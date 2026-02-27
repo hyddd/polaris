@@ -1,0 +1,6 @@
+[
+  {"id": "todo-1", "title": "完成权限设计文档", "priority": "high", "status": "pending", "due": "2026-05-05", "tags": ["产品", "文档"]},
+  {"id": "todo-2", "title": "Code Review PR #42", "priority": "medium", "status": "in_progress", "due": "2026-05-03", "tags": ["开发"]},
+  {"id": "todo-3", "title": "准备周五技术分享", "priority": "medium", "status": "pending", "due": "2026-05-08", "tags": ["分享"]},
+  {"id": "todo-4", "title": "更新 README", "priority": "low", "status": "done", "due": "2026-04-28", "tags": ["文档"]}
+]

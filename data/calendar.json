@@ -1,0 +1,10 @@
+[
+  {
+    "date": "2026-05-04",
+    "events": [
+      {"id": "evt-1", "time": "09:00", "title": "晨会", "attendees": ["Alice", "Bob"], "duration": 30},
+      {"id": "evt-2", "time": "15:00", "title": "产品方案评审", "attendees": ["张三", "李四", "王五"], "duration": 60},
+      {"id": "evt-3", "time": "17:00", "title": "周报同步", "attendees": ["全组"], "duration": 30}
+    ]
+  }
+]
