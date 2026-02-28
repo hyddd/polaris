@@ -218,7 +218,7 @@ Chainlit ─┐   ┌─────────────┐     ┌───
 | Vector DB | ChromaDB | 轻量本地，开发体验好 |
 | Web UI | Chainlit | 专为 LangChain 设计的聊天 UI |
 | Bot | 复用 FeishuBot | 已有 WebSocket + 插件架构 |
-| 包管理 | Poetry | 依赖管理 |
+| 包管理 | venv + pip | Python 虚拟环境 + requirements.txt |
 
 ---
 

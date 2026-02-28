@@ -6,7 +6,7 @@
 
 **Architecture:** Three-layer design — entry layer (Chainlit + Feishu Bot) sends messages via unified protocol to the LangGraph agent core (Router → 5 skill subgraphs → Summarize), which invokes 4 tools (GoogleCalendar, Note, Todo, RAGSearch) through a shared ToolRegistry. Memory persists across turns via ConversationBufferWindowMemory.
 
-**Tech Stack:** Python 3.11+, LangGraph, LangChain, Chainlit, ChromaDB, Google Calendar API v3, Poetry, pytest
+**Tech Stack:** Python 3.11+, LangGraph, LangChain, Chainlit, ChromaDB, Google Calendar API v3, venv + pip, pytest
 
 ---
 
@@ -14,7 +14,7 @@
 
 ```
 AgentPlan/
-├── pyproject.toml
+├── requirements.txt
 ├── .env.example
 ├── .gitignore
 ├── data/
@@ -87,7 +87,7 @@ AgentPlan/
 ### Task 1: Project Scaffold
 
 **Files:**
-- Create: `pyproject.toml`
+- Create: `requirements.txt`
 - Create: `.env.example`
 - Create: `.gitignore`
 - Create: `src/__init__.py`
@@ -95,13 +95,12 @@ AgentPlan/
 - Create: `tests/__init__.py`
 - Create: `tests/conftest.py`
 
-- [ ] **Step 1: Initialize Poetry project**
+- [ ] **Step 1: Create venv and install dependencies**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry init --name polaris --description "Personal efficiency AI Agent with LangGraph" --author "kang" --python "^3.11" --dependency langgraph --dependency langchain --dependency langchain-openai --dependency chromadb --dependency chainlit --dependency google-auth --dependency google-api-python-client --dependency python-dotenv --dependency pyyaml --dependency pytest --dependency pytest-asyncio --dev --no-interaction`
-
-- [ ] **Step 2: Add dev dependencies and install**
-
-Run: `cd /Users/kang/Code/AgentPlan && poetry add --group dev pytest pytest-asyncio black mypy && poetry install`
+Run:
+```bash
+cd /Users/kang/Code/AgentPlan && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+```
 
 - [ ] **Step 3: Write .env.example**
 
@@ -130,9 +129,7 @@ __pycache__/
 .env
 credentials.json
 data/chroma/
-.poetry/
-dist/
-*.egg-info/
+venv/
 .superpowers/
 ```
 
@@ -318,7 +315,7 @@ date: "2026-04-15"
 - [ ] **Step 11: Commit**
 
 ```bash
-cd /Users/kang/Code/AgentPlan && git init && git add -A && git commit -m "feat: project scaffold with Poetry, config, and seed data"
+cd /Users/kang/Code/AgentPlan && git init && git add -A && git commit -m "feat: project scaffold with venv, config, and seed data"
 ```
 
 ---
@@ -366,7 +363,7 @@ def test_agent_state_defaults():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_protocol.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_protocol.py -v`
 Expected: FAIL (module not found)
 
 - [ ] **Step 3: Write src/protocol.py**
@@ -415,7 +412,7 @@ class AgentState(TypedDict):
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_protocol.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_protocol.py -v`
 Expected: PASS (3 tests)
 
 - [ ] **Step 6: Commit**
@@ -554,7 +551,7 @@ def archive_note(filepath: Path, archive_dir: Path) -> bool:
 
 Run:
 ```bash
-cd /Users/kang/Code/AgentPlan && poetry run python -c "
+cd /Users/kang/Code/AgentPlan && python -c "
 from src.data_layer.loader import load_notes, load_calendar_events, parse_note_frontmatter
 from src.config import DATA_DIR
 
@@ -640,7 +637,7 @@ def test_todo_delete(tmp_data_dir):
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_tools/test_todos.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_tools/test_todos.py -v`
 Expected: FAIL (ImportError)
 
 - [ ] **Step 3: Write ToolRegistry**
@@ -765,7 +762,7 @@ class TodoTool(BaseTool):
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_tools/test_todos.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_tools/test_todos.py -v`
 Expected: 6 PASS
 
 - [ ] **Step 6: Commit**
@@ -824,7 +821,7 @@ def test_note_search(tmp_data_dir):
 
 - [ ] **Step 2: Run tests — expect fail**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_tools/test_notes.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_tools/test_notes.py -v`
 Expected: FAIL
 
 - [ ] **Step 3: Write NoteTool**
@@ -896,7 +893,7 @@ class NoteTool(BaseTool):
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_tools/test_notes.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_tools/test_notes.py -v`
 Expected: 5 PASS
 
 - [ ] **Step 5: Commit**
@@ -1057,7 +1054,7 @@ class RAGSearchTool(BaseTool):
 
 - [ ] **Step 4: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_tools/test_rag.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_tools/test_rag.py -v`
 Expected: 2 PASS
 
 - [ ] **Step 5: Commit**
@@ -1224,7 +1221,7 @@ class GoogleCalendarTool(BaseTool):
 
 - [ ] **Step 3: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_tools/test_calendar.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_tools/test_calendar.py -v`
 Expected: 4 PASS
 
 - [ ] **Step 4: Commit**
@@ -1335,7 +1332,7 @@ class MemoryManager:
 
 - [ ] **Step 3: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_memory/test_store.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_memory/test_store.py -v`
 Expected: 4 PASS
 
 - [ ] **Step 4: Commit**
@@ -1510,7 +1507,7 @@ def route_condition(state: AgentState) -> str:
 
 - [ ] **Step 3: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_agent/test_router.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_agent/test_router.py -v`
 Expected: 6 PASS
 
 - [ ] **Step 4: Commit**
@@ -1651,7 +1648,7 @@ def test_search_node_produces_prompt():
 
 - [ ] **Step 4: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_agent/test_planning.py tests/test_agent/test_search.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_agent/test_planning.py tests/test_agent/test_search.py -v`
 Expected: 2 PASS
 
 - [ ] **Step 5: Commit**
@@ -1831,7 +1828,7 @@ def test_manage_node():
 
 - [ ] **Step 5: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_agent/test_prep.py tests/test_agent/test_capture.py tests/test_agent/test_manage.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_agent/test_prep.py tests/test_agent/test_capture.py tests/test_agent/test_manage.py -v`
 Expected: 3 PASS
 
 - [ ] **Step 6: Commit**
@@ -2030,7 +2027,7 @@ def test_graph_routes_to_clarify_for_empty_message():
 
 - [ ] **Step 5: Run tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/test_agent/test_graph.py -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/test_agent/test_graph.py -v`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -2052,7 +2049,7 @@ Write `src/chainlit_app.py`:
 ```python
 """Polaris Chainlit Web UI entry point.
 
-Run with: poetry run chainlit run src/chainlit_app.py
+Run with: chainlit run src/chainlit_app.py
 """
 
 import chainlit as cl
@@ -2115,7 +2112,7 @@ async def on_message(message: cl.Message):
 
 - [ ] **Step 2: Verify it loads**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run python -c "from src.chainlit_app import get_agent; print('OK')"`
+Run: `cd /Users/kang/Code/AgentPlan && python -c "from src.chainlit_app import get_agent; print('OK')"`
 Expected: `OK`
 
 - [ ] **Step 3: Commit**
@@ -2193,7 +2190,7 @@ class PolarisPlugin:
 
 - [ ] **Step 2: Verify import**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run python -c "from src.feishu_plugin import PolarisPlugin; p = PolarisPlugin(); print(p.name)"`
+Run: `cd /Users/kang/Code/AgentPlan && python -c "from src.feishu_plugin import PolarisPlugin; p = PolarisPlugin(); print(p.name)"`
 Expected: `polaris`
 
 - [ ] **Step 3: Commit**
@@ -2255,7 +2252,7 @@ def test_e2e_knowledge_search():
 
 - [ ] **Step 2: Run all tests**
 
-Run: `cd /Users/kang/Code/AgentPlan && poetry run pytest tests/ -v`
+Run: `cd /Users/kang/Code/AgentPlan && pytest tests/ -v`
 Expected: all tests PASS
 
 - [ ] **Step 3: Write README.md**
@@ -2269,17 +2266,17 @@ Expected: all tests PASS
 
 ```bash
 # 安装依赖
-poetry install
+pip install -r requirements.txt
 
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env，填入 OPENAI_API_KEY
 
 # 启动 Chainlit Web UI
-poetry run chainlit run src/chainlit_app.py
+chainlit run src/chainlit_app.py
 
 # 运行测试
-poetry run pytest tests/ -v
+pytest tests/ -v
 ```
 
 ## 架构
