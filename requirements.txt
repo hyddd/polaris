@@ -1,3 +1,6 @@
+# Generated via: pip freeze > requirements.txt
+# Source of truth: pyproject.toml (install with: pip install -e ".[dev]")
+#
 langgraph
 langchain
 langchain-openai

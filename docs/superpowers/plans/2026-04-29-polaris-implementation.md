@@ -6,7 +6,7 @@
 
 **Architecture:** Three-layer design — entry layer (Chainlit + Feishu Bot) sends messages via unified protocol to the LangGraph agent core (Router → 5 skill subgraphs → Summarize), which invokes 4 tools (GoogleCalendar, Note, Todo, RAGSearch) through a shared ToolRegistry. Memory persists across turns via ConversationBufferWindowMemory.
 
-**Tech Stack:** Python 3.11+, LangGraph, LangChain, Chainlit, ChromaDB, Google Calendar API v3, venv + pip, pytest
+**Tech Stack:** Python 3.11+, LangGraph, LangChain, Chainlit, ChromaDB, Google Calendar API v3, venv + pyproject.toml + pip, pytest
 
 ---
 
@@ -14,7 +14,7 @@
 
 ```
 AgentPlan/
-├── requirements.txt
+├── pyproject.toml
 ├── .env.example
 ├── .gitignore
 ├── data/
@@ -87,7 +87,7 @@ AgentPlan/
 ### Task 1: Project Scaffold
 
 **Files:**
-- Create: `requirements.txt`
+- Create: `pyproject.toml`
 - Create: `.env.example`
 - Create: `.gitignore`
 - Create: `src/__init__.py`
@@ -99,7 +99,7 @@ AgentPlan/
 
 Run:
 ```bash
-cd /Users/kang/Code/AgentPlan && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+cd /Users/kang/Code/AgentPlan && python3 -m venv venv && source venv/bin/activate && pip install -e ".[dev]"
 ```
 
 - [ ] **Step 3: Write .env.example**
@@ -2266,7 +2266,7 @@ Expected: all tests PASS
 
 ```bash
 # 安装依赖
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # 配置环境变量
 cp .env.example .env

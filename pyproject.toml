@@ -1,0 +1,27 @@
+[project]
+name = "polaris"
+version = "1.0.0"
+description = "Personal efficiency AI Agent with LangGraph"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph",
+    "langchain",
+    "langchain-openai",
+    "chromadb",
+    "chainlit",
+    "google-auth",
+    "google-api-python-client",
+    "python-dotenv",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
