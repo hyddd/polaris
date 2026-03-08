@@ -5,3 +5,4 @@ credentials.json
 data/chroma/
 venv/
 .superpowers/
+.chainlit/translations/
