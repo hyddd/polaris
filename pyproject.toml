@@ -3,7 +3,7 @@ name = "polaris"
 version = "1.0.0"
 description = "Personal efficiency AI Agent with LangGraph"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "langgraph",
     "langchain",
@@ -25,3 +25,6 @@ dev = [
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]

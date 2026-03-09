@@ -1,0 +1,13 @@
+langgraph
+langchain
+langchain-openai
+chromadb
+chainlit
+google-auth
+google-api-python-client
+python-dotenv
+pyyaml
+
+[dev]
+pytest
+pytest-asyncio
