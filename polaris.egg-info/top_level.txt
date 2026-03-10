@@ -1,5 +1,0 @@
-data
-docs
-src
-tests
-venv

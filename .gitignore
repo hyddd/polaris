@@ -6,3 +6,5 @@ data/chroma/
 venv/
 .superpowers/
 .chainlit/translations/
+*.egg-info/
+chainlit.md
