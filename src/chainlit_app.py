@@ -9,17 +9,11 @@ from src.agent.graph import get_agent
 from src.state import AgentState
 from src.memory.store import MemoryManager
 
-sessions: dict[str, MemoryManager] = {}
-
-
-def get_or_create_memory(session_id: str) -> MemoryManager:
-    if session_id not in sessions:
-        sessions[session_id] = MemoryManager(window_size=10)
-    return sessions[session_id]
-
 
 @cl.on_chat_start
 async def start():
+    cl.user_session.set("memory", MemoryManager(window_size=10))
+
     await cl.Message(
         content="你好！我是 Polaris，你的个人效率助手。\n\n"
         "目前已支持：\n"
@@ -34,8 +28,7 @@ async def start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    session_id = cl.user_session.get("id")
-    memory = get_or_create_memory(session_id)
+    memory: MemoryManager = cl.user_session.get("memory")
 
     agent = get_agent()
 
