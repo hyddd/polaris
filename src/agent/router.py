@@ -3,13 +3,13 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.state import AgentState
 from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
 
-INTENT_OPTIONS = ["daily_planning", "meeting_prep", "knowledge_search", "quick_capture", "manage", "clarify"]
+INTENT_OPTIONS = ["daily_planning", "meeting_prep", "knowledge_search", "quick_capture", "manage", "chat", "clarify"]
 
 
 def classify_intent(state: AgentState) -> dict:
     messages = state.get("messages", [])
     if not messages:
-        return {"intent": "clarify"}
+        return {"intent": "chat"}
 
     last_message = messages[-1]
     content = last_message.content if hasattr(last_message, "content") else str(last_message)
@@ -18,9 +18,10 @@ def classify_intent(state: AgentState) -> dict:
     if intent:
         return {"intent": intent}
 
-    llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0)
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """你是一个意图分类器。分析用户消息，输出一个意图标签。
+    try:
+        llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """你是一个意图分类器。分析用户消息，输出一个意图标签。
 
 意图说明：
 - daily_planning: 询问今日/某天的日程安排、待办、计划
@@ -28,20 +29,25 @@ def classify_intent(state: AgentState) -> dict:
 - knowledge_search: 搜索历史笔记、查找之前记录的信息
 - quick_capture: 快速记录/创建日程、笔记、待办（用户想添加/记录新东西）
 - manage: 修改、取消、删除已有的日程或待办（用户想改动现有东西）
-- clarify: 消息信息不足，无法判断意图
+- chat: 普通闲聊、打招呼、自我介绍、一般性问题（不属于以上任何工具类意图）
+- clarify: 消息信息不足，无法判断用户想要什么
 
 区分 quick_capture 和 manage 的关键：
 - "加个"、"新建"、"记一下"、"创建"、"添加" → quick_capture
 - "取消"、"删除"、"修改"、"改到"、"改成"、"标记为" → manage
 
-只输出意图标签，不要解释。"""),
-        ("human", "{message}"),
-    ])
-    chain = prompt | llm
-    result = chain.invoke({"message": content})
-    intent = result.content.strip().lower()
+普通闲聊（"你好"、"你叫什么"、"我叫小明"、"今天天气怎么样"）→ chat
 
-    return {"intent": intent if intent in INTENT_OPTIONS else "clarify"}
+只输出意图标签，不要解释。"""),
+            ("human", "{message}"),
+        ])
+        chain = prompt | llm
+        result = chain.invoke({"message": content})
+        intent = result.content.strip().lower()
+    except Exception:
+        intent = "chat"
+
+    return {"intent": intent if intent in INTENT_OPTIONS else "chat"}
 
 
 def _keyword_route(content: str) -> str | None:
@@ -59,8 +65,12 @@ def _keyword_route(content: str) -> str | None:
     if any(kw in c for kw in ["准备", "会议材料", "帮我准备"]):
         return "meeting_prep"
 
+    # Casual conversation keywords
+    if any(kw in c for kw in ["你好", "嘿", "嗨", "我叫", "你是谁", "你叫什么", "谢谢", "再见"]):
+        return "chat"
+
     return None
 
 
 def route_condition(state: AgentState) -> str:
-    return state.get("intent", "clarify")
+    return state.get("intent", "chat")

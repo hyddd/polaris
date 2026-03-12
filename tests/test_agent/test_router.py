@@ -33,3 +33,15 @@ def test_router_quick_capture():
 
 def test_router_manage():
     assert classify_intent(make_state("取消明天的产品评审"))["intent"] == "manage"
+
+
+def test_router_casual_chat():
+    assert classify_intent(make_state("你好"))["intent"] == "chat"
+
+
+def test_router_self_intro():
+    assert classify_intent(make_state("你是谁"))["intent"] == "chat"
+
+
+def test_router_defaults_to_chat():
+    assert classify_intent(make_state("..."))["intent"] == "chat"
