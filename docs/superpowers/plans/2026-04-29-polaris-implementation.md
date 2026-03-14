@@ -1887,3 +1887,17 @@ git commit -m "feat: E2E tests and README"
 ```
 
 **Phase D complete! Project done.**
+
+---
+
+## Phase E: 后续优化（待排期）
+
+### Task 15: 上下文管理与记忆压缩
+
+**当前状态**: MemoryManager 保留最近 10 条消息，Summarize 直接全部塞入 prompt，无 token 控制和摘要压缩。
+
+**待实现**:
+1. Token 估算：对历史消息用 tiktoken 估算 token 数，超限时自动截断最早的消息
+2. 摘要压缩：对超出窗口的较早对话轮次，调用 LLM 生成摘要而非直接丢弃，摘要注入 system prompt
+3. 滑动窗口优化：区分"核心上下文"（当前任务的 tool call 链）和"背景上下文"（历史闲聊），后者优先被压缩
+4. 可配置的窗口大小和 token 上限，通过环境变量控制
