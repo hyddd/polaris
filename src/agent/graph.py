@@ -3,26 +3,19 @@ from src.state import AgentState
 from src.agent.router import classify_intent, route_condition
 from src.agent.confirm import confirm_node
 from src.agent.summarize import summarize_node
+
 from src.agent.skills.planning import planning_node
+from src.agent.skills.prep import prep_node
+from src.agent.skills.search import search_node
+from src.agent.skills.capture import capture_node
+from src.agent.skills.manage import manage_node
 
 
 def chat_node(state: AgentState) -> dict:
-    """Casual conversation / clarification — pass through to LLM for natural reply."""
     messages = state.get("messages", [])
     last_msg = messages[-1].content if messages else ""
     return {
         "tool_results": {"user_query": last_msg, "mode": "chat"},
-        "final_response": "",
-    }
-
-
-def default_skill_node(state: AgentState) -> dict:
-    """Stub node for skills not yet implemented."""
-    intent = state.get("intent", "")
-    messages = state.get("messages", [])
-    last_msg = messages[-1].content if messages else ""
-    return {
-        "tool_results": {"user_query": last_msg, "mode": intent},
         "final_response": "",
     }
 
@@ -33,7 +26,10 @@ def build_agent_graph() -> StateGraph:
     builder.add_node("router", classify_intent)
     builder.add_node("chat", chat_node)
     builder.add_node("planning", planning_node)
-    builder.add_node("default", default_skill_node)
+    builder.add_node("prep", prep_node)
+    builder.add_node("search", search_node)
+    builder.add_node("capture", capture_node)
+    builder.add_node("manage", manage_node)
     builder.add_node("confirm", confirm_node)
     builder.add_node("summarize", summarize_node)
 
@@ -44,16 +40,16 @@ def build_agent_graph() -> StateGraph:
         route_condition,
         {
             "daily_planning": "planning",
-            "meeting_prep": "default",
-            "knowledge_search": "default",
-            "quick_capture": "default",
-            "manage": "default",
+            "meeting_prep": "prep",
+            "knowledge_search": "search",
+            "quick_capture": "capture",
+            "manage": "manage",
             "clarify": "chat",
             "chat": "chat",
         }
     )
 
-    for node in ["planning", "default", "chat"]:
+    for node in ["planning", "prep", "search", "capture", "manage", "chat"]:
         builder.add_edge(node, "summarize")
 
     builder.add_edge("summarize", END)
