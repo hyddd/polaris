@@ -1,5 +1,6 @@
 """ReAct agent executor — LLM with tool binding + tool execution loop."""
 
+from datetime import date
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage
@@ -85,6 +86,9 @@ def _get_tools(intent: str) -> list:
 def agent_node(state: AgentState) -> dict:
     intent = state.get("intent", "chat")
     system_prompt = SYSTEM_PROMPTS.get(intent, SYSTEM_PROMPTS["chat"])
+    # Inject today's date so LLM knows what "today" / "明天" means
+    today = date.today().isoformat()
+    system_prompt = f"今天是 {today}。\n\n{system_prompt}"
     tools = _get_tools(intent)
 
     llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0.3)
