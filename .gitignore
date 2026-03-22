@@ -8,3 +8,4 @@ venv/
 .chainlit/translations/
 *.egg-info/
 chainlit.md
+logs/

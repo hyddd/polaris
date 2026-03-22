@@ -11,12 +11,7 @@
     "date": "2026-04-30",
     "events": [
       {"id": "evt-4", "time": "10:00", "title": "技术分享会", "attendees": ["全组"], "duration": 90},
-      {"id": "evt-5", "time": "14:00", "title": "1on1 周会", "attendees": ["经理"], "duration": 30}
-    ]
-  },
-  {
-    "date": "2026-05-05",
-    "events": [
+      {"id": "evt-5", "time": "14:00", "title": "1on1 周会", "attendees": ["经理"], "duration": 30},
       {"id": "evt-6", "time": "13:00", "title": "产品评审会", "attendees": [], "duration": 60}
     ]
   }
