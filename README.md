@@ -91,7 +91,7 @@ AgentPlan/
 │   ├── chainlit_app.py     # Chainlit 入口
 │   └── feishu_bot.py       # 飞书 Bot 入口
 ├── data/                   # 种子数据
-├── tests/                  # 43 个测试
+├── tests/                  # 47 个测试
 └── docs/superpowers/       # 设计文档 & 开发计划
 ```
 
