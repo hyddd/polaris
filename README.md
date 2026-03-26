@@ -34,12 +34,10 @@ pip install -e ".[dev]"
 # 配置
 cp .env.example .env
 # 编辑 .env，填入 OPENAI_API_KEY
+# 可选：填入 FEISHU_APP_ID / FEISHU_APP_SECRET 启用飞书 Bot
 
-# 启动 Chainlit Web UI
-chainlit run src/chainlit_app.py
-
-# 启动飞书 Bot（可选，需配置 FEISHU_APP_ID / FEISHU_APP_SECRET）
-python -m src.feishu_bot
+# 一键启动（Web + 飞书）
+python run.py
 
 # 运行测试
 pytest tests/ -v
