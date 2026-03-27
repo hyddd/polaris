@@ -129,9 +129,6 @@ class PolarisFeishuBot:
             if not text.strip():
                 return
 
-            # Show typing indicator
-            self._send_typing(data.event.message.message_id)
-
             # Run agent
             response = self._process_message(sender_id, text)
 
