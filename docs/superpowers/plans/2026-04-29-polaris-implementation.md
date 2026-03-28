@@ -1901,3 +1901,12 @@ git commit -m "feat: E2E tests and README"
 2. 摘要压缩：对超出窗口的较早对话轮次，调用 LLM 生成摘要而非直接丢弃，摘要注入 system prompt
 3. 滑动窗口优化：区分"核心上下文"（当前任务的 tool call 链）和"背景上下文"（历史闲聊），后者优先被压缩
 4. 可配置的窗口大小和 token 上限，通过环境变量控制
+
+### Task 16: Web 与飞书跨通道共享上下文
+
+**当前状态**: Web 端和飞书端各自独立维护 MemoryManager，同一用户两边对话互不可见。
+
+**待实现**:
+1. 统一用户标识：Web 端加登录态（或 session → user_id 映射），与飞书 open_id 统一
+2. 共享 Memory 存储：从进程内 dict 换成 SQLite / Redis，按 user_id 存取
+3. 两端读写同一份对话历史，切换通道无缝续聊
