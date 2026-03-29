@@ -92,6 +92,7 @@ class PolarisFeishuBot:
 
         event_handler = lark.EventDispatcherHandler.builder("", "", lark.LogLevel.DEBUG) \
             .register_p2_im_message_receive_v1(self._on_message) \
+            .register_p2_im_message_reaction_created_v1(self._on_reaction) \
             .build()
 
         self.ws_client = lark.ws.Client(
@@ -105,6 +106,10 @@ class PolarisFeishuBot:
 
         logger.info("开始 WebSocket 连接...")
         self.ws_client.start()
+
+    def _on_reaction(self, data) -> None:
+        """Silently consume reaction events (triggered by typing indicator)."""
+        pass
 
     def _on_message(self, data) -> None:
         try:
@@ -128,6 +133,9 @@ class PolarisFeishuBot:
 
             if not text.strip():
                 return
+
+            # Show typing indicator
+            self._send_typing(data.event.message.message_id)
 
             # Run agent
             response = self._process_message(sender_id, text)
