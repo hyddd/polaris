@@ -135,12 +135,14 @@ class PolarisFeishuBot:
                 return
 
             # Show typing indicator
-            self._send_typing(data.event.message.message_id)
+            reaction_id = self._send_typing(data.event.message.message_id)
 
             # Run agent
             response = self._process_message(sender_id, text)
 
-            # Send reply
+            # Remove typing indicator, then send reply
+            if reaction_id:
+                self._delete_typing(data.event.message.message_id, reaction_id)
             if chat_id:
                 self._send_message(chat_id, response)
             else:
@@ -181,7 +183,8 @@ class PolarisFeishuBot:
         memory.add_message(AIMessage(content=response))
         return response
 
-    def _send_typing(self, message_id: str) -> None:
+    def _send_typing(self, message_id: str) -> str | None:
+        """发送 typing 表情，返回 reaction_id 用于后续删除。"""
         try:
             request = CreateMessageReactionRequest.builder() \
                 .message_id(message_id) \
@@ -189,7 +192,21 @@ class PolarisFeishuBot:
                     .reaction_type(Emoji.builder().emoji_type("Typing").build())
                     .build()) \
                 .build()
-            self.client.im.v1.message_reaction.create(request)
+            response = self.client.im.v1.message_reaction.create(request)
+            if response.code == 0:
+                return response.data.reaction_id
+        except Exception:
+            pass
+        return None
+
+    def _delete_typing(self, message_id: str, reaction_id: str) -> None:
+        """删除 typing 表情。"""
+        try:
+            request = DeleteMessageReactionRequest.builder() \
+                .message_id(message_id) \
+                .reaction_id(reaction_id) \
+                .build()
+            self.client.im.v1.message_reaction.delete(request)
         except Exception:
             pass
 
