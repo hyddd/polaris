@@ -77,6 +77,7 @@ class PolarisFeishuBot:
         self.app_secret = app_secret
         self.client = None
         self.ws_client = None
+        self._seen_messages: set[str] = set()  # Dedup message IDs
 
     def start(self):
         logger.info("Polaris 飞书 Bot 启动中...")
@@ -93,6 +94,7 @@ class PolarisFeishuBot:
         event_handler = lark.EventDispatcherHandler.builder("", "", lark.LogLevel.DEBUG) \
             .register_p2_im_message_receive_v1(self._on_message) \
             .register_p2_im_message_reaction_created_v1(self._on_reaction) \
+            .register_p2_im_message_reaction_deleted_v1(self._on_reaction) \
             .build()
 
         self.ws_client = lark.ws.Client(
@@ -115,6 +117,15 @@ class PolarisFeishuBot:
         try:
             if not data.event:
                 return
+
+            # Dedup: skip already-processed messages
+            msg_id = data.event.message.message_id
+            if msg_id in self._seen_messages:
+                return
+            self._seen_messages.add(msg_id)
+            # Prevent unlimited growth
+            if len(self._seen_messages) > 10000:
+                self._seen_messages.clear()
 
             sender_id = data.event.sender.sender_id.open_id if data.event.sender.sender_id else "unknown"
             content_str = data.event.message.content
