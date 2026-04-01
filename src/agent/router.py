@@ -1,75 +1,55 @@
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from src.state import AgentState
-from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
+"""Intent router — keyword-only fast path, no LLM overhead."""
 
-INTENT_OPTIONS = ["daily_planning", "meeting_prep", "knowledge_search", "quick_capture", "manage", "chat", "clarify"]
+from src.state import AgentState
+
+# Intents that get tool access; everything else defaults to chat
+TOOL_INTENTS = ["daily_planning", "meeting_prep", "knowledge_search", "quick_capture", "manage"]
 
 
 def classify_intent(state: AgentState) -> dict:
+    """Keyword-based intent classification. No LLM — fast and cheap."""
     messages = state.get("messages", [])
     if not messages:
         return {"intent": "chat"}
 
     last_message = messages[-1]
     content = last_message.content if hasattr(last_message, "content") else str(last_message)
-
     intent = _keyword_route(content)
-    if intent:
-        return {"intent": intent}
-
-    try:
-        llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0)
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一个意图分类器。分析用户消息，输出一个意图标签。
-
-意图说明：
-- daily_planning: 询问今日/某天的日程安排、待办、计划
-- meeting_prep: 为某个会议做准备、整理材料
-- knowledge_search: 搜索历史笔记、查找之前记录的信息
-- quick_capture: 快速记录/创建日程、笔记、待办（用户想添加/记录新东西）
-- manage: 修改、取消、删除已有的日程或待办（用户想改动现有东西）
-- chat: 普通闲聊、打招呼、自我介绍、一般性问题（不属于以上任何工具类意图）
-- clarify: 消息信息不足，无法判断用户想要什么
-
-区分 quick_capture 和 manage 的关键：
-- "加个"、"新建"、"记一下"、"创建"、"添加" → quick_capture
-- "取消"、"删除"、"修改"、"改到"、"改成"、"标记为" → manage
-
-普通闲聊（"你好"、"你叫什么"、"我叫小明"、"今天天气怎么样"）→ chat
-
-只输出意图标签，不要解释。"""),
-            ("human", "{message}"),
-        ])
-        chain = prompt | llm
-        result = chain.invoke({"message": content})
-        intent = result.content.strip().lower()
-    except Exception:
-        intent = "chat"
-
-    return {"intent": intent if intent in INTENT_OPTIONS else "chat"}
+    return {"intent": intent}
 
 
-def _keyword_route(content: str) -> str | None:
-    """Fast keyword-based routing — cheap and reliable for obvious cases."""
+def _keyword_route(content: str) -> str:
     c = content.strip().lower()
 
-    if any(kw in c for kw in ["加个", "新建", "记一下", "添加", "创建", "帮我加", "帮我记", "记录一下"]):
+    # quick_capture: adding/creating/recording
+    if any(kw in c for kw in ["加个", "新建", "记一下", "添加", "创建", "帮我加", "帮我记",
+                                "记录一下", "写个笔记", "做个笔记", "加一个", "建一个"]):
         return "quick_capture"
-    if any(kw in c for kw in ["取消", "删除", "改到", "改成", "更新", "标记为", "移除"]):
+
+    # manage: modifying/deleting
+    if any(kw in c for kw in ["取消", "删除", "改到", "改成", "更新", "标记为", "移除",
+                                "清理", "删掉", "去掉", "修改一下", "改一下"]):
         return "manage"
-    if any(kw in c for kw in ["上次", "之前", "讨论过", "讨论了什么", "找一下", "搜索", "查一下笔记"]):
+
+    # knowledge_search: searching past notes
+    if any(kw in c for kw in ["上次", "之前", "讨论过", "讨论了什么", "找一下", "搜索",
+                                "查一下笔记", "有没有记", "查一下", "搜一下", "帮我找",
+                                "之前记的", "有没有记录", "查笔记"]):
         return "knowledge_search"
-    if any(kw in c for kw in ["安排", "计划", "今天有什么", "今天干嘛", "日程", "有什么事情", "今天要做"]):
+
+    # daily_planning: checking schedule/todos
+    if any(kw in c for kw in ["安排", "计划", "今天有什么", "今天干嘛", "日程", "有什么事情",
+                                "今天要做", "今天要做什么", "今天忙", "今天安排", "今天的",
+                                "有什么安排", "看看今天", "待办", "今天的事"]):
         return "daily_planning"
-    if any(kw in c for kw in ["准备", "会议材料", "帮我准备"]):
+
+    # meeting_prep: preparing for meetings
+    if any(kw in c for kw in ["准备", "会议材料", "帮我准备", "准备一下", "准备什么",
+                                "开会", "会议准备", "要开会"]):
         return "meeting_prep"
 
-    # Casual conversation keywords
-    if any(kw in c for kw in ["你好", "嘿", "嗨", "我叫", "你是谁", "你叫什么", "谢谢", "再见"]):
-        return "chat"
-
-    return None
+    # Everything else is chat — no tools needed
+    return "chat"
 
 
 def route_condition(state: AgentState) -> str:
