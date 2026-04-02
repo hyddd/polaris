@@ -1,5 +1,6 @@
 """ReAct agent executor — LLM with tool binding + tool execution loop."""
 
+import os
 from datetime import date
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -7,6 +8,7 @@ from langchain_core.messages import ToolMessage, AIMessage
 from src.state import AgentState
 from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
 from src.tools.registry import ToolRegistry
+from src.memory.compressor import ConversationCompressor
 
 
 UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris，一个聪明友好的 AI 助手。
@@ -57,19 +59,41 @@ def _get_tools(intent: str) -> list:
     return []
 
 
+# Global compressor instance (in-process; summary persists across calls in same session)
+_compressor = None
+
+
+def _get_compressor() -> ConversationCompressor:
+    global _compressor
+    if _compressor is None:
+        max_recent = int(os.getenv("POLARIS_MAX_RECENT", "8"))
+        max_tokens = int(os.getenv("POLARIS_MAX_HISTORY_TOKENS", "4000"))
+        _compressor = ConversationCompressor(max_recent=max_recent, max_history_tokens=max_tokens)
+    return _compressor
+
+
 def agent_node(state: AgentState) -> dict:
     intent = state.get("intent", "chat")
-    today = date.today().isoformat()
-    system_prompt = f"今天是 {today}。\n\n{UNIFIED_SYSTEM_PROMPT}"
     tools = _get_tools(intent)
+    messages = state.get("messages", [])
+
+    # Compress: summarize old messages, trim recent to token budget
+    compressor = _get_compressor()
+    summary, recent = compressor.process(list(messages))
+
+    # Build system prompt with summary
+    today = date.today().isoformat()
+    system_prompt = f"今天是 {today}。\n\n"
+    if summary:
+        system_prompt += f"[对话摘要]\n{summary}\n\n"
+    system_prompt += UNIFIED_SYSTEM_PROMPT
 
     llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0.3)
     if tools:
         llm = llm.bind_tools(tools)
 
-    messages = state.get("messages", [])
     chain = AGENT_PROMPT | llm
-    response = chain.invoke({"system_prompt": system_prompt, "messages": list(messages)})
+    response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
 
     return {"messages": [response]}
 
