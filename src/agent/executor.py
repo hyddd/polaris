@@ -66,9 +66,12 @@ _compressor = None
 def _get_compressor() -> ConversationCompressor:
     global _compressor
     if _compressor is None:
-        max_recent = int(os.getenv("POLARIS_MAX_RECENT", "8"))
-        max_tokens = int(os.getenv("POLARIS_MAX_HISTORY_TOKENS", "4000"))
-        _compressor = ConversationCompressor(max_recent=max_recent, max_history_tokens=max_tokens)
+        model_max = int(os.getenv("POLARIS_MODEL_MAX_CONTEXT", "200000"))
+        threshold = float(os.getenv("POLARIS_COMPRESSION_THRESHOLD", "0.8"))
+        _compressor = ConversationCompressor(
+            model_max_context=model_max,
+            compression_threshold=threshold,
+        )
     return _compressor
 
 
