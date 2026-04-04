@@ -31,8 +31,8 @@ def test_compression_when_over_budget():
 def test_count_tokens():
     cc = ConversationCompressor()
     # Chinese: roughly 1 token per char
-    assert cc._count_tokens_str("你好世界") >= 2  # 4 chars
-    assert cc._count_tokens_str("hello") >= 2      # 5 chars
+    assert cc._count_tokens_str("你好世界") >= 2  # 4 CJK chars
+    assert cc._count_tokens_str("hello") >= 1      # tiktoken: 1; fallback: 2
     assert cc._count_tokens_str("") == 0           # empty
 
     msgs = [HumanMessage(content="你好世界")]
