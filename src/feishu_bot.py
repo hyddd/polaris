@@ -11,6 +11,8 @@
 import logging
 import os
 import sys
+import hashlib
+import time
 from datetime import datetime
 
 import lark_oapi as lark
@@ -77,7 +79,8 @@ class PolarisFeishuBot:
         self.app_secret = app_secret
         self.client = None
         self.ws_client = None
-        self._seen_messages: set[str] = set()  # Dedup message IDs
+        self._seen_messages: set[str] = set()
+        self._recent_hashes: dict[str, float] = {}  # content_hash → timestamp
 
     def start(self):
         logger.info("Polaris 飞书 Bot 启动中...")
@@ -118,23 +121,42 @@ class PolarisFeishuBot:
             if not data.event:
                 return
 
-            # Dedup: skip already-processed messages
             msg_id = data.event.message.message_id
+            message_type = data.event.message.message_type
+            sender_id = data.event.sender.sender_id.open_id if data.event.sender.sender_id else "unknown"
+
+            # Only process user text messages; skip bot's own messages and non-text
+            if message_type != "text":
+                logger.debug(f"[{sender_id}] 跳过非文本消息: {message_type}")
+                return
+
+            # Dedup by message_id
             if msg_id in self._seen_messages:
+                logger.debug(f"[{sender_id}] 跳过重复消息 (msg_id): {msg_id[:20]}...")
                 return
             self._seen_messages.add(msg_id)
-            # Prevent unlimited growth
+
+            # Also dedup by content hash within 10s window (catches cross-event dupes)
+            content_str = data.event.message.content
+            content_hash = hashlib.md5(f"{sender_id}:{content_str}".encode()).hexdigest()
+            now = time.time()
+            if content_hash in self._recent_hashes:
+                elapsed = now - self._recent_hashes[content_hash]
+                if elapsed < 10:
+                    logger.debug(f"[{sender_id}] 跳过重复消息 (content, {elapsed:.1f}s ago)")
+                    return
+            self._recent_hashes[content_hash] = now
+
+            # Cleanup stale hashes
+            if len(self._recent_hashes) > 1000:
+                self._recent_hashes = {k: v for k, v in self._recent_hashes.items() if now - v < 10}
             if len(self._seen_messages) > 10000:
                 self._seen_messages.clear()
 
-            sender_id = data.event.sender.sender_id.open_id if data.event.sender.sender_id else "unknown"
-            content_str = data.event.message.content
-            message_type = data.event.message.message_type
             chat_id = data.event.message.chat_id
+            logger.info(f"[{sender_id}] {content_str}")
 
-            logger.info(f"[{sender_id}] [{message_type}] {content_str}")
-
-            # Parse content
+            # Parse text content
             import json
             try:
                 content_obj = json.loads(content_str)
