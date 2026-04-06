@@ -6,8 +6,10 @@ Run with: source venv/bin/activate && chainlit run src/chainlit_app.py
 import chainlit as cl
 from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
+from src.agent.executor import _get_compressor
 from src.state import AgentState
 from src.memory.store import MemoryManager
+from src.system_commands import handle_command
 from src.tools.registry import ToolRegistry
 from src.tools.todos import TodoTool
 from src.tools.notes import NoteTool
@@ -37,17 +39,26 @@ async def start():
         "- 🔍 **搜索笔记**：上次RBAC讨论了什么\n"
         "- ✍️ **快速记录**：记一下，明天下午3点开会讨论权限方案\n"
         "- ✏️ **管理信息**：取消明天的晨会\n\n"
-        "试试跟我说句话吧！"
+        "发送 `/help` 查看更多指令。"
     ).send()
 
 
 @cl.on_message
 async def on_message(message: cl.Message):
     memory: MemoryManager = cl.user_session.get("memory")
+    text = message.content.strip()
+
+    # System commands — no LLM overhead
+    if text.startswith("/"):
+        compressor = _get_compressor()
+        response = handle_command(text, memory, compressor)
+        if response:
+            await cl.Message(content=response).send()
+            return
 
     agent = get_agent()
 
-    memory.add_message(HumanMessage(content=message.content))
+    memory.add_message(HumanMessage(content=text))
     state = AgentState(
         messages=memory.get_history(),
         intent="",
@@ -60,7 +71,6 @@ async def on_message(message: cl.Message):
 
     result = agent.invoke(state)
 
-    # Extract final response from the last AI message in the conversation
     messages = result.get("messages", [])
     response = "抱歉，处理出错了。"
     for m in reversed(messages):
