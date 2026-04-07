@@ -6,10 +6,8 @@ Run with: source venv/bin/activate && chainlit run src/chainlit_app.py
 import chainlit as cl
 from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
-from src.agent.executor import _get_compressor
 from src.state import AgentState
 from src.memory.store import MemoryManager
-from src.system_commands import handle_command
 from src.tools.registry import ToolRegistry
 from src.tools.todos import TodoTool
 from src.tools.notes import NoteTool
@@ -46,19 +44,10 @@ async def start():
 @cl.on_message
 async def on_message(message: cl.Message):
     memory: MemoryManager = cl.user_session.get("memory")
-    text = message.content.strip()
-
-    # System commands — no LLM overhead
-    if text.startswith("/"):
-        compressor = _get_compressor()
-        response = handle_command(text, memory, compressor)
-        if response:
-            await cl.Message(content=response).send()
-            return
 
     agent = get_agent()
 
-    memory.add_message(HumanMessage(content=text))
+    memory.add_message(HumanMessage(content=message.content))
     state = AgentState(
         messages=memory.get_history(),
         intent="",
@@ -71,15 +60,24 @@ async def on_message(message: cl.Message):
 
     result = agent.invoke(state)
 
-    messages = result.get("messages", [])
-    response = "抱歉，处理出错了。"
-    for m in reversed(messages):
-        if hasattr(m, "content") and m.content and not hasattr(m, "tool_calls"):
-            response = m.content
-            break
-        if hasattr(m, "content") and m.content and hasattr(m, "tool_calls") and not m.tool_calls:
-            response = m.content
-            break
+    # Check for system command response (returned directly, no LLM)
+    response = result.get("final_response", "")
+
+    if not response:
+        messages = result.get("messages", [])
+        for m in reversed(messages):
+            if hasattr(m, "content") and m.content and not (
+                hasattr(m, "tool_calls") and m.tool_calls
+            ):
+                response = m.content
+                break
+
+    if not response:
+        response = "抱歉，处理出错了。"
+
+    # /reset sync: clear entry-layer memory too
+    if message.content.strip() == "/reset":
+        memory._messages.clear()
 
     memory.add_message(AIMessage(content=response))
     await cl.Message(content=response).send()

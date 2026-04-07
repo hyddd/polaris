@@ -167,17 +167,6 @@ class PolarisFeishuBot:
             if not text.strip():
                 return
 
-            # System commands — no LLM overhead, no typing indicator
-            if text.strip().startswith("/"):
-                from src.system_commands import handle_command
-                from src.agent.executor import _get_compressor
-                memory = _get_memory(sender_id)
-                compressor = _get_compressor()
-                cmd_response = handle_command(text.strip(), memory, compressor)
-                if cmd_response:
-                    self._send_response(chat_id, sender_id, cmd_response)
-                    return
-
             # Show typing indicator
             reaction_id = self._send_typing(data.event.message.message_id)
 
@@ -187,7 +176,10 @@ class PolarisFeishuBot:
             # Remove typing indicator, then send reply
             if reaction_id:
                 self._delete_typing(data.event.message.message_id, reaction_id)
-            self._send_response(chat_id, sender_id, response)
+            if chat_id:
+                self._send_message(chat_id, response)
+            else:
+                self._send_message_by_user(sender_id, response)
 
         except Exception as e:
             logger.error(f"处理消息失败: {e}", exc_info=True)
@@ -209,14 +201,21 @@ class PolarisFeishuBot:
 
         try:
             result = agent.invoke(state)
-            messages = result.get("messages", [])
-            response = "抱歉，处理出错了。"
-            for m in reversed(messages):
-                if hasattr(m, "content") and m.content and not (
-                    hasattr(m, "tool_calls") and m.tool_calls
-                ):
-                    response = m.content
-                    break
+
+            response = result.get("final_response", "")
+            if not response:
+                messages = result.get("messages", [])
+                for m in reversed(messages):
+                    if hasattr(m, "content") and m.content and not (
+                        hasattr(m, "tool_calls") and m.tool_calls
+                    ):
+                        response = m.content
+                        break
+            if not response:
+                response = "抱歉，处理出错了。"
+
+            if text.strip() == "/reset":
+                memory._messages.clear()
         except Exception as e:
             logger.error(f"Agent 调用失败: {e}", exc_info=True)
             response = f"抱歉，出了点问题：{e}"
@@ -250,13 +249,6 @@ class PolarisFeishuBot:
             self.client.im.v1.message_reaction.delete(request)
         except Exception:
             pass
-
-    def _send_response(self, chat_id: str | None, user_id: str, content: str) -> None:
-        """Send response to the right channel (chat or user)."""
-        if chat_id:
-            self._send_message(chat_id, content)
-        else:
-            self._send_message_by_user(user_id, content)
 
     def _send_message(self, chat_id: str, content: str) -> None:
         import json
