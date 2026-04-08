@@ -1,6 +1,7 @@
 """ReAct agent executor — LLM with tool binding + tool execution loop."""
 
 import os
+import logging
 from datetime import date
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -9,6 +10,8 @@ from src.state import AgentState
 from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
 from src.tools.registry import ToolRegistry
 from src.memory.compressor import ConversationCompressor
+
+logger = logging.getLogger("polaris.agent")
 
 
 UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris，一个聪明友好的 AI 助手。
@@ -94,9 +97,27 @@ def agent_node(state: AgentState) -> dict:
     llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0.3)
     if tools:
         llm = llm.bind_tools(tools)
+        tool_names = [t.name for t in tools]
+    else:
+        tool_names = []
+
+    # Log request details for cache debugging
+    msg_types = [m.type for m in recent]
+    total_chars = sum(len(m.content) if hasattr(m, "content") and isinstance(m.content, str) else 0 for m in recent)
+    logger.info(
+        f"[LLM] intent={intent} tools={tool_names} "
+        f"msgs={len(recent)}({','.join(msg_types)}) "
+        f"chars={total_chars} summary={len(summary)}chars "
+        f"system_prompt={len(system_prompt)}chars"
+    )
 
     chain = AGENT_PROMPT | llm
     response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
+
+    # Log response summary
+    tc_count = len(response.tool_calls) if hasattr(response, "tool_calls") and response.tool_calls else 0
+    content_len = len(response.content) if response.content else 0
+    logger.info(f"[LLM] response: tool_calls={tc_count} content_len={content_len}")
 
     return {"messages": [response]}
 
