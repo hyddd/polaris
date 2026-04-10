@@ -1,4 +1,8 @@
-"""ReAct agent executor — LLM with tool binding + tool execution loop."""
+"""ReAct agent executor — LLM with tool binding + tool execution loop.
+
+LLM always gets ALL tools and decides autonomously whether to call them.
+No intent-based routing — the LLM self-determines intent from context.
+"""
 
 import os
 from datetime import date
@@ -10,36 +14,42 @@ from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
 from src.tools.registry import ToolRegistry
 from src.memory.compressor import ConversationCompressor
 
+UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 
-UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris，一个聪明友好的 AI 助手。
+## 可用工具
+你拥有以下工具，可以根据需要自主决定是否调用：
 
-## 你的能力
-你可以帮用户完成以下操作：
+- **calendar** — 查询、创建、修改、删除日历事件
+  - 查询当日或指定日期：list <日期 YYYY-MM-DD>
+  - 搜索事件：search <关键词>
+  - 创建事件：create {"date":"...","time":"...","title":"..."}
+  - 修改事件：update <event_id> {...}
+  - 删除事件：delete <event_id>
 
-1. **查看日程** — 查询当天的日历事件和待办事项，生成今日计划
-   - 使用 calendar 工具查询日历，使用 todo 工具查询待办
-2. **会议准备** — 查找会议信息、搜索相关笔记、生成准备清单
-   - 使用 calendar、rag_search、todo 工具
-3. **搜索笔记** — 语义搜索历史笔记
-   - 使用 rag_search 工具
-4. **快速记录** — 一句话创建日程、笔记或待办
-   - 创建日程用 calendar，记录笔记用 notes，添加待办用 todo
-   - 将自然语言日期（明天、周五）转换为 YYYY-MM-DD 格式
-5. **管理信息** — 修改或删除已有的日程和待办
-   - 修改/删除：先搜索找到目标，确认后再执行
+- **todo** — 管理待办事项
+  - 列出待办：list all|pending|done
+  - 搜索：search <关键词>
+  - 创建：create {"title":"...","priority":"high|medium|low","due":"YYYY-MM-DD"}
+  - 标记完成：done <todo_id>
+  - 删除：delete <todo_id>
 
-## 工具使用规则
-- 用户消息明确属于上述 5 类操作时才调用工具
-- 查询/列表类操作可以直接调用
-- 创建类操作直接执行，成功后告知
-- 删除类操作先搜索确认，再执行
-- 普通闲聊、打招呼、一般知识问答时不要调用工具，友好自然地用中文回复
-- 如果用户意图模糊，友好追问以明确意图
+- **notes** — 管理笔记
+  - 列出笔记：list
+  - 读取：read <文件名>
+  - 创建：create {"title":"...","content":"...","tags":[...]}
+  - 搜索（关键词）：search <关键词>
+  - 归档：archive <文件名>
 
-## 回复风格
-- 用中文，简洁直接
-- 日程按时间排列，待办按优先级排列
-- 工具返回空结果时如实告知用户，而不是编造数据
+- **rag_search** — 语义搜索笔记内容。输入自然语言查询即可
+
+## 行为准则
+- 根据用户消息自主判断是否需要调用工具
+- 闲聊、打招呼、一般知识问答时不要调用工具，直接友好回复
+- 用户明确要求操作日程/笔记/待办时才调用对应工具
+- 结合对话历史理解上下文。比如用户之前提到某个会议，后续说"帮我准备一下"，应理解指的是那个会议
+- 删除操作先确认再执行
+- 工具返回空结果时如实告知，不编造数据
+- 用中文回复，简洁直接
 """
 
 AGENT_PROMPT = ChatPromptTemplate.from_messages([
@@ -47,19 +57,15 @@ AGENT_PROMPT = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="messages"),
 ])
 
-# Non-chat intents get ALL tools; agent decides which to use based on context
-TOOL_INTENTS = {"daily_planning", "meeting_prep", "knowledge_search", "quick_capture", "manage"}
 ALL_TOOLS = ["calendar", "todo", "notes", "rag_search"]
 
 
-def _get_tools(intent: str) -> list:
+def _get_all_tools() -> list:
     registry = ToolRegistry.get_instance()
-    if intent in TOOL_INTENTS:
-        return [registry.get(name) for name in ALL_TOOLS if registry.get(name)]
-    return []
+    return [registry.get(name) for name in ALL_TOOLS if registry.get(name)]
 
 
-# Global compressor instance (in-process; summary persists across calls in same session)
+# Global compressor instance
 _compressor = None
 
 
@@ -76,8 +82,7 @@ def _get_compressor() -> ConversationCompressor:
 
 
 def agent_node(state: AgentState) -> dict:
-    intent = state.get("intent", "chat")
-    tools = _get_tools(intent)
+    tools = _get_all_tools()
     messages = state.get("messages", [])
 
     # Compress: summarize old messages, trim recent to token budget
@@ -138,6 +143,4 @@ def should_continue(state: AgentState) -> str:
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         return "tools"
 
-    # Final answer — store it in final_response for the Chainlit layer
-    content = last_message.content if hasattr(last_message, "content") else str(last_message)
     return "end"
