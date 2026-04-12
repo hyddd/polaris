@@ -27,10 +27,11 @@ class TodoTool(BaseTool):
                 return "没有待办事项。"
             lines = []
             for t in todos:
-                icon = {"pending": "○", "in_progress": "◉", "done": "✓"}.get(t.get("status", ""), "?")
+                status_text = {"pending": "待完成", "in_progress": "进行中", "done": "已完成"}.get(t.get("status", ""), "未知")
+                priority_text = {"high": "高", "medium": "中", "low": "低"}.get(t.get("priority", ""), "-")
                 lines.append(
-                    f"- {icon} [{t.get('priority', '-')}] {t['title']} "
-                    f"(截止: {t.get('due', '无')}) [ID: {t['id']}]"
+                    f"- [{status_text}] 优先级{priority_text} {t['title']} "
+                    f"(截止: {t.get('due', '无')})"
                 )
             return "\n".join(lines)
 
@@ -43,7 +44,12 @@ class TodoTool(BaseTool):
             ]
             if not matches:
                 return f"没有找到包含「{keyword}」的待办。"
-            return "\n".join(f"- [{t['priority']}] {t['title']} [ID: {t['id']}]" for t in matches)
+            lines = []
+            for t in matches:
+                status_text = {"pending": "待完成", "in_progress": "进行中", "done": "已完成"}.get(t.get("status", ""), "未知")
+                priority_text = {"high": "高", "medium": "中", "low": "低"}.get(t.get("priority", ""), "-")
+                lines.append(f"- [{status_text}] 优先级{priority_text} {t['title']} (截止: {t.get('due', '无')})")
+            return "\n".join(lines)
 
         elif cmd.startswith("create"):
             try:
@@ -55,7 +61,8 @@ class TodoTool(BaseTool):
             new_todo.setdefault("tags", [])
             todos.append(new_todo)
             save_json(path, todos)
-            return f"已添加待办：{new_todo['title']} [ID: {new_todo['id']}]"
+            priority_text = {"high": "高", "medium": "中", "low": "低"}.get(new_todo.get("priority", ""), "-")
+            return f"已添加待办（优先级{priority_text}）：{new_todo['title']}，截止 {new_todo.get('due', '未设')}"
 
         elif cmd.startswith("done"):
             todo_id = cmd.replace("done", "").strip()
