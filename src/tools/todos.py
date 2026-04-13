@@ -7,7 +7,8 @@ from pathlib import Path
 class TodoTool(BaseTool):
     name: str = "todo"
     description: str = (
-        "Manage todo items. Commands: list all|pending|done, "
+        "Manage todo items. Commands: "
+        "list active (pending+in_progress, default), list all, list pending, list done, "
         "search <keyword>, create {\"title\":...,\"priority\":...,\"due\":...}, done <id>, delete <id>"
     )
     data_file: str = ""
@@ -21,7 +22,9 @@ class TodoTool(BaseTool):
 
         if cmd.startswith("list"):
             status_filter = cmd.replace("list", "").strip()
-            if status_filter and status_filter != "all":
+            if status_filter == "active":
+                todos = [t for t in todos if t.get("status") in ("pending", "in_progress")]
+            elif status_filter and status_filter != "all":
                 todos = [t for t in todos if t.get("status") == status_filter]
             if not todos:
                 return "没有待办事项。"

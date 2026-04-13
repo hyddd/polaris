@@ -29,14 +29,15 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
   注意：用户说"今天有什么安排"时，传入今天的日期
 
 - **todo** — 管理待办事项
-  - 查看所有待办（默认）：list all
-  - 只看未完成的：list pending
+  - 查看当前待办（默认，不含已完成）：list active
+  - 查看所有（含已完成）：list all
   - 只看已完成的：list done
+  - 只看未开始的：list pending
   - 搜索：search <关键词>
   - 创建：create {"title":"...","priority":"high|medium|low","due":"YYYY-MM-DD"}
   - 标记完成：done <todo_id>
   - 删除：delete <todo_id>
-  注意：用户说"查看待办""有什么待办"时，使用 list all，不要只查 pending
+  注意：用户说"查看待办""有什么待办"时默认用 list active；说"查看所有待办""包括已完成的"时才用 list all
 
 - **notes** — 管理笔记
   - 列出笔记：list
