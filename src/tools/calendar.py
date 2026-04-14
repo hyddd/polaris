@@ -1,60 +1,56 @@
-import json
 import uuid
+from typing import Optional, Literal
 from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
 from pathlib import Path
+
+
+class CalendarInput(BaseModel):
+    action: Literal["list", "search", "create", "update", "delete"] = Field(
+        description="操作类型：list=查看日程, search=搜索事件, create=创建, update=修改, delete=删除"
+    )
+    date: Optional[str] = Field(default=None, description="list 或 create 时的日期，格式 YYYY-MM-DD")
+    keyword: Optional[str] = Field(default=None, description="search 时的搜索关键词")
+    title: Optional[str] = Field(default=None, description="create 时的事件标题")
+    time: Optional[str] = Field(default=None, description="create 时的事件时间，格式 HH:MM")
+    attendees: Optional[list[str]] = Field(default=None, description="create 时的参与者列表")
+    duration: Optional[int] = Field(default=60, description="create 时的事件时长（分钟），默认 60")
+    event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID")
+    updates: Optional[dict] = Field(default=None, description="update 时要修改的字段")
 
 
 class GoogleCalendarTool(BaseTool):
     name: str = "calendar"
-    description: str = (
-        "Manage calendar events. Commands: list <date YYYY-MM-DD>, "
-        "create {\"date\":\"...\",\"time\":\"...\",\"title\":\"...\"}, "
-        "search <keyword>, update <id> <json>, delete <id>"
-    )
+    description: str = "管理日历事件：查看、搜索、创建、修改、删除。查看时传入日期可查当天日程。"
+    args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
     use_mock: bool = True
 
-    def _run(self, command: str) -> str:
+    def _run(self, action: str, date: str | None = None, keyword: str | None = None,
+             title: str | None = None, time: str | None = None, attendees: list[str] | None = None,
+             duration: int = 60, event_id: str | None = None, updates: dict | None = None) -> str:
         from src.data_layer.loader import load_json, save_json
 
         path = Path(self.data_file)
         data = load_json(path) if isinstance(load_json(path), list) else []
-        cmd = command.strip().lower()
 
-        if cmd.startswith("list"):
-            date_str = command.split("list", 1)[1].strip()
+        if action == "list":
+            if not date:
+                return "请提供要查询的日期（YYYY-MM-DD）。"
             for day in data:
-                if day.get("date") == date_str:
+                if day.get("date") == date:
                     events = day.get("events", [])
                     if not events:
-                        return f"{date_str} 没有日程安排。"
+                        return f"{date} 没有日程安排。"
                     return "\n".join(
-                        f"- {ev['time']} {ev['title']} ({ev.get('duration', 60)}分钟) [ID: {ev['id']}]"
+                        f"- {ev['time']} {ev['title']} ({ev.get('duration', 60)}分钟)"
                         for ev in sorted(events, key=lambda e: e.get("time", ""))
                     )
-            return f"{date_str} 没有日程安排。"
+            return f"{date} 没有日程安排。"
 
-        elif cmd.startswith("create"):
-            try:
-                new_event = json.loads(command.split("create", 1)[1].strip())
-            except (json.JSONDecodeError, IndexError):
-                return "创建日程需要 JSON：create {\"date\":\"...\",\"time\":\"...\",\"title\":\"...\"}"
-            new_event["id"] = f"evt-{uuid.uuid4().hex[:8]}"
-            new_event.setdefault("duration", 60)
-            new_event.setdefault("attendees", [])
-            date_str = new_event.pop("date")
-
-            for day in data:
-                if day.get("date") == date_str:
-                    day.setdefault("events", []).append(new_event)
-                    save_json(path, data)
-                    return f"已添加日程：{date_str} {new_event.get('time','')} {new_event['title']} [ID: {new_event['id']}]"
-            data.append({"date": date_str, "events": [new_event]})
-            save_json(path, data)
-            return f"已添加日程：{date_str} {new_event.get('time','')} {new_event['title']} [ID: {new_event['id']}]"
-
-        elif cmd.startswith("search"):
-            keyword = cmd.replace("search", "").strip()
+        elif action == "search":
+            if not keyword:
+                return "请提供搜索关键词。"
             matches = []
             for day in data:
                 for ev in day.get("events", []):
@@ -62,30 +58,41 @@ class GoogleCalendarTool(BaseTool):
                         matches.append((day["date"], ev))
             if not matches:
                 return f"没有找到包含「{keyword}」的日程。"
-            return "\n".join(
-                f"- {date}: {ev['time']} {ev['title']} [ID: {ev['id']}]"
-                for date, ev in matches
-            )
+            return "\n".join(f"- {date}: {ev['time']} {ev['title']}" for date, ev in matches)
 
-        elif cmd.startswith("update"):
-            parts = command.split(None, 2)
-            if len(parts) < 3:
-                return "用法: update <event_id> {\"date\":\"...\",\"time\":\"...\"}"
-            event_id, json_data = parts[1], parts[2]
-            try:
-                updates = json.loads(json_data)
-            except json.JSONDecodeError:
-                return "更新数据需要 JSON 格式"
+        elif action == "create":
+            if not title or not date:
+                return "创建日程需要提供标题和日期。"
+            new_event = {
+                "id": f"evt-{uuid.uuid4().hex[:8]}",
+                "title": title,
+                "time": time or "09:00",
+                "duration": duration,
+                "attendees": attendees or [],
+            }
+            for day in data:
+                if day.get("date") == date:
+                    day.setdefault("events", []).append(new_event)
+                    save_json(path, data)
+                    return f"已添加日程：{date} {new_event['time']} {title}"
+            data.append({"date": date, "events": [new_event]})
+            save_json(path, data)
+            return f"已添加日程：{date} {new_event['time']} {title}"
+
+        elif action == "update":
+            if not event_id or not updates:
+                return "修改日程需要提供事件 ID 和要修改的字段。"
             for day in data:
                 for ev in day.get("events", []):
                     if ev["id"] == event_id:
                         ev.update(updates)
                         save_json(path, data)
                         return f"已更新日程：{ev.get('title', event_id)}"
-            return f"未找到日程 ID: {event_id}"
+            return f"未找到事件 ID: {event_id}"
 
-        elif cmd.startswith("delete"):
-            event_id = cmd.replace("delete", "").strip()
+        elif action == "delete":
+            if not event_id:
+                return "删除需要提供事件 ID。"
             for day in data:
                 events = day.get("events", [])
                 for i, ev in enumerate(events):
@@ -94,9 +101,9 @@ class GoogleCalendarTool(BaseTool):
                         events.pop(i)
                         save_json(path, data)
                         return f"已删除日程：{title}"
-            return f"未找到日程 ID: {event_id}"
+            return f"未找到事件 ID: {event_id}"
 
-        return "可用命令：list <date>, create <json>, search <keyword>, update <id> <json>, delete <id>"
+        return "未知操作。"
 
-    async def _arun(self, command: str) -> str:
-        return self._run(command)
+    async def _arun(self, **kwargs) -> str:
+        return self._run(**kwargs)

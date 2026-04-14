@@ -1,9 +1,15 @@
 from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+
+
+class RAGInput(BaseModel):
+    query: str = Field(description="搜索查询，自然语言即可")
 
 
 class RAGSearchTool(BaseTool):
     name: str = "rag_search"
-    description: str = "Semantic search across your notes. Input: a natural language query string."
+    description: str = "语义搜索笔记内容。输入自然语言查询，返回相关笔记片段。"
+    args_schema: type[BaseModel] = RAGInput
     persist_dir: str = ""
     collection_name: str = "notes"
 
