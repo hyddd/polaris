@@ -63,9 +63,49 @@ class Session:
     metadata: dict           # {source_channel: str, message_count: int, summary: str}
 ```
 
-### 3.2 会话存储
+### 3.2 默认会话
 
-进程内 `dict[str, Session]`，重启丢失。后续可换 SQLite 持久化。
+系统启动时自动创建一个默认会话 `default`，channel 首次对话无需手动创建：
+
+```
+飞书第一条消息（无 session_id） → 自动路由到 default 会话
+Web 新用户（无 session_id）     → 自动路由到 default 会话
+```
+
+用户可以在默认会话中正常对话，也可以随时 `/new` 创建独立会话。
+
+### 3.3 活跃会话
+
+所有通道共享同一个"活跃会话"指针。用户在飞书 `/session 工作` 切到工作会话后，Web 端也自动切换。保证跨通道体验一致。
+
+### 3.4 会话持久化
+
+每次会话变更时自动保存到 `data/sessions.json`，Agent 重启后恢复：
+
+```json
+{
+  "active_session": "sess_a1b2c3d4",
+  "sessions": [
+    {
+      "id": "default",
+      "name": "默认",
+      "created_at": "2026-04-30T10:00:00",
+      "last_active": "2026-04-30T15:30:00",
+      "message_count": 12,
+      "messages": [
+        {"type": "human", "content": "你好", "timestamp": "..."},
+        {"type": "ai", "content": "你好！我是 Polaris", "timestamp": "..."}
+      ],
+      "summary": ""
+    }
+  ]
+}
+```
+
+- 每个会话保存完整消息历史（序列化为 dict）
+- Compressor 摘要一并持久化
+- 启动时从文件恢复所有 MemoryManager
+- 仅保存最近 200 条消息，超出部分保留摘要
 
 ### 3.3 会话 ID 生成
 
@@ -170,9 +210,8 @@ Response: {"ok": true, "active_session": "sess_a1b2c3d4"}
 | 指令 | 行为 |
 |------|------|
 | `/new <name>` | 创建新会话并切换 |
-| `/switch <id>` | 切换到指定会话，支持模糊匹配（`/switch sess_a`） |
-| `/switch` | 列出所有会话及摘要，供选择 |
-| `/sessions` | 同 `/switch`，显示会话列表 |
+| `/sessions` | 列出所有会话及摘要 |
+| `/session <id\|名称>` | 切换到指定会话，支持 ID 前缀和名称模糊匹配 |
 | `/rename <name>` | 重命名当前会话 |
 | `/reset` | 重置当前会话记忆（现有功能，不变） |
 | `/compact` | 压缩当前会话上下文（现有功能，不变） |
@@ -194,29 +233,35 @@ Agent: 已创建会话「技术讨论」(sess_b5e6f7a8)。已切换到该会话�
 - 继承当前会话的 profile 信息（时区、偏好）
 - 旧会话保持独立，可随时切回
 
-### 5.2 `/switch` — 切换/查看会话
+### 5.2 `/sessions` — 查看所有会话
 
 ```
-# 列出会话
-用户: /switch
-Agent: 当前活跃: 「工作规划」(sess_a1b2c3d4)
+用户: /sessions
+Agent: 当前活跃: 「工作规划」(sess_a1b2c)
 
        会话列表:
        [活跃] 工作规划 (sess_a1b2c) — 23条消息 — 最后活跃14:30
               技术讨论 (sess_b5e6f) — 5条消息  — 最后活跃12:10
               读书笔记 (sess_d9e1a) — 8条消息  — 最后活跃昨天
-
-       输入 /switch <id> 切换到对应会话。
-
-# 切换
-用户: /switch sess_b5
-Agent: 已切换到会话「技术讨论」(sess_b5e6f7a8)。上次话题：讨论了微服务拆分方案。
+              默认     (default)    — 12条消息 — 最后活跃刚才
 ```
 
-- ID 支持前缀模糊匹配（前4位唯一即可）
-- 切换时显示该会话的摘要，帮助用户回忆上下文
+### 5.3 `/session` — 切换会话
 
-### 5.3 `/rename` — 重命名
+```
+用户: /session sess_b5
+Agent: 已切换到会话「技术讨论」(sess_b5e6f7a8)。上次话题：讨论了微服务拆分方案。
+
+用户: /session 工作
+Agent: 已切换到会话「工作规划」(sess_a1b2c3d4)。上次话题：讨论了RBAC方案。
+```
+
+- ID 支持前缀匹配（前4位唯一即可）
+- 名称支持模糊匹配（包含关系）
+- 多个匹配时列出候选让用户选
+- 切换时显示摘要，帮助用户回忆上下文
+
+### 5.4 `/rename` — 重命名
 
 ```
 用户: /rename 工作规划 & RBAC
