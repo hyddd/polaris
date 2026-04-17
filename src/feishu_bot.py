@@ -37,7 +37,7 @@ logger = logging.getLogger("polaris.feishu")
 from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
 from src.state import AgentState
-from src.memory.store import MemoryManager
+from src.session_manager import get_session_manager
 from src.tools.registry import ToolRegistry
 from src.tools.todos import TodoTool
 from src.tools.notes import NoteTool
@@ -45,7 +45,6 @@ from src.tools.calendar import GoogleCalendarTool
 from src.tools.rag import RAGSearchTool
 from src.config import CALENDAR_FILE, TODOS_FILE, NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
 
-_user_memories: dict[str, MemoryManager] = {}
 _tools_registered = False
 
 
@@ -60,12 +59,8 @@ def _register_tools():
     registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
     _tools_registered = True
     logger.info("Tools registered")
-
-
-def _get_memory(user_id: str) -> MemoryManager:
-    if user_id not in _user_memories:
-        _user_memories[user_id] = MemoryManager(window_size=10)
-    return _user_memories[user_id]
+    _tools_registered = True
+    logger.info("Tools registered")
 
 
 class PolarisFeishuBot:
@@ -185,7 +180,9 @@ class PolarisFeishuBot:
             logger.error(f"处理消息失败: {e}", exc_info=True)
 
     def _process_message(self, user_id: str, text: str) -> str:
-        memory = _get_memory(user_id)
+        session_mgr = get_session_manager()
+        session = session_mgr.active_session
+        memory = session.memory
         agent = get_agent()
 
         memory.add_message(HumanMessage(content=text))
@@ -213,14 +210,12 @@ class PolarisFeishuBot:
                         break
             if not response:
                 response = "抱歉，处理出错了。"
-
-            if text.strip() == "/reset":
-                memory._messages.clear()
         except Exception as e:
             logger.error(f"Agent 调用失败: {e}", exc_info=True)
             response = f"抱歉，出了点问题：{e}"
 
         memory.add_message(AIMessage(content=response))
+        session_mgr.record_message(text, response)
         return response
 
     def _send_typing(self, message_id: str) -> str | None:

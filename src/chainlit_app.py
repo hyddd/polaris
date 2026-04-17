@@ -7,7 +7,7 @@ import chainlit as cl
 from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
 from src.state import AgentState
-from src.memory.store import MemoryManager
+from src.session_manager import get_session_manager
 from src.tools.registry import ToolRegistry
 from src.tools.todos import TodoTool
 from src.tools.notes import NoteTool
@@ -18,6 +18,8 @@ from src.config import CALENDAR_FILE, TODOS_FILE, NOTES_DIR, ARCHIVE_DIR, CHROMA
 
 def register_tools():
     registry = ToolRegistry.get_instance()
+    if registry.list_tools():
+        return
     registry.register(TodoTool(data_file=str(TODOS_FILE)))
     registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR)))
     registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
@@ -26,8 +28,9 @@ def register_tools():
 
 @cl.on_chat_start
 async def start():
-    cl.user_session.set("memory", MemoryManager(window_size=10))
     register_tools()
+    session_mgr = get_session_manager()
+    cl.user_session.set("session_id", session_mgr._active_id)
 
     await cl.Message(
         content="你好！我是 Polaris，你的个人效率助手。\n\n"
@@ -37,13 +40,19 @@ async def start():
         "- 🔍 **搜索笔记**：上次RBAC讨论了什么\n"
         "- ✍️ **快速记录**：记一下，明天下午3点开会讨论权限方案\n"
         "- ✏️ **管理信息**：取消明天的晨会\n\n"
-        "发送 `/help` 查看更多指令。"
+        "会话命令：\n"
+        "• `/new <名称>` — 创建新会话\n"
+        "• `/sessions` — 查看所有会话\n"
+        "• `/session <id|名称>` — 切换会话\n"
+        "• `/help` — 查看更多指令"
     ).send()
 
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    memory: MemoryManager = cl.user_session.get("memory")
+    session_mgr = get_session_manager()
+    session = session_mgr.active_session
+    memory = session.memory
 
     agent = get_agent()
 
@@ -60,24 +69,19 @@ async def on_message(message: cl.Message):
 
     result = agent.invoke(state)
 
-    # Check for system command response (returned directly, no LLM)
+    messages = result.get("messages", [])
     response = result.get("final_response", "")
-
     if not response:
-        messages = result.get("messages", [])
         for m in reversed(messages):
             if hasattr(m, "content") and m.content and not (
                 hasattr(m, "tool_calls") and m.tool_calls
             ):
                 response = m.content
                 break
-
     if not response:
         response = "抱歉，处理出错了。"
 
-    # /reset sync: clear entry-layer memory too
-    if message.content.strip() == "/reset":
-        memory._messages.clear()
-
     memory.add_message(AIMessage(content=response))
+    session_mgr.record_message(message.content, response)
+
     await cl.Message(content=response).send()

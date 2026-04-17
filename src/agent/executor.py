@@ -12,7 +12,7 @@ from langchain_core.messages import ToolMessage, AIMessage
 from src.state import AgentState
 from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
 from src.tools.registry import ToolRegistry
-from src.memory.compressor import ConversationCompressor
+from src.session_manager import get_session_manager
 
 UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 
@@ -68,28 +68,13 @@ def _get_all_tools() -> list:
     return [registry.get(name) for name in ALL_TOOLS if registry.get(name)]
 
 
-# Global compressor instance
-_compressor = None
-
-
-def _get_compressor() -> ConversationCompressor:
-    global _compressor
-    if _compressor is None:
-        model_max = int(os.getenv("POLARIS_MODEL_MAX_CONTEXT", "200000"))
-        threshold = float(os.getenv("POLARIS_COMPRESSION_THRESHOLD", "0.8"))
-        _compressor = ConversationCompressor(
-            model_max_context=model_max,
-            compression_threshold=threshold,
-        )
-    return _compressor
-
-
 def agent_node(state: AgentState) -> dict:
     tools = _get_all_tools()
     messages = state.get("messages", [])
 
-    # Compress: summarize old messages, trim recent to token budget
-    compressor = _get_compressor()
+    # Use the active session's compressor
+    session_mgr = get_session_manager()
+    compressor = session_mgr.active_session.compressor
     summary, recent = compressor.process(list(messages))
 
     # Build system prompt with summary
