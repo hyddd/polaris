@@ -59,10 +59,6 @@ def _register_tools():
     registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
     _tools_registered = True
     logger.info("Tools registered")
-    _tools_registered = True
-    logger.info("Tools registered")
-
-
 class PolarisFeishuBot:
     def __init__(self):
         app_id = os.getenv("FEISHU_APP_ID")
@@ -180,43 +176,25 @@ class PolarisFeishuBot:
             logger.error(f"处理消息失败: {e}", exc_info=True)
 
     def _process_message(self, user_id: str, text: str) -> str:
-        session_mgr = get_session_manager()
-        session = session_mgr.active_session
-        memory = session.memory
-        agent = get_agent()
+        import urllib.request, json as _json
 
-        memory.add_message(HumanMessage(content=text))
-        state = AgentState(
-            messages=memory.get_history(),
-            intent="",
-            user_profile=memory.get_profile(),
-            tool_results={},
-            final_response="",
-            needs_clarification=False,
-            pending_action=None,
-        )
-
+        agent_url = os.getenv("AGENT_SERVER_URL", "http://localhost:8700")
         try:
-            result = agent.invoke(state)
-
-            response = result.get("final_response", "")
-            if not response:
-                messages = result.get("messages", [])
-                for m in reversed(messages):
-                    if hasattr(m, "content") and m.content and not (
-                        hasattr(m, "tool_calls") and m.tool_calls
-                    ):
-                        response = m.content
-                        break
-            if not response:
-                response = "抱歉，处理出错了。"
+            req = urllib.request.Request(
+                f"{agent_url}/chat",
+                data=_json.dumps({
+                    "message": text,
+                    "channel": f"feishu:{user_id}"
+                }).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = _json.loads(resp.read())
+                return data.get("response", "抱歉，处理出错了。")
         except Exception as e:
-            logger.error(f"Agent 调用失败: {e}", exc_info=True)
-            response = f"抱歉，出了点问题：{e}"
-
-        memory.add_message(AIMessage(content=response))
-        session_mgr.record_message(text, response)
-        return response
+            logger.error(f"Agent Server 调用失败: {e}")
+            return f"Agent Server 连接失败: {e}"
 
     def _send_typing(self, message_id: str) -> str | None:
         """发送 typing 表情，返回 reaction_id 用于后续删除。"""

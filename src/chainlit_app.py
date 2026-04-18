@@ -1,87 +1,57 @@
-"""Polaris Chainlit Web UI entry point.
+"""Polaris Chainlit Web UI — HTTP client to Agent Server.
 
-Run with: source venv/bin/activate && chainlit run src/chainlit_app.py
+Run: source venv/bin/activate && chainlit run src/chainlit_app.py
+
+Requires Agent Server running on AGENT_SERVER_URL (default http://localhost:8700).
 """
 
+import os
 import chainlit as cl
-from langchain_core.messages import HumanMessage, AIMessage
-from src.agent.graph import get_agent
-from src.state import AgentState
-from src.session_manager import get_session_manager
-from src.tools.registry import ToolRegistry
-from src.tools.todos import TodoTool
-from src.tools.notes import NoteTool
-from src.tools.calendar import GoogleCalendarTool
-from src.tools.rag import RAGSearchTool
-from src.config import CALENDAR_FILE, TODOS_FILE, NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
+import httpx
 
-
-def register_tools():
-    registry = ToolRegistry.get_instance()
-    if registry.list_tools():
-        return
-    registry.register(TodoTool(data_file=str(TODOS_FILE)))
-    registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR)))
-    registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
-    registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
+AGENT_SERVER = os.getenv("AGENT_SERVER_URL", "http://localhost:8700")
 
 
 @cl.on_chat_start
 async def start():
-    register_tools()
-    session_mgr = get_session_manager()
-    cl.user_session.set("session_id", session_mgr._active_id)
+    # Show active session info
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{AGENT_SERVER}/sessions")
+            if r.status_code == 200:
+                data = r.json()
+                active = data.get("active_session_id", "")
+                for s in data.get("sessions", []):
+                    if s["session_id"] == active:
+                        await cl.Message(
+                            content=f"当前会话: **{s['name']}** ({active})\n\n"
+                            "你好！我是 Polaris，你的个人效率助手。\n"
+                            "• `/new <名称>` 创建新会话\n"
+                            "• `/sessions` 查看所有会话\n"
+                            "• `/session <id>` 切换会话\n"
+                            "• `/help` 查看更多指令"
+                        ).send()
+                        return
+    except Exception:
+        pass
 
-    await cl.Message(
-        content="你好！我是 Polaris，你的个人效率助手。\n\n"
-        "我可以帮你：\n"
-        "- 🗓 **查看日程**：今天有什么安排？\n"
-        "- 📋 **会议准备**：下午3点的会帮我准备\n"
-        "- 🔍 **搜索笔记**：上次RBAC讨论了什么\n"
-        "- ✍️ **快速记录**：记一下，明天下午3点开会讨论权限方案\n"
-        "- ✏️ **管理信息**：取消明天的晨会\n\n"
-        "会话命令：\n"
-        "• `/new <名称>` — 创建新会话\n"
-        "• `/sessions` — 查看所有会话\n"
-        "• `/session <id|名称>` — 切换会话\n"
-        "• `/help` — 查看更多指令"
-    ).send()
+    await cl.Message(content="你好！我是 Polaris。发送 `/help` 查看指令。").send()
 
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    session_mgr = get_session_manager()
-    session = session_mgr.active_session
-    memory = session.memory
-
-    agent = get_agent()
-
-    memory.add_message(HumanMessage(content=message.content))
-    state = AgentState(
-        messages=memory.get_history(),
-        intent="",
-        user_profile=memory.get_profile(),
-        tool_results={},
-        final_response="",
-        needs_clarification=False,
-        pending_action=None,
-    )
-
-    result = agent.invoke(state)
-
-    messages = result.get("messages", [])
-    response = result.get("final_response", "")
-    if not response:
-        for m in reversed(messages):
-            if hasattr(m, "content") and m.content and not (
-                hasattr(m, "tool_calls") and m.tool_calls
-            ):
-                response = m.content
-                break
-    if not response:
-        response = "抱歉，处理出错了。"
-
-    memory.add_message(AIMessage(content=response))
-    session_mgr.record_message(message.content, response)
-
-    await cl.Message(content=response).send()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(
+                f"{AGENT_SERVER}/chat",
+                json={"message": message.content, "channel": "web"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                await cl.Message(content=data["response"]).send()
+            else:
+                await cl.Message(content=f"Agent Server 错误: {r.status_code}").send()
+    except httpx.ConnectError:
+        await cl.Message(content="无法连接到 Agent Server。请先启动 `python run_server.py`").send()
+    except Exception as e:
+        await cl.Message(content=f"出错: {e}").send()

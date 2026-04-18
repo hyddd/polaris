@@ -16,6 +16,9 @@ dependencies = [
     "pyyaml",
     "sentence-transformers",
     "lark-oapi",
+    "fastapi",
+    "uvicorn",
+    "httpx",
 ]
 
 [project.optional-dependencies]
