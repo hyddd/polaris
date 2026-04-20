@@ -10,7 +10,6 @@
 
 import logging
 import os
-import sys
 import hashlib
 import time
 from datetime import datetime
@@ -34,31 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("polaris.feishu")
 
-from langchain_core.messages import HumanMessage, AIMessage
-from src.agent.graph import get_agent
-from src.state import AgentState
-from src.session_manager import get_session_manager
-from src.tools.registry import ToolRegistry
-from src.tools.todos import TodoTool
-from src.tools.notes import NoteTool
-from src.tools.calendar import GoogleCalendarTool
-from src.tools.rag import RAGSearchTool
-from src.config import CALENDAR_FILE, TODOS_FILE, NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
 
-_tools_registered = False
-
-
-def _register_tools():
-    global _tools_registered
-    if _tools_registered:
-        return
-    registry = ToolRegistry.get_instance()
-    registry.register(TodoTool(data_file=str(TODOS_FILE)))
-    registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR)))
-    registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
-    registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
-    _tools_registered = True
-    logger.info("Tools registered")
 class PolarisFeishuBot:
     def __init__(self):
         app_id = os.getenv("FEISHU_APP_ID")
@@ -76,7 +51,6 @@ class PolarisFeishuBot:
     def start(self):
         logger.info("Polaris 飞书 Bot 启动中...")
 
-        _register_tools()
 
         self.client = lark.Client.builder() \
             .app_id(self.app_id) \

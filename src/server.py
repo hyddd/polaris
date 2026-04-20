@@ -62,6 +62,12 @@ async def lifespan(app: FastAPI):
         registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
         registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
         _tools_registered = True
+
+    # Discover and start channel plugins
+    from src.channels import ChannelManager
+    mgr = ChannelManager()
+    mgr.discover_and_start()
+
     yield
 
 
