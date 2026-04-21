@@ -119,10 +119,17 @@ def chat(req: ChatRequest):
 
 
 @app.post("/chat/stream")
-def chat_stream(req: ChatRequest):
-    """SSE streaming — yields tool_call, message, done events."""
-    from typing import Generator
+async def chat_stream(req: ChatRequest):
+    """SSE streaming — node-level progress via LangGraph astream.
+
+    Yields events as each graph node completes:
+      event: node — which node just ran (command, agent, tools)
+      event: tool_call — LLM decided to call a tool
+      event: message — final response text
+      event: done — stream complete
+    """
     import json
+    from typing import AsyncGenerator
 
     session_mgr = get_session_manager()
     session = _get_active_session(req.session_id, session_mgr)
@@ -140,21 +147,42 @@ def chat_stream(req: ChatRequest):
         pending_action=None,
     )
 
-    def generate() -> Generator[str, None, None]:
-        # For now: run full agent, stream result as single message event
-        # Future: integrate LangGraph streaming for true token-by-token
-        result = agent.invoke(state)
-        response_text = _extract_response(result)
-        tool_calls = _extract_tool_calls(result)
+    async def generate() -> AsyncGenerator[str, None]:
+        full_response = ""
 
-        for tc in tool_calls:
-            yield f"event: tool_call\ndata: {json.dumps(tc, ensure_ascii=False)}\n\n"
+        try:
+            async for chunk in agent.astream(state, stream_mode="updates"):
+                node_name = list(chunk.keys())[0] if chunk else "unknown"
+                node_output = list(chunk.values())[0] if chunk else {}
 
-        yield f"event: message\ndata: {json.dumps({'content': response_text}, ensure_ascii=False)}\n\n"
-        yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
+                yield f"event: node\ndata: {json.dumps({'node': node_name}, ensure_ascii=False)}\n\n"
 
-        memory.add_message(AIMessage(content=response_text))
-        session_mgr.record_message(req.message, response_text)
+                # Check for tool calls in agent node output
+                msgs = node_output.get("messages", [])
+                for msg in msgs:
+                    if hasattr(msg, "tool_calls") and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            yield f"event: tool_call\ndata: {json.dumps({'tool': tc.get('name', ''), 'args': tc.get('args', {})}, ensure_ascii=False)}\n\n"
+
+                    elif hasattr(msg, "content") and msg.content:
+                        # Collect final AI response
+                        if msg.type == "ai" and not (hasattr(msg, "tool_calls") and msg.tool_calls):
+                            full_response = msg.content
+
+                # Command node final_response
+                if node_output.get("final_response"):
+                    full_response = node_output["final_response"]
+
+            yield f"event: message\ndata: {json.dumps({'content': full_response or '无回复'}, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            import traceback
+            yield f"event: error\ndata: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+        if full_response:
+            memory.add_message(AIMessage(content=full_response))
+            session_mgr.record_message(req.message, full_response)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
