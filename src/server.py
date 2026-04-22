@@ -89,36 +89,10 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager):
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     session_mgr = get_session_manager()
-    session = _get_active_session(req.session_id, session_mgr)
-    memory = session.memory
-
-    # System commands: handle without memory/LLM overhead
-    if req.message.strip().startswith("/"):
-        from src.system_commands import handle_command
-        response_text = handle_command(req.message.strip(), session_mgr) or "未知指令"
-        return ChatResponse(session_id=session.session_id, response=response_text)
-
-    agent = get_agent()
-    memory.add_message(HumanMessage(content=req.message))
-    state = AgentState(
-        messages=memory.get_history(),
-        intent="",
-        user_profile=memory.get_profile(),
-        tool_results={},
-        final_response="",
-        needs_clarification=False,
-        pending_action=None,
-    )
-
-    result = agent.invoke(state)
-    response_text = _extract_response(result)
-    tool_calls = _extract_tool_calls(result)
-
-    memory.add_message(AIMessage(content=response_text))
-    session_mgr.record_message(req.message, response_text)
-
+    _get_active_session(req.session_id, session_mgr)
+    response_text, tool_calls = process_message(req.message, session_mgr)
     return ChatResponse(
-        session_id=session.session_id,
+        session_id=session_mgr.active_session.session_id,
         response=response_text,
         tool_calls=tool_calls,
     )
@@ -139,20 +113,20 @@ async def chat_stream(req: ChatRequest):
 
     session_mgr = get_session_manager()
     session = _get_active_session(req.session_id, session_mgr)
-    memory = session.memory
 
-    # System commands: handle without memory/LLM overhead
+    # System commands: wrap in SSE
     if req.message.strip().startswith("/"):
-        import json as _json2
-        from src.system_commands import handle_command
-        response_text = handle_command(req.message.strip(), session_mgr) or "未知指令"
+        response_text, _ = process_message(req.message, session_mgr)
 
-        async def cmd_generate() -> AsyncGenerator[str, None]:
-            yield f"event: message\ndata: {_json2.dumps({'content': response_text}, ensure_ascii=False)}\n\n"
-            yield f"event: done\ndata: {_json2.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
-        return StreamingResponse(cmd_generate(), media_type="text/event-stream")
+        async def cmd_gen() -> AsyncGenerator[str, None]:
+            import json as _j
+            yield f"event: message\ndata: {_j.dumps({'content': response_text}, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {_j.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(cmd_gen(), media_type="text/event-stream")
 
+    # Normal message: streaming agent pipeline
     agent = get_agent()
+    memory = session.memory
     memory.add_message(HumanMessage(content=req.message))
     state = AgentState(
         messages=memory.get_history(),
@@ -234,6 +208,49 @@ def activate_session(session_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
     return {"ok": True, "active_session": result.session_id, "name": result.name}
+
+
+# --- Shared message processing (used by HTTP endpoints & in-process channels) ---
+
+
+def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[dict]]:
+    """统一消息处理入口。系统命令不记 memory，普通消息走 Agent pipeline。
+
+    Returns (response_text, tool_calls).
+    """
+    from langchain_core.messages import HumanMessage, AIMessage
+    from src.agent.graph import get_agent
+    from src.system_commands import handle_command
+
+    session = session_mgr.active_session
+
+    # System commands: no memory, no LLM
+    if text.strip().startswith("/"):
+        return (handle_command(text.strip(), session_mgr) or "未知指令", [])
+
+    # Normal message
+    memory = session.memory
+    agent = get_agent()
+
+    memory.add_message(HumanMessage(content=text))
+    state = AgentState(
+        messages=memory.get_history(),
+        intent="",
+        user_profile=memory.get_profile(),
+        tool_results={},
+        final_response="",
+        needs_clarification=False,
+        pending_action=None,
+    )
+
+    result = agent.invoke(state)
+    response_text = _extract_response(result)
+    tool_calls = _extract_tool_calls(result)
+
+    memory.add_message(AIMessage(content=response_text))
+    session_mgr.record_message(text, response_text)
+
+    return (response_text, tool_calls)
 
 
 # --- Helpers ---
