@@ -91,8 +91,14 @@ def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     session = _get_active_session(req.session_id, session_mgr)
     memory = session.memory
-    agent = get_agent()
 
+    # System commands: handle without memory/LLM overhead
+    if req.message.strip().startswith("/"):
+        from src.system_commands import handle_command
+        response_text = handle_command(req.message.strip(), session_mgr) or "未知指令"
+        return ChatResponse(session_id=session.session_id, response=response_text)
+
+    agent = get_agent()
     memory.add_message(HumanMessage(content=req.message))
     state = AgentState(
         messages=memory.get_history(),
@@ -134,8 +140,19 @@ async def chat_stream(req: ChatRequest):
     session_mgr = get_session_manager()
     session = _get_active_session(req.session_id, session_mgr)
     memory = session.memory
-    agent = get_agent()
 
+    # System commands: handle without memory/LLM overhead
+    if req.message.strip().startswith("/"):
+        import json as _json2
+        from src.system_commands import handle_command
+        response_text = handle_command(req.message.strip(), session_mgr) or "未知指令"
+
+        async def cmd_generate() -> AsyncGenerator[str, None]:
+            yield f"event: message\ndata: {_json2.dumps({'content': response_text}, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {_json2.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(cmd_generate(), media_type="text/event-stream")
+
+    agent = get_agent()
     memory.add_message(HumanMessage(content=req.message))
     state = AgentState(
         messages=memory.get_history(),

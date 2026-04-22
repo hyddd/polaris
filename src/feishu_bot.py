@@ -158,6 +158,12 @@ class PolarisFeishuBot:
 
         session_mgr = get_session_manager()
         session = session_mgr.active_session
+
+        # System commands: handle without adding to memory
+        if text.strip().startswith("/"):
+            from src.system_commands import handle_command
+            return handle_command(text.strip(), session_mgr) or "未知指令"
+
         memory = session.memory
         agent = get_agent()
 
