@@ -22,9 +22,12 @@ def command_node(state: AgentState) -> dict:
     session_mgr = get_session_manager()
     response = handle_command(content.strip(), session_mgr)
     if response:
+        # Remove command from session memory (in-process channels share this)
+        session_mgr.active_session.memory._messages.pop()
+        # Clear all for /reset
         if content.strip() == "/reset":
-            return {"messages": [], "final_response": response}
-        return {"final_response": response}
+            session_mgr.reset_active()
+        return {"messages": [], "final_response": response}
 
     return {}
 

@@ -214,25 +214,19 @@ def activate_session(session_id: str):
 
 
 def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[dict]]:
-    """统一消息处理入口。系统命令不记 memory，普通消息走 Agent pipeline。
+    """统一消息处理入口。
 
-    Returns (response_text, tool_calls).
+    系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。
     """
     from langchain_core.messages import HumanMessage, AIMessage
     from src.agent.graph import get_agent
-    from src.system_commands import handle_command
 
     session = session_mgr.active_session
-
-    # System commands: no memory, no LLM
-    if text.strip().startswith("/"):
-        return (handle_command(text.strip(), session_mgr) or "未知指令", [])
-
-    # Normal message
     memory = session.memory
     agent = get_agent()
 
     memory.add_message(HumanMessage(content=text))
+
     state = AgentState(
         messages=memory.get_history(),
         intent="",
@@ -247,6 +241,11 @@ def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[d
     response_text = _extract_response(result)
     tool_calls = _extract_tool_calls(result)
 
+    # Command handled by command_node: already cleaned memory, just return response
+    if result.get("final_response"):
+        return (response_text, tool_calls)
+
+    # Normal message: persist AI reply
     memory.add_message(AIMessage(content=response_text))
     session_mgr.record_message(text, response_text)
 
