@@ -245,8 +245,12 @@ def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[d
     if result.get("final_response"):
         return (response_text, tool_calls)
 
-    # Normal message: persist AI reply
-    memory.add_message(AIMessage(content=response_text))
+    # Normal message: sync full message history (including tool calls) back to memory
+    result_messages = result.get("messages", [])
+    if result_messages:
+        memory._messages = list(result_messages)
+    else:
+        memory.add_message(AIMessage(content=response_text))
     session_mgr.record_message(text, response_text)
 
     return (response_text, tool_calls)
