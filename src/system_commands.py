@@ -142,23 +142,22 @@ def _status(session_mgr: SessionManager) -> str:
 
     user_msgs = sum(1 for m in messages if m.type == "human")
     ai_msgs = sum(1 for m in messages if m.type == "ai")
-    tool_msgs = sum(1 for m in messages if m.type == "tool")
+    used = total_tokens + summary_tokens
+    pct = (used / model_max * 100) if model_max else 0
 
     lines = [
         f"📊 「{session.name}」会话状态",
         "",
         "**消息统计**",
-        f"• 总消息数: {len(messages)} (用户:{user_msgs} AI:{ai_msgs} 工具:{tool_msgs})",
-        f"• 最近消息 token: {total_tokens}",
-        f"• 摘要长度: {len(summary)} 字符 (~{summary_tokens} tokens)",
+        f"• 总消息数: {len(messages)} (用户:{user_msgs} AI:{ai_msgs})",
+        f"• 摘要: {len(summary)} 字符 (~{summary_tokens} tokens)",
         "",
-        "**Token 预算**",
-        f"• 模型最大窗口: {model_max:,}",
+        "**上下文 Token**",
+        f"• 当前/最大: {used:,} / {model_max:,} ({pct:.1f}%)",
         f"• 压缩触发线: {budget:,} ({(budget/model_max)*100:.0f}%)",
-        f"• 当前占用率: {((total_tokens + summary_tokens) / model_max * 100):.1f}%",
         "",
-        "**会话管理**",
-        f"• 会话 ID: {session.session_id}",
+        "**会话**",
+        f"• ID: {session.session_id}",
         f"• 总会话数: {len(session_mgr._sessions)}",
     ]
 
