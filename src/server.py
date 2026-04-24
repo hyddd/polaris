@@ -9,6 +9,7 @@ Endpoints:
   POST /sessions/{id}/activate — switch active session
 """
 
+import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
@@ -212,8 +213,16 @@ def activate_session(session_id: str):
 
 # --- Shared message processing (used by HTTP endpoints & in-process channels) ---
 
+_message_lock = threading.Lock()
+
 
 def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[dict]]:
+    """统一消息处理入口。全局锁保证同一时间只处理一条消息。"""
+    with _message_lock:
+        return _process_message_impl(text, session_mgr)
+
+
+def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, list[dict]]:
     """统一消息处理入口。
 
     系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。
