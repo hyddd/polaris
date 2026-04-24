@@ -225,6 +225,8 @@ def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[d
     memory = session.memory
     agent = get_agent()
 
+    # Save pre-invoke state, then add user message for the graph
+    previous_messages = list(memory._messages)
     memory.add_message(HumanMessage(content=text))
 
     state = AgentState(
@@ -241,16 +243,14 @@ def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[d
     response_text = _extract_response(result)
     tool_calls = _extract_tool_calls(result)
 
-    # Command handled by command_node: already cleaned memory, just return response
     if result.get("final_response"):
         return (response_text, tool_calls)
 
-    # Normal message: sync full message history (including tool calls) back to memory
-    result_messages = result.get("messages", [])
-    if result_messages:
-        memory._messages = list(result_messages)
-    else:
-        memory.add_message(AIMessage(content=response_text))
+    # Persist only user msg + final AI reply. Strip intermediate tool messages.
+    memory._messages = previous_messages + [
+        HumanMessage(content=text),
+        AIMessage(content=response_text),
+    ]
     session_mgr.record_message(text, response_text)
 
     return (response_text, tool_calls)
