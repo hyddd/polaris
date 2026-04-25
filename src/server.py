@@ -234,7 +234,7 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
     memory = session.memory
     agent = get_agent()
 
-    # Save pre-invoke state, then add user message for the graph
+    # Save pre-invoke state for rollback on error
     previous_messages = list(memory._messages)
     memory.add_message(HumanMessage(content=text))
 
@@ -248,9 +248,16 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
         pending_action=None,
     )
 
-    result = agent.invoke(state)
-    response_text = _extract_response(result)
-    tool_calls = _extract_tool_calls(result)
+    try:
+        result = agent.invoke(state)
+        response_text = _extract_response(result)
+        tool_calls = _extract_tool_calls(result)
+    except Exception as e:
+        # Roll back memory and return error
+        memory._messages = previous_messages
+        import logging
+        logging.getLogger("polaris.agent").error(f"Agent 调用失败: {e}", exc_info=True)
+        return (f"抱歉，处理请求时出错：{e}", [])
 
     if result.get("final_response"):
         return (response_text, tool_calls)
