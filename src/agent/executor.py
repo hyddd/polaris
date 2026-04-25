@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage
 from src.state import AgentState
-from src.config import LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
+import src.config as _cfg  # Read at call time for hot-reload support
 from src.tools.registry import ToolRegistry
 from src.session_manager import get_session_manager
 
@@ -84,7 +84,7 @@ def agent_node(state: AgentState) -> dict:
         system_prompt += f"[对话摘要]\n{summary}\n\n"
     system_prompt += UNIFIED_SYSTEM_PROMPT
 
-    llm = ChatOpenAI(model=LLM_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, temperature=0.3)
+    llm = ChatOpenAI(model=_cfg.LLM_MODEL, api_key=_cfg.LLM_API_KEY, base_url=_cfg.LLM_BASE_URL, temperature=0.3)
     if tools:
         llm = llm.bind_tools(tools)
 

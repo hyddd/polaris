@@ -5,6 +5,7 @@ Commands:
   /sessions       — List all sessions
   /session <id>   — Switch session (ID prefix or name match)
   /rename <name>  — Rename current session
+  /reload         — Hot-reload config from .env (API keys, model, etc.)
   /reset          — Reset conversation memory
   /compact        — Manually trigger context compression
   /status         — Show session + token stats
@@ -44,6 +45,9 @@ def handle_command(text: str, session_mgr: SessionManager) -> str | None:
 
     if cmd == "/rename":
         return _rename(session_mgr, arg)
+
+    if cmd == "/reload":
+        return _reload()
 
     return None
 
@@ -164,6 +168,30 @@ def _status(session_mgr: SessionManager) -> str:
     return "\n".join(lines)
 
 
+def _reload() -> str:
+    """Re-read .env and update config module attributes."""
+    import os
+    from dotenv import load_dotenv
+
+    try:
+        load_dotenv(override=True)
+
+        # Update config module vars
+        import src.config as cfg
+        cfg.LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+        cfg.LLM_API_KEY = os.getenv("OPENAI_API_KEY", "sk-placeholder")
+        cfg.LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+        return (
+            "配置已重载。\n"
+            f"• LLM_MODEL: {cfg.LLM_MODEL}\n"
+            f"• LLM_BASE_URL: {cfg.LLM_BASE_URL}\n"
+            f"• API_KEY: {'已设置' if cfg.LLM_API_KEY and cfg.LLM_API_KEY != 'sk-placeholder' else '未设置'}"
+        )
+    except Exception as e:
+        return f"配置重载失败：{e}"
+
+
 def _help() -> str:
     return """**Polaris 个人效率助手**
 
@@ -172,6 +200,7 @@ def _help() -> str:
 `/sessions` — 查看所有会话
 `/session <id|名称>` — 切换会话
 `/rename <名称>` — 重命名当前会话
+`/reload` — 热重载配置（无需重启）
 `/reset` — 重置当前会话记忆
 `/compact` — 手动压缩上下文
 `/status` — 查看会话状态
