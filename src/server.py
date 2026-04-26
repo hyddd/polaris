@@ -172,7 +172,8 @@ async def chat_stream(req: ChatRequest):
 
         except Exception as e:
             import traceback
-            yield f"event: error\ndata: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+            tb = traceback.format_exc()
+            yield f"event: error\ndata: {json.dumps({'error': str(e), 'traceback': tb[-500:]}, ensure_ascii=False)}\n\n"
 
         if full_response:
             memory.add_message(AIMessage(content=full_response))

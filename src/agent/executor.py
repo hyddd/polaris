@@ -104,8 +104,14 @@ def tool_node(state: AgentState) -> dict:
     registry = ToolRegistry.get_instance()
     results = []
     for tc in last_message.tool_calls:
-        tool_name = tc.get("name", "")
-        tool_args = tc.get("args", {})
+        if tc is None:
+            continue
+        if isinstance(tc, dict):
+            tool_name = tc.get("name", "")
+            tool_args = tc.get("args") or {}
+        else:
+            tool_name = getattr(tc, "name", "")
+            tool_args = getattr(tc, "args", None) or {}
         tool = registry.get(tool_name)
 
         if tool:
