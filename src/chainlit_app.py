@@ -83,6 +83,9 @@ async def on_message(message: cl.Message):
                         except json.JSONDecodeError:
                             continue
 
+                        if not isinstance(data, dict):
+                            continue
+
                         if event_type == "node":
                             pass  # Internal progress, skip showing
 

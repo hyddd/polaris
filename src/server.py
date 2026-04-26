@@ -154,7 +154,9 @@ async def chat_stream(req: ChatRequest):
                 for msg in msgs:
                     if hasattr(msg, "tool_calls") and msg.tool_calls:
                         for tc in msg.tool_calls:
-                            yield f"event: tool_call\ndata: {json.dumps({'tool': tc.get('name', ''), 'args': tc.get('args', {})}, ensure_ascii=False)}\n\n"
+                            tc_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "unknown")
+                            tc_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {}) or {}
+                            yield f"event: tool_call\ndata: {json.dumps({'tool': tc_name, 'args': tc_args}, ensure_ascii=False)}\n\n"
 
                     elif hasattr(msg, "content") and msg.content:
                         # Collect final AI response
@@ -295,8 +297,14 @@ def _extract_tool_calls(result: dict) -> list[dict]:
     for m in messages:
         if hasattr(m, "tool_calls") and m.tool_calls:
             for tc in m.tool_calls:
-                calls.append({
-                    "tool": tc.get("name", "unknown"),
-                    "args": tc.get("args", {}),
-                })
+                if isinstance(tc, dict):
+                    calls.append({
+                        "tool": tc.get("name", "unknown"),
+                        "args": tc.get("args") or {},
+                    })
+                else:
+                    calls.append({
+                        "tool": getattr(tc, "name", "unknown"),
+                        "args": getattr(tc, "args", {}) or {},
+                    })
     return calls
