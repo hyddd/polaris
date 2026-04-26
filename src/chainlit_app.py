@@ -111,6 +111,9 @@ async def on_message(message: cl.Message):
                         elif event_type == "error":
                             full_response = f"❌ {data.get('error', '未知错误')}"
 
+                    # Debug: log all SSE events
+                    print(f"[SSE] event={event_type} data={data_str[:200]}", flush=True)
+
                     # Update the message with latest content
                     msg.content = full_response or "处理中..."
                     await msg.update()

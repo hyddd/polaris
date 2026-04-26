@@ -140,6 +140,9 @@ async def chat_stream(req: ChatRequest):
     )
 
     async def generate() -> AsyncGenerator[str, None]:
+        import logging as _log
+        _log.getLogger("polaris.stream").info(f"开始处理: {req.message[:50]}")
+
         full_response = ""
 
         try:
@@ -173,6 +176,8 @@ async def chat_stream(req: ChatRequest):
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
+            import logging as _log
+            _log.getLogger("polaris.stream").error(f"流式错误: {e}\n{tb}")
             yield f"event: error\ndata: {json.dumps({'error': str(e), 'traceback': tb[-500:]}, ensure_ascii=False)}\n\n"
 
         if full_response:
