@@ -148,7 +148,9 @@ async def chat_stream(req: ChatRequest):
         try:
             async for chunk in agent.astream(state, stream_mode="updates"):
                 node_name = list(chunk.keys())[0] if chunk else "unknown"
-                node_output = list(chunk.values())[0] if chunk else {}
+                node_output = list(chunk.values())[0] if chunk else None
+                if node_output is None:
+                    node_output = {}
 
                 yield f"event: node\ndata: {json.dumps({'node': node_name}, ensure_ascii=False)}\n\n"
 
