@@ -146,33 +146,28 @@ async def chat_stream(req: ChatRequest):
         full_response = ""
 
         try:
-            async for chunk in agent.astream(state, stream_mode="updates"):
-                node_name = list(chunk.keys())[0] if chunk else "unknown"
-                node_output = list(chunk.values())[0] if chunk else None
-                if node_output is None:
-                    node_output = {}
+            # Use stream_mode="custom" + "updates" to get both tokens and node outputs
+            async for chunk in agent.astream(state, stream_mode=["custom", "updates"]):
+                # Custom events: tokens emitted by get_stream_writer()
+                custom_data = chunk[1] if len(chunk) > 1 else None
+                if custom_data and isinstance(custom_data, dict) and custom_data.get("type") == "token":
+                    token = custom_data.get("content", "")
+                    full_response += token
+                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
 
-                yield f"event: node\ndata: {json.dumps({'node': node_name}, ensure_ascii=False)}\n\n"
+                # Updates: node outputs for tool calls
+                updates = chunk[0] if len(chunk) > 0 else {}
+                for node_name, node_output in updates.items():
+                    if not isinstance(node_output, dict):
+                        continue
+                    msgs = node_output.get("messages", [])
+                    for msg in msgs:
+                        if hasattr(msg, "tool_calls") and msg.tool_calls:
+                            for tc in msg.tool_calls:
+                                tc_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "unknown")
+                                tc_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {}) or {}
+                                yield f"event: tool_call\ndata: {json.dumps({'tool': tc_name, 'args': tc_args}, ensure_ascii=False)}\n\n"
 
-                # Check for tool calls in agent node output
-                msgs = node_output.get("messages", [])
-                for msg in msgs:
-                    if hasattr(msg, "tool_calls") and msg.tool_calls:
-                        for tc in msg.tool_calls:
-                            tc_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "unknown")
-                            tc_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {}) or {}
-                            yield f"event: tool_call\ndata: {json.dumps({'tool': tc_name, 'args': tc_args}, ensure_ascii=False)}\n\n"
-
-                    elif hasattr(msg, "content") and msg.content:
-                        # Collect final AI response
-                        if msg.type == "ai" and not (hasattr(msg, "tool_calls") and msg.tool_calls):
-                            full_response = msg.content
-
-                # Command node final_response
-                if node_output.get("final_response"):
-                    full_response = node_output["final_response"]
-
-            yield f"event: message\ndata: {json.dumps({'content': full_response or '无回复'}, ensure_ascii=False)}\n\n"
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 
         except Exception as e:

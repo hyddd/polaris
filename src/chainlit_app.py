@@ -87,7 +87,13 @@ async def on_message(message: cl.Message):
                             continue
 
                         if event_type == "node":
-                            pass  # Internal progress, skip showing
+                            pass
+
+                        elif not event_type:
+                            # Token streaming: append to response
+                            token = data.get("token", "")
+                            if token:
+                                full_response += token
 
                         elif event_type == "tool_call":
                             tool_name = data.get("tool", "")

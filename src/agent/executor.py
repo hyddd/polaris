@@ -1,7 +1,7 @@
 """ReAct agent executor — LLM with tool binding + tool execution loop.
 
 LLM always gets ALL tools and decides autonomously whether to call them.
-No intent-based routing — the LLM self-determines intent from context.
+Supports token-level streaming via LangGraph get_stream_writer().
 """
 
 import os
@@ -17,39 +17,35 @@ from src.session_manager import get_session_manager
 UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 
 ## 可用工具
-你拥有以下工具，可以根据需要自主决定是否调用。每个工具都有明确的参数类型，直接填入即可，不需要拼字符串。
+你拥有以下工具，可以根据需要自主决定是否调用：
 
-- **calendar** — 管理日历事件
-  参数：action(list/search/create/update/delete), date(日期), title, time, keyword, event_id
-  - 查看当日日程 → action="list", date="今天日期"
-  - 搜索事件 → action="search", keyword="关键词"
-  - 创建事件 → action="create", date, title, time, attendees, duration
-  - 修改事件 → action="update", event_id, updates={...}
-  - 删除事件 → action="delete", event_id
+- **calendar** — 查询、创建、修改、删除日历事件
+  - 查询当日或指定日期：list <日期 YYYY-MM-DD>
+  - 搜索事件：search <关键词>
+  - 创建事件：create {"date":"...","time":"...","title":"..."}
+  - 修改事件：update <event_id> {...}
+  - 删除事件：delete <event_id>
+  注意：用户说"今天有什么安排"时，传入今天的日期
 
 - **todo** — 管理待办事项
-  参数：action(list/search/create/done/delete), status(active/all/pending/done), title, priority(high/medium/low), due, keyword, todo_id
-  - 查看当前待办（默认）→ action="list", status="active"
-  - 查看所有含已完成 → action="list", status="all"
-  - 创建 → action="create", title, priority, due
-  - 标记完成 → action="done", todo_id
-  - 删除 → action="delete", todo_id
+  - 查看当前待办（默认，不含已完成）：list active
+  - 查看所有（含已完成）：list all
+  - 只看已完成的：list done
+  - 搜索：search <关键词>
+  - 创建：create {"title":"...","priority":"high|medium|low","due":"YYYY-MM-DD"}
+  - 标记完成：done <todo_id>
+  - 删除：delete <todo_id>
+  注意：用户说"查看待办""有什么待办"时默认用 list active；说"查看所有待办""包括已完成的"时才用 list all
 
 - **notes** — 管理笔记
   参数：action(list/read/create/search/archive), title, content, tags, keyword, filename
-  - 列出笔记 → action="list"
-  - 读取 → action="read", filename
-  - 创建 → action="create", title, content, tags
-  - 搜索（关键词）→ action="search", keyword
-  - 归档 → action="archive", filename
 
 - **rag_search** — 语义搜索笔记。参数：query(自然语言查询)
 
 ## 行为准则
 - 根据用户消息自主判断是否需要调用工具
 - 闲聊、打招呼、一般知识问答时不要调用工具，直接友好回复
-- 用户明确要求操作日程/笔记/待办时才调用对应工具
-- 结合对话历史理解上下文。比如用户之前提到某个会议，后续说"帮我准备一下"，应理解指的是那个会议
+- 结合对话历史理解上下文
 - 删除操作先确认再执行
 - 工具返回空结果时如实告知，不编造数据
 - 用中文回复，简洁直接
@@ -72,12 +68,10 @@ def agent_node(state: AgentState) -> dict:
     tools = _get_all_tools()
     messages = state.get("messages", [])
 
-    # Use the active session's compressor
     session_mgr = get_session_manager()
     compressor = session_mgr.active_session.compressor
     summary, recent = compressor.process(list(messages))
 
-    # Build system prompt with summary
     today = date.today().isoformat()
     system_prompt = f"今天是 {today}。\n\n"
     if summary:
@@ -88,8 +82,23 @@ def agent_node(state: AgentState) -> dict:
     if tools:
         llm = llm.bind_tools(tools)
 
-    chain = AGENT_PROMPT | llm
-    response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
+    # Try token-level streaming; fall back to invoke
+    try:
+        from langgraph.config import get_stream_writer
+        writer = get_stream_writer()
+        chain = AGENT_PROMPT | llm
+        full_content = ""
+        tool_calls_data = []
+        for chunk in chain.stream({"system_prompt": system_prompt, "messages": recent}):
+            if chunk.content:
+                full_content += chunk.content
+                writer({"type": "token", "content": chunk.content})
+            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+                tool_calls_data = chunk.tool_calls
+        response = AIMessage(content=full_content, tool_calls=tool_calls_data or None)
+    except Exception:
+        chain = AGENT_PROMPT | llm
+        response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
 
     return {"messages": [response]}
 
@@ -123,7 +132,7 @@ def tool_node(state: AgentState) -> dict:
         else:
             result_str = f"未找到工具：{tool_name}"
 
-        results.append(ToolMessage(content=result_str, tool_call_id=tc["id"]))
+        results.append(ToolMessage(content=result_str, tool_call_id=tc.get("id", "") if isinstance(tc, dict) else getattr(tc, "id", "")))
 
     return {"messages": results}
 
