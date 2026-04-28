@@ -19,28 +19,10 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 ## 可用工具
 你拥有以下工具，可以根据需要自主决定是否调用：
 
-- **calendar** — 查询、创建、修改、删除日历事件
-  - 查询当日或指定日期：list <日期 YYYY-MM-DD>
-  - 搜索事件：search <关键词>
-  - 创建事件：create {"date":"...","time":"...","title":"..."}
-  - 修改事件：update <event_id> {...}
-  - 删除事件：delete <event_id>
-  注意：用户说"今天有什么安排"时，传入今天的日期
-
-- **todo** — 管理待办事项
-  - 查看当前待办（默认，不含已完成）：list active
-  - 查看所有（含已完成）：list all
-  - 只看已完成的：list done
-  - 搜索：search <关键词>
-  - 创建：create {"title":"...","priority":"high|medium|low","due":"YYYY-MM-DD"}
-  - 标记完成：done <todo_id>
-  - 删除：delete <todo_id>
-  注意：用户说"查看待办""有什么待办"时默认用 list active；说"查看所有待办""包括已完成的"时才用 list all
-
-- **notes** — 管理笔记
-  参数：action(list/read/create/search/archive), title, content, tags, keyword, filename
-
-- **rag_search** — 语义搜索笔记。参数：query(自然语言查询)
+- **calendar** — 管理日历事件。参数: action(list/search/create/update/delete), date, title, time, keyword, event_id
+- **todo** — 管理待办。参数: action(list/search/create/done/delete), status(active/all/pending/done), title, priority(high/medium/low), due, keyword, todo_id
+- **notes** — 管理笔记。参数: action(list/read/create/search/archive), title, content, tags, keyword, filename
+- **rag_search** — 语义搜索笔记。参数: query(自然语言查询)
 
 ## 行为准则
 - 根据用户消息自主判断是否需要调用工具
