@@ -146,27 +146,21 @@ async def chat_stream(req: ChatRequest):
         full_response = ""
 
         try:
-            # Use stream_mode="custom" + "updates" to get both tokens and node outputs
-            async for chunk in agent.astream(state, stream_mode=["custom", "updates"]):
-                # Custom events: tokens emitted by get_stream_writer()
-                custom_data = chunk[1] if len(chunk) > 1 else None
-                if custom_data and isinstance(custom_data, dict) and custom_data.get("type") == "token":
-                    token = custom_data.get("content", "")
-                    full_response += token
-                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+            async for event in agent.astream_events(state, version="v2"):
+                kind = event.get("event", "")
 
-                # Updates: node outputs for tool calls
-                updates = chunk[0] if len(chunk) > 0 else {}
-                for node_name, node_output in updates.items():
-                    if not isinstance(node_output, dict):
-                        continue
-                    msgs = node_output.get("messages", [])
-                    for msg in msgs:
-                        if hasattr(msg, "tool_calls") and msg.tool_calls:
-                            for tc in msg.tool_calls:
-                                tc_name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "unknown")
-                                tc_args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {}) or {}
-                                yield f"event: tool_call\ndata: {json.dumps({'tool': tc_name, 'args': tc_args}, ensure_ascii=False)}\n\n"
+                # Token-level streaming from LLM
+                if kind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk", None)
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        full_response += chunk.content
+                        yield f"data: {json.dumps({'token': chunk.content}, ensure_ascii=False)}\n\n"
+
+                # Tool call starting
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "unknown")
+                    tool_input = event.get("data", {}).get("input", {})
+                    yield f"event: tool_call\ndata: {json.dumps({'tool': tool_name, 'args': tool_input}, ensure_ascii=False)}\n\n"
 
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 
