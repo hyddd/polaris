@@ -64,22 +64,18 @@ def agent_node(state: AgentState) -> dict:
     if tools:
         llm = llm.bind_tools(tools)
 
-    # Try token-level streaming; fall back to invoke
+    # Try streaming for token-level output; fall back to invoke
+    chain = AGENT_PROMPT | llm
     try:
-        from langgraph.config import get_stream_writer
-        writer = get_stream_writer()
-        chain = AGENT_PROMPT | llm
         full_content = ""
         tool_calls_data = []
         for chunk in chain.stream({"system_prompt": system_prompt, "messages": recent}):
             if chunk.content:
                 full_content += chunk.content
-                writer({"type": "token", "content": chunk.content})
             if hasattr(chunk, "tool_calls") and chunk.tool_calls:
                 tool_calls_data = chunk.tool_calls
         response = AIMessage(content=full_content, tool_calls=tool_calls_data or None)
     except Exception:
-        chain = AGENT_PROMPT | llm
         response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
 
     return {"messages": [response]}
