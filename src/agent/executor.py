@@ -4,7 +4,6 @@ LLM always gets ALL tools and decides autonomously whether to call them.
 Supports token-level streaming via LangGraph get_stream_writer().
 """
 
-import os
 from datetime import date
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
