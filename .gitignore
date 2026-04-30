@@ -2,14 +2,11 @@ __pycache__/
 *.pyc
 .env
 credentials.json
-data/chroma/
+data/
 venv/
 .superpowers/
-.chainlit/translations/
+.chainlit/
 *.egg-info/
 chainlit.md
 logs/
-data/sessions.json
-data/notes/*.md
-!data/notes/sample-meeting.md
 docs/
