@@ -40,12 +40,13 @@ async def start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    # Create an empty message to stream into
     msg = cl.Message(content="")
     await msg.send()
 
-    tool_calls_shown = []
-    full_response = ""
+    thinking_text = ""
+    response_text = ""
+    has_tool_calls = False
+    tool_steps = {}  # tool_name -> cl.Step (track for result updates)
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -63,7 +64,6 @@ async def on_message(message: cl.Message):
                 async for chunk in response.aiter_text():
                     buffer += chunk
 
-                    # Parse SSE events from buffer
                     while "\n\n" in buffer:
                         event_text, buffer = buffer.split("\n\n", 1)
 
@@ -86,40 +86,50 @@ async def on_message(message: cl.Message):
                         if not isinstance(data, dict):
                             continue
 
-                        if event_type == "node":
-                            pass
+                        if event_type == "tool_call":
+                            has_tool_calls = True
+                            # Flush thinking text
+                            if thinking_text.strip():
+                                think_step = cl.Step(name="💭 思考推理", type="thought")
+                                think_step.output = thinking_text.strip()
+                                await think_step.send()
+                                thinking_text = ""
 
-                        elif not event_type:
-                            # Token streaming: append to response
-                            token = data.get("token", "")
-                            if token:
-                                full_response += token
+                            tool_name = data.get("tool", "unknown")
+                            tool_args = data.get("args", {})
+                            step = cl.Step(name=f"🔧 调用工具: {tool_name}", type="tool")
+                            step.input = json.dumps(tool_args, ensure_ascii=False, indent=2)
+                            step.output = "执行中..."
+                            await step.send()
+                            tool_steps[tool_name] = step
 
-                        elif event_type == "tool_call":
-                            tool_name = data.get("tool", "")
-                            if tool_name not in tool_calls_shown:
-                                tool_calls_shown.append(tool_name)
-                                full_response += f"\n🔧 调用工具: {tool_name}..."
+                        elif event_type == "tool_result":
+                            tool_name = data.get("tool", "unknown")
+                            result = data.get("result", "")
+                            if tool_name in tool_steps:
+                                step = tool_steps[tool_name]
+                                step.output = result
+                                await step.update()
+                                del tool_steps[tool_name]
 
                         elif event_type == "message":
-                            content = data.get("content", "")
-                            if content:
-                                # Strip tool_call placeholder text from earlier
-                                if full_response:
-                                    # Replace tool placeholders with clean response
-                                    full_response = content
-                                else:
-                                    full_response = content
-
-                        elif event_type == "done":
-                            pass
+                            response_text = data.get("content", "")
 
                         elif event_type == "error":
-                            full_response = f"❌ {data.get('error', '未知错误')}"
+                            response_text = f"❌ {data.get('error', '未知错误')}"
 
-                    # Update the message with latest content
-                    msg.content = full_response or "处理中..."
-                    await msg.update()
+                        elif not event_type:
+                            token = data.get("token", "")
+                            if token:
+                                if has_tool_calls:
+                                    response_text += token
+                                else:
+                                    thinking_text += token
+
+                        # Update display: show thinking while reasoning, response after tools
+                        display = response_text or thinking_text or "处理中..."
+                        msg.content = display
+                        await msg.update()
 
     except httpx.ConnectError:
         msg.content = "无法连接到 Agent Server。请先启动 `python run.py`"

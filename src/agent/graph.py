@@ -20,8 +20,6 @@ def command_node(state: AgentState) -> dict:
         return {}
 
     session_mgr = get_session_manager()
-    # Pop command from memory FIRST so handle_command doesn't count it
-    session_mgr.active_session.memory._messages.pop()
     response = handle_command(content.strip(), session_mgr)
     if response:
         if content.strip() == "/reset":

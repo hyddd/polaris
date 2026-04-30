@@ -23,13 +23,21 @@ class Session:
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
 
     def to_dict(self) -> dict:
-        """Serialize for persistence. Messages are converted to dicts."""
-        messages = []
-        for m in self.memory.get_history():
+        """Serialize for persistence. Messages beyond token budget are compressed into summary first."""
+        all_messages = self.memory.get_history()
+        if all_messages:
+            _, recent = self.compressor.process(list(all_messages))
+        else:
+            recent = []
+
+        serialized = []
+        for m in recent:
             msg_dict = {"type": m.type, "content": m.content if hasattr(m, "content") else ""}
             if hasattr(m, "tool_calls") and m.tool_calls:
                 msg_dict["tool_calls"] = m.tool_calls
-            messages.append(msg_dict)
+            elif hasattr(m, "tool_call_id") and m.tool_call_id:
+                msg_dict["tool_call_id"] = m.tool_call_id
+            serialized.append(msg_dict)
 
         return {
             "id": self.session_id,
@@ -37,7 +45,7 @@ class Session:
             "created_at": self.created_at,
             "last_active": self.last_active,
             "message_count": self.metadata.get("message_count", 0),
-            "messages": messages[-200:],  # Keep last 200
+            "messages": serialized,
             "summary": self.compressor.summary,
             "summary_tokens": self.compressor._summary_tokens,
         }
@@ -46,18 +54,20 @@ class Session:
     def from_dict(cls, data: dict) -> "Session":
         """Restore from persisted dict."""
         memory = MemoryManager(window_size=10)
+        restored_messages = []
         for m in data.get("messages", []):
             msg_type = m["type"]
             content = m.get("content", "")
             if msg_type == "human":
-                memory.add_message(HumanMessage(content=content))
+                restored_messages.append(HumanMessage(content=content))
             elif msg_type == "ai":
                 kwargs = {}
                 if m.get("tool_calls"):
                     kwargs["tool_calls"] = m["tool_calls"]
-                memory.add_message(AIMessage(content=content, **kwargs))
+                restored_messages.append(AIMessage(content=content, **kwargs))
             elif msg_type == "tool":
-                memory.add_message(ToolMessage(content=content, tool_call_id=m.get("tool_call_id", "")))
+                restored_messages.append(ToolMessage(content=content, tool_call_id=m.get("tool_call_id", "")))
+        memory._messages = restored_messages  # Bypass add_message to avoid window_size truncation
 
         compressor = ConversationCompressor()
         compressor.summary = data.get("summary", "")

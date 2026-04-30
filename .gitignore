@@ -12,3 +12,4 @@ logs/
 data/sessions.json
 data/notes/*.md
 !data/notes/sample-meeting.md
+docs/

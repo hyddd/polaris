@@ -128,15 +128,17 @@ async def chat_stream(req: ChatRequest):
     # Normal message: streaming agent pipeline
     agent = get_agent()
     memory = session.memory
-    memory.add_message(HumanMessage(content=req.message))
+    old_messages = list(memory._messages)
+    human_msg = HumanMessage(content=req.message)
     state = AgentState(
-        messages=memory.get_history(),
+        messages=old_messages + [human_msg],
         intent="",
         user_profile=memory.get_profile(),
         tool_results={},
         final_response="",
         needs_clarification=False,
         pending_action=None,
+        streaming=True,
     )
 
     async def generate() -> AsyncGenerator[str, None]:
@@ -159,6 +161,15 @@ async def chat_stream(req: ChatRequest):
                     tool_input = event.get("data", {}).get("input", {})
                     yield f"event: tool_call\ndata: {json.dumps({'tool': tool_name, 'args': tool_input}, ensure_ascii=False)}\n\n"
 
+                # Tool call finished — send result for thinking chain display
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "unknown")
+                    tool_output = event.get("data", {}).get("output", "")
+                    # ToolMessage output — extract string content
+                    if hasattr(tool_output, "content"):
+                        tool_output = tool_output.content
+                    yield f"event: tool_result\ndata: {json.dumps({'tool': tool_name, 'result': str(tool_output)}, ensure_ascii=False)}\n\n"
+
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
@@ -167,7 +178,11 @@ async def chat_stream(req: ChatRequest):
             yield f"event: error\ndata: {json.dumps({'error': str(e), 'traceback': tb[-300:]}, ensure_ascii=False)}\n\n"
 
         if full_response:
-            memory.add_message(AIMessage(content=full_response))
+            # Strip intermediate tool messages, keep only user + final AI reply
+            memory._messages = old_messages + [
+                human_msg,
+                AIMessage(content=full_response),
+            ]
             session_mgr.record_message(req.message, full_response)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -230,10 +245,10 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
 
     # Save pre-invoke state for rollback on error
     previous_messages = list(memory._messages)
-    memory.add_message(HumanMessage(content=text))
+    state_messages = previous_messages + [HumanMessage(content=text)]
 
     state = AgentState(
-        messages=memory.get_history(),
+        messages=state_messages,
         intent="",
         user_profile=memory.get_profile(),
         tool_results={},

@@ -19,3 +19,4 @@ class AgentState(TypedDict):
     final_response: str
     needs_clarification: bool
     pending_action: Optional[dict]
+    streaming: bool  # True = chain.stream() for token events; False = chain.invoke()

@@ -86,8 +86,13 @@ def _switch(session_mgr: SessionManager, arg: str) -> str:
 
     result = session_mgr.switch(arg)
     if result:
-        summary = result.compressor.summary
-        extra = f"上次话题：{summary[:100]}" if summary else "这是一个新会话。"
+        msg_count = result.metadata.get("message_count", 0)
+        if msg_count > 0:
+            extra = f"已有 {msg_count} 条消息"
+            if result.compressor.summary:
+                extra += f"，上次话题：{result.compressor.summary[:80]}"
+        else:
+            extra = "这是一个新会话。"
         return f"已切换到会话「{result.name}」({result.session_id})。{extra}"
 
     # No match — suggest sessions
