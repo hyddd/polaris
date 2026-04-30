@@ -1,8 +1,8 @@
 # Polaris — 个人效率 AI Agent
 
-基于 **LangGraph** 的个人效率 AI Agent，通过 **ReAct 工具执行循环**将日历、待办、笔记的增删改查统一为一个自然语言对话入口。
+基于 **LangGraph** 的个人效率 AI Agent，你可以随时随地让它帮你记日程、记待办、记笔记，也可随时问它你的日程，帮你规划一天，它就是你的私人秘书。
 
-> 一句话介绍：我构建了一个基于 LangGraph 的个人效率 AI Agent（Polaris）。它通过 ReAct 工具执行循环，将日历、待办、笔记的增删改查统一为一个自然语言对话入口——用户一句话即可完成日程规划、会议准备、知识检索或快速记录。Agent 采用 Command → Agent Node ⇄ Tool Node 的三层架构，支持 Chainlit Web UI 和飞书 Bot 双入口，具备 Token 预算感知的上下文压缩、多会话管理、SSE 流式输出和可插拔通道系统。
+> 一句话介绍：一个基于 LangGraph 的个人效率 AI Agent（Polaris）。它通过 ReAct 工具执行循环，将日历、待办、笔记的增删改查统一为一个自然语言对话入口——用户一句话即可完成日程规划、会议准备、知识检索或快速记录。Agent 采用 Command → Agent Node ⇄ Tool Node 的三层架构，支持 Chainlit Web UI 和飞书 Bot 双入口，具备 Token 预算感知的上下文压缩、多会话管理、SSE 流式输出和可插拔通道系统。
 
 ## 项目亮点
 
@@ -22,9 +22,10 @@
 - **重启无损恢复**：保存前走 compressor 压缩，确保摘要 + 最近消息完整持久化
 
 **多会话**
-- 支持创建、切换、重命名会话，持久化到 `data/sessions.json`
+- 支持创建、切换、重命名会话，可持久化到
 - 切换支持 ID 前缀匹配和名称模糊匹配
 - 默认会话自动创建，开箱即用
+- 多通道共享会话，多设备间无缝切换
 
 **流式体验**
 - Web 端 SSE Token 级流式输出，实时展示 LLM 生成过程
@@ -56,7 +57,7 @@ Chainlit Web ──┐   ┌─────────────────�
 
 ### 环境要求
 
-- Python ≥ 3.12
+- Python ≥ 3.12 且 < 3.14
 - OpenAI 兼容 API Key（支持 DeepSeek 等）
 
 ### 安装
