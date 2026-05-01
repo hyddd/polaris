@@ -1,12 +1,13 @@
 """Session Manager — multi-session support with persistence."""
 
 import json
+import threading
 import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from src.memory.store import MemoryManager
 from src.memory.compressor import ConversationCompressor
 from src.config import DATA_DIR
@@ -69,8 +70,6 @@ class Session:
                 if m.get("tool_calls"):
                     kwargs["tool_calls"] = m["tool_calls"]
                 restored_messages.append(AIMessage(content=content, **kwargs))
-            elif msg_type == "tool":
-                restored_messages.append(ToolMessage(content=content, tool_call_id=m.get("tool_call_id", "")))
         memory._messages = restored_messages
 
         compressor = ConversationCompressor()
@@ -207,10 +206,13 @@ class SessionManager:
 
 # Global singleton
 _session_manager: SessionManager | None = None
+_session_lock = threading.Lock()
 
 
 def get_session_manager() -> SessionManager:
     global _session_manager
     if _session_manager is None:
-        _session_manager = SessionManager()
+        with _session_lock:
+            if _session_manager is None:
+                _session_manager = SessionManager()
     return _session_manager

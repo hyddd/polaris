@@ -99,7 +99,7 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager):
 
 
 # --- Chat endpoints (for external channels: Chainlit UI, remote bots, etc.) ---
-# In-process channels (Feishu, future QQ/WeChat) call agent directly, not via HTTP.
+# In-process channels (Feishu, QQ) call agent directly, not via HTTP.
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
