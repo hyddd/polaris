@@ -31,7 +31,9 @@
           v-model="input"
           placeholder="Message Polaris"
           rows="1"
-          @keydown.enter.exact.prevent="send"
+          @keydown.enter.exact="onEnter"
+          @compositionstart="isComposing = true"
+          @compositionend="isComposing = false"
           @input="autoResize"
           ref="inputRef"
         />
@@ -54,6 +56,13 @@ const hasPendingMessage = computed(() => store.messages.some(m => m.role === 'as
 const input = ref('')
 const messagesRef = ref(null)
 const inputRef = ref(null)
+const isComposing = ref(false)
+
+function onEnter(e) {
+  if (isComposing.value) return
+  e.preventDefault()
+  send()
+}
 
 const suggestions = [
   '今天有什么安排？',
