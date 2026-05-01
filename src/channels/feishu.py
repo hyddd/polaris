@@ -9,6 +9,7 @@ import hashlib
 import time
 import os
 import logging
+from collections import OrderedDict
 
 from src.channels import ChannelPlugin
 
@@ -28,7 +29,7 @@ class PolarisFeishuBot:
         self.app_secret = app_secret
         self.client = None
         self.ws_client = None
-        self._seen_messages: set[str] = set()
+        self._seen_messages: OrderedDict[str, float] = OrderedDict()
         self._recent_hashes: dict[str, float] = {}
 
     def start(self):
@@ -60,6 +61,13 @@ class PolarisFeishuBot:
         logger.info("[feishu] 开始 WebSocket 连接...")
         self.ws_client.start()
 
+    def stop(self):
+        """Attempt to stop the Feishu WebSocket connection."""
+        self.ws_client = None
+        self.client = None
+        # lark ws.Client has no stop() — the daemon thread will be abandoned
+        logger.info("[feishu] 已标记停止（旧连接将在 daemon 线程中自然退出）")
+
     def _on_reaction(self, data) -> None:
         pass
 
@@ -77,20 +85,28 @@ class PolarisFeishuBot:
 
             if msg_id in self._seen_messages:
                 return
-            self._seen_messages.add(msg_id)
+
+            now = time.time()
+            self._seen_messages[msg_id] = now
 
             content_str = data.event.message.content
             content_hash = hashlib.md5(f"{sender_id}:{content_str}".encode()).hexdigest()
-            now = time.time()
             if content_hash in self._recent_hashes:
                 if now - self._recent_hashes[content_hash] < 10:
                     return
             self._recent_hashes[content_hash] = now
 
+            # LRU-style cleanup: remove seen_messages older than 1 hour
+            cutoff = now - 3600
+            while self._seen_messages:
+                oldest_id, oldest_time = next(iter(self._seen_messages.items()))
+                if oldest_time < cutoff:
+                    self._seen_messages.popitem(last=False)
+                else:
+                    break
+
             if len(self._recent_hashes) > 1000:
                 self._recent_hashes = {k: v for k, v in self._recent_hashes.items() if now - v < 10}
-            if len(self._seen_messages) > 10000:
-                self._seen_messages.clear()
 
             chat_id = data.event.message.chat_id
 
@@ -183,6 +199,9 @@ class PolarisFeishuBot:
 
 
 class FeishuChannel(ChannelPlugin):
+    def __init__(self):
+        self._bot: PolarisFeishuBot | None = None
+
     @property
     def name(self) -> str:
         return "feishu"
@@ -192,9 +211,21 @@ class FeishuChannel(ChannelPlugin):
         app_secret = os.getenv("FEISHU_APP_SECRET", "")
         return bool(app_id and app_secret)
 
+    def get_credentials(self) -> dict:
+        return {
+            "app_id": os.getenv("FEISHU_APP_ID", ""),
+            "app_secret": os.getenv("FEISHU_APP_SECRET", ""),
+        }
+
     def start(self) -> None:
-        bot = PolarisFeishuBot()
-        bot.start()
+        self._bot = PolarisFeishuBot()
+        self._bot.start()
 
     def stop(self) -> None:
-        pass
+        if self._bot:
+            self._bot.stop()
+            self._bot = None
+
+    def rebuild(self) -> None:
+        """Re-create bot instance with latest credentials."""
+        self._bot = None

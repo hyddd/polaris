@@ -4,16 +4,13 @@ from typing import Optional
 
 
 class MemoryManager:
-    def __init__(self, window_size: int = 10, profile_path: Optional[str] = None):
-        self.window_size = window_size
+    def __init__(self, profile_path: Optional[str] = None):
         self._messages: list[BaseMessage] = []
         self.profile_path = Path(profile_path) if profile_path else None
         self._profile: dict = {}
 
     def add_message(self, message: BaseMessage) -> None:
         self._messages.append(message)
-        if len(self._messages) > self.window_size:
-            self._messages = self._messages[-self.window_size:]
 
     def get_history(self) -> list[BaseMessage]:
         return list(self._messages)

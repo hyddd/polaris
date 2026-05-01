@@ -5,7 +5,9 @@ Start: python -m src.server  (or: uvicorn src.server:app)
 Endpoints:
   POST /chat          — non-streaming reply (Feishu, QQ, etc.)
   POST /chat/stream   — SSE streaming reply (Web)
+  POST /sessions      — create new session
   GET  /sessions      — list all sessions
+  GET  /sessions/{id} — session detail + message history
   POST /sessions/{id}/activate — switch active session
 """
 
@@ -50,6 +52,11 @@ class SessionInfo(BaseModel):
 
 # --- App lifecycle ---
 
+# Enable HTTP request logging for LLM API calls
+import logging
+logging.getLogger("httpx").setLevel(logging.INFO)
+logging.getLogger("openai").setLevel(logging.INFO)
+
 _tools_registered = False
 
 
@@ -64,10 +71,10 @@ async def lifespan(app: FastAPI):
         registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
         _tools_registered = True
 
-    # Pre-warm embedding model (avoids first-request download delay)
+    # Check embedding config (cloud API, no local model to pre-warm)
     try:
-        from src.data_layer.vector_store import prewarm_embedding_model
-        prewarm_embedding_model()
+        from src.data_layer.vector_store import check_embedding_config
+        check_embedding_config()
     except Exception:
         pass
 
@@ -166,16 +173,18 @@ async def chat_stream(req: ChatRequest):
                 elif kind == "on_tool_start":
                     tool_name = event.get("name", "unknown")
                     tool_input = event.get("data", {}).get("input", {})
-                    yield f"event: tool_call\ndata: {json.dumps({'tool': tool_name, 'args': tool_input}, ensure_ascii=False)}\n\n"
+                    call_id = event.get("run_id", "")
+                    yield f"event: tool_call\ndata: {json.dumps({'tool': tool_name, 'args': tool_input, 'call_id': call_id}, ensure_ascii=False)}\n\n"
 
                 # Tool call finished — send result for thinking chain display
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "unknown")
                     tool_output = event.get("data", {}).get("output", "")
+                    call_id = event.get("run_id", "")
                     # ToolMessage output — extract string content
                     if hasattr(tool_output, "content"):
                         tool_output = tool_output.content
-                    yield f"event: tool_result\ndata: {json.dumps({'tool': tool_name, 'result': str(tool_output)}, ensure_ascii=False)}\n\n"
+                    yield f"event: tool_result\ndata: {json.dumps({'tool': tool_name, 'result': str(tool_output), 'call_id': call_id}, ensure_ascii=False)}\n\n"
 
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 
@@ -225,6 +234,45 @@ def activate_session(session_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
     return {"ok": True, "active_session": result.session_id, "name": result.name}
+
+
+class CreateSessionRequest(BaseModel):
+    name: str | None = None
+
+
+@app.post("/sessions")
+def create_session(req: CreateSessionRequest):
+    session_mgr = get_session_manager()
+    session = session_mgr.create(name=req.name)
+    return {
+        "session_id": session.session_id,
+        "name": session.name,
+        "created_at": session.created_at,
+    }
+
+
+@app.get("/sessions/{session_id}")
+def get_session_detail(session_id: str):
+    session_mgr = get_session_manager()
+    session = session_mgr.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+    messages = session.memory.get_history()
+    compressor = session.compressor
+    return {
+        "session_id": session.session_id,
+        "name": session.name,
+        "messages": [
+            {"type": m.type, "content": m.content if hasattr(m, "content") else ""}
+            for m in messages
+        ],
+        "summary": compressor.summary,
+        "token_stats": {
+            "message_count": len(messages),
+            "estimated_tokens": compressor._count_tokens(messages) + compressor._summary_tokens,
+            "compression_trigger": compressor.compress_trigger,
+        },
+    }
 
 
 # --- Shared message processing (used by HTTP endpoints & in-process channels) ---

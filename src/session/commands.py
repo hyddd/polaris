@@ -174,25 +174,21 @@ def _status(session_mgr: SessionManager) -> str:
 
 
 def _reload() -> str:
-    """Re-read .env and update config module attributes."""
-    import os
-    from dotenv import load_dotenv
-
+    """Re-read .env and trigger config reload event."""
     try:
-        load_dotenv(override=True)
-
-        # Update config module vars
         import src.config as cfg
-        cfg.LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
-        cfg.LLM_API_KEY = os.getenv("OPENAI_API_KEY", "sk-placeholder")
-        cfg.LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        result = cfg.reload()
 
-        return (
-            "配置已重载。\n"
-            f"• LLM_MODEL: {cfg.LLM_MODEL}\n"
-            f"• LLM_BASE_URL: {cfg.LLM_BASE_URL}\n"
-            f"• API_KEY: {'已设置' if cfg.LLM_API_KEY and cfg.LLM_API_KEY != 'sk-placeholder' else '未设置'}"
-        )
+        lines = ["配置已重载。"]
+        if result["changes"]:
+            for key, change in result["changes"].items():
+                lines.append(f"• {key}: {change}")
+        else:
+            lines.append(f"• LLM_MODEL: {result['LLM_MODEL']}")
+            lines.append(f"• LLM_BASE_URL: {result['LLM_BASE_URL']}")
+        lines.append(f"• API_KEY: {'已设置' if result['API_KEY_SET'] else '未设置'}")
+
+        return "\n".join(lines)
     except Exception as e:
         return f"配置重载失败：{e}"
 
@@ -205,7 +201,7 @@ def _help() -> str:
 `/sessions` — 查看所有会话
 `/session <id|名称>` — 切换会话
 `/rename <名称>` — 重命名当前会话
-`/reload` — 热重载配置（无需重启）
+`/reload` — 热重载配置（LLM + 通道凭证，无需重启）
 `/reset` — 重置当前会话记忆
 `/compact` — 手动压缩上下文
 `/status` — 查看会话状态
@@ -227,6 +223,8 @@ def _fmt_time(iso_str: str) -> str:
     try:
         from datetime import datetime, timezone
         dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         diff = now - dt
         if diff.total_seconds() < 60:

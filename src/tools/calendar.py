@@ -32,7 +32,8 @@ class GoogleCalendarTool(BaseTool):
         from src.data_layer.loader import load_json, save_json
 
         path = Path(self.data_file)
-        data = load_json(path) if isinstance(load_json(path), list) else []
+        raw = load_json(path)
+        data = raw if isinstance(raw, list) else []
 
         if action == "list":
             if not date:

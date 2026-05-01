@@ -1,9 +1,11 @@
+import threading
 from langchain_core.tools import BaseTool
 from typing import Optional
 
 
 class ToolRegistry:
     _instance: Optional["ToolRegistry"] = None
+    _lock = threading.Lock()
 
     def __init__(self):
         self._tools: dict[str, BaseTool] = {}
@@ -20,5 +22,7 @@ class ToolRegistry:
     @classmethod
     def get_instance(cls) -> "ToolRegistry":
         if cls._instance is None:
-            cls._instance = cls()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
         return cls._instance

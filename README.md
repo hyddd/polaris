@@ -44,9 +44,9 @@
 ──────────────────────────────────────────────────────────────
 Chainlit Web ──┐   ┌──────────────────┐     ┌──────────────────┐
                ├──▶│ /chat/stream SSE │     │  command_node    │
-飞书 Bot ──────┘   │ /chat            │     │  (拦截 / 命令)    │
-                   │ /sessions        │     │      ↓           │
-                   │ SessionManager   │────▶│  agent_node      │
+飞书 Bot ──────┤   │ /chat            │     │  (拦截 / 命令)    │
+               │   │ /sessions        │     │      ↓           │
+QQ Bot ────────┘   │ SessionManager   │────▶│  agent_node      │
                    │ (多会话持久化)    │     │  (LLM+tools)⇄    │
                    │ ToolRegistry     │     │  tool_node       │
                    │ ChannelManager   │     │  (工具执行)       │
@@ -79,6 +79,9 @@ cp .env.example .env
 #   OPENAI_API_KEY=sk-xxx
 #   OPENAI_BASE_URL=https://api.openai.com/v1  （或其他兼容 API）
 #   LLM_MODEL=gpt-4o
+#   EMBEDDING_API_KEY=sk-xxx
+#   EMBEDDING_BASE_URL=https://api.siliconflow.cn/v1
+#   EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B
 ```
 
 ### 启动
@@ -195,7 +198,7 @@ Polaris/
 | Agent 框架 | LangGraph StateGraph + ReAct 循环 |
 | LLM | ChatOpenAI（可替换，支持 DeepSeek 等兼容 API） |
 | 工具定义 | LangChain BaseTool + Pydantic args_schema |
-| 向量检索 | ChromaDB + sentence-transformers |
+| 向量检索 | ChromaDB + 硅基流动 Embedding API（OpenAI 兼容） |
 | Web 服务 | FastAPI + SSE |
 | Web UI | Chainlit + httpx 流式客户端 |
 | Bot 通道 | 飞书 WebSocket（lark-oapi） |

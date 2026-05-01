@@ -74,6 +74,9 @@ class _PolarisQQClient(botpy.Client):
 
 
 class QQChannel(ChannelPlugin):
+    def __init__(self):
+        self._client: _PolarisQQClient | None = None
+
     @property
     def name(self) -> str:
         return "qq"
@@ -83,12 +86,17 @@ class QQChannel(ChannelPlugin):
         secret = os.getenv("QQ_BOT_SECRET", "")
         return bool(appid and secret)
 
+    def get_credentials(self) -> dict:
+        return {
+            "appid": os.getenv("QQ_BOT_APPID", ""),
+            "secret": os.getenv("QQ_BOT_SECRET", ""),
+        }
+
     def start(self) -> None:
         appid = os.getenv("QQ_BOT_APPID", "")
         secret = os.getenv("QQ_BOT_SECRET", "")
 
         # botpy.Client.__init__ calls asyncio.get_event_loop(); ensure one exists
-        import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
@@ -99,8 +107,18 @@ class QQChannel(ChannelPlugin):
         )
 
         logger.info(f"[qq] 启动 QQ Bot (appid={appid[:8]}...)")
-        client = _PolarisQQClient(intents=intents, is_sandbox=False)
-        client.run(appid=appid, secret=secret)
+        self._client = _PolarisQQClient(intents=intents, is_sandbox=False)
+        self._client.run(appid=appid, secret=secret)
 
     def stop(self) -> None:
-        pass
+        if self._client and not self._client.is_closed:
+            try:
+                asyncio.get_event_loop().run_until_complete(self._client.close())
+            except Exception:
+                pass
+            self._client = None
+            logger.info("[qq] 已停止")
+
+    def rebuild(self) -> None:
+        """Re-create client instance with latest credentials."""
+        self._client = None

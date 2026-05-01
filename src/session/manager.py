@@ -23,10 +23,14 @@ class Session:
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
 
     def to_dict(self) -> dict:
-        """Serialize for persistence. Messages beyond token budget are compressed into summary first."""
+        """Serialize for persistence. Only clean conversation messages (human + ai without tool_calls)."""
         all_messages = self.memory.get_history()
-        if all_messages:
-            _, recent = self.compressor.process(list(all_messages))
+        # Only keep clean conversation messages — no ToolMessage, no AIMessage with tool_calls
+        clean = [m for m in all_messages
+                 if m.type in ("human", "ai")
+                 and not (hasattr(m, "tool_calls") and m.tool_calls)]
+        if clean:
+            _, recent = self.compressor.process(list(clean))
         else:
             recent = []
 
@@ -53,7 +57,7 @@ class Session:
     @classmethod
     def from_dict(cls, data: dict) -> "Session":
         """Restore from persisted dict."""
-        memory = MemoryManager(window_size=10)
+        memory = MemoryManager()
         restored_messages = []
         for m in data.get("messages", []):
             msg_type = m["type"]
@@ -67,7 +71,7 @@ class Session:
                 restored_messages.append(AIMessage(content=content, **kwargs))
             elif msg_type == "tool":
                 restored_messages.append(ToolMessage(content=content, tool_call_id=m.get("tool_call_id", "")))
-        memory._messages = restored_messages  # Bypass add_message to avoid window_size truncation
+        memory._messages = restored_messages
 
         compressor = ConversationCompressor()
         compressor.summary = data.get("summary", "")
@@ -104,7 +108,7 @@ class SessionManager:
         session = Session(
             session_id=sid,
             name=name or f"对话 {len(self._sessions) + 1}",
-            memory=MemoryManager(window_size=10),
+            memory=MemoryManager(),
             compressor=ConversationCompressor(),
             created_at=datetime.now(timezone.utc).isoformat(),
             last_active=datetime.now(timezone.utc).isoformat(),

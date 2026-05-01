@@ -97,20 +97,22 @@ async def on_message(message: cl.Message):
 
                             tool_name = data.get("tool", "unknown")
                             tool_args = data.get("args", {})
+                            call_id = data.get("call_id", tool_name)
                             step = cl.Step(name=f"🔧 调用工具: {tool_name}", type="tool")
                             step.input = json.dumps(tool_args, ensure_ascii=False, indent=2)
                             step.output = "执行中..."
                             await step.send()
-                            tool_steps[tool_name] = step
+                            tool_steps[call_id] = step
 
                         elif event_type == "tool_result":
                             tool_name = data.get("tool", "unknown")
                             result = data.get("result", "")
-                            if tool_name in tool_steps:
-                                step = tool_steps[tool_name]
+                            call_id = data.get("call_id", tool_name)
+                            if call_id in tool_steps:
+                                step = tool_steps[call_id]
                                 step.output = result
                                 await step.update()
-                                del tool_steps[tool_name]
+                                del tool_steps[call_id]
 
                         elif event_type == "message":
                             response_text = data.get("content", "")

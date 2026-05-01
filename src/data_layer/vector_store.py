@@ -16,7 +16,8 @@ def get_embedding_function():
     return embedding_functions.OpenAIEmbeddingFunction(**kwargs)
 
 
-def prewarm_embedding_model() -> None:
+def check_embedding_config() -> None:
+    """检查 Embedding 配置是否可用，打印配置信息。"""
     api_key = os.getenv("EMBEDDING_API_KEY", "")
     if not api_key:
         print("⚠ 未配置 EMBEDDING_API_KEY，向量检索功能不可用")

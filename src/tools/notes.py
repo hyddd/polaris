@@ -85,18 +85,24 @@ class NoteTool(BaseTool):
 
 def _index_note(filename: str, title: str, content: str, tags: list[str],
                 persist_dir: str, collection_name: str) -> None:
-    """Background indexing, swallows all errors."""
+    """Background indexing."""
+    import logging
+    logger = logging.getLogger("polaris.tools.notes")
     try:
         from src.data_layer.vector_store import add_note_to_index
         add_note_to_index(filename, title, content, tags, persist_dir, collection_name)
-    except Exception:
-        pass
+        logger.debug(f"笔记已索引: {filename}")
+    except Exception as e:
+        logger.warning(f"笔记索引失败 ({filename}): {e}")
 
 
 def _deindex_note(filename: str, persist_dir: str, collection_name: str) -> None:
-    """Background de-indexing, swallows all errors."""
+    """Background de-indexing."""
+    import logging
+    logger = logging.getLogger("polaris.tools.notes")
     try:
         from src.data_layer.vector_store import remove_note_from_index
         remove_note_from_index(filename, persist_dir, collection_name)
-    except Exception:
-        pass
+        logger.debug(f"笔记已从索引移除: {filename}")
+    except Exception as e:
+        logger.warning(f"笔记移除索引失败 ({filename}): {e}")
