@@ -55,11 +55,13 @@ export function streamSSE(path, data, onToken, onEvent) {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        buffer += decoder.decode(value, { stream: true })
+        const chunk = decoder.decode(value, { stream: true })
+        buffer = buffer + chunk
 
-        while (buffer.includes('\n\n')) {
-          const [event, rest] = buffer.split('\n\n', 1)
-          buffer = rest
+        while (buffer && buffer.includes('\n\n')) {
+          const idx = buffer.indexOf('\n\n')
+          const event = buffer.substring(0, idx)
+          buffer = buffer.substring(idx + 2)
 
           let eventType = '', dataStr = ''
           for (const line of event.split('\n')) {

@@ -22,14 +22,16 @@ export const useChatStore = defineStore('chat', {
           '/chat/stream',
           { message: text, channel: 'admin' },
           (token) => {
+            console.log('SSE token:', token)
             if (hasToolCalls) {
-              response += token.token
+              response += token.token || ''
             } else {
-              thinking += token.token
+              thinking += token.token || ''
             }
             this._updateLastAssistant(thinking || response, hasToolCalls)
           },
           (eventType, data) => {
+            console.log('SSE event:', eventType, data)
             if (eventType === 'tool_call') {
               hasToolCalls = true
               if (thinking.trim()) {
@@ -55,6 +57,7 @@ export const useChatStore = defineStore('chat', {
           }
         )
       } catch (e) {
+        console.error('SSE error:', e)
         response = `连接失败: ${e.message}`
       }
 
