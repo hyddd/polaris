@@ -1,13 +1,14 @@
-"""Feishu (Lark) channel plugin — WebSocket bot integration."""
+"""Feishu (Lark) channel plugin — WebSocket bot integration.
+
+Lark SDK caches event loop at module import time — all lark imports are deferred
+to function scope so they execute in the daemon thread, not the main thread.
+"""
 
 import json
 import hashlib
 import time
 import os
 import logging
-
-import lark_oapi as lark
-from lark_oapi.api.im.v1 import *
 
 from src.channels import ChannelPlugin
 
@@ -31,6 +32,8 @@ class PolarisFeishuBot:
         self._recent_hashes: dict[str, float] = {}
 
     def start(self):
+        import lark_oapi as lark  # Deferred: runs in daemon thread, clean event loop
+
         logger.info("[feishu] 启动中...")
 
         self.client = lark.Client.builder() \
@@ -120,6 +123,7 @@ class PolarisFeishuBot:
         return response_text
 
     def _send_typing(self, message_id: str) -> str | None:
+        from lark_oapi.api.im.v1 import CreateMessageReactionRequest, CreateMessageReactionRequestBody, Emoji
         try:
             request = CreateMessageReactionRequest.builder() \
                 .message_id(message_id) \
@@ -135,6 +139,7 @@ class PolarisFeishuBot:
         return None
 
     def _delete_typing(self, message_id: str, reaction_id: str) -> None:
+        from lark_oapi.api.im.v1 import DeleteMessageReactionRequest
         try:
             request = DeleteMessageReactionRequest.builder() \
                 .message_id(message_id) \
@@ -145,6 +150,7 @@ class PolarisFeishuBot:
             pass
 
     def _send_message(self, chat_id: str, content: str) -> None:
+        from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
         content_json = json.dumps({"text": content}, ensure_ascii=False)
         try:
             request = CreateMessageRequest.builder() \
@@ -160,6 +166,7 @@ class PolarisFeishuBot:
             logger.error(f"[feishu] 发送消息异常: {e}")
 
     def _send_message_by_user(self, user_id: str, content: str) -> None:
+        from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
         content_json = json.dumps({"text": content}, ensure_ascii=False)
         try:
             request = CreateMessageRequest.builder() \

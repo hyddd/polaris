@@ -20,7 +20,7 @@ def main():
     print("Channel 插件将在 Server 启动时自动加载...")
     print()
 
-    uvicorn.run("src.server:app", host="0.0.0.0", port=8700)
+    uvicorn.run("src.server:app", host="0.0.0.0", port=8700, loop="asyncio")
 
 
 if __name__ == "__main__":

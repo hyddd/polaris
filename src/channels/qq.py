@@ -87,7 +87,8 @@ class QQChannel(ChannelPlugin):
         appid = os.getenv("QQ_BOT_APPID", "")
         secret = os.getenv("QQ_BOT_SECRET", "")
 
-        # Channel runs in a daemon thread — create event loop for this thread
+        # botpy.Client.__init__ calls asyncio.get_event_loop(); ensure one exists
+        import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
