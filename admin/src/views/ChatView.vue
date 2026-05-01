@@ -15,6 +15,13 @@
     <!-- Messages -->
     <div v-else class="messages" ref="messagesRef">
       <ChatMessage v-for="(msg, i) in store.messages" :key="i" :msg="msg" />
+      <!-- Loading indicator -->
+      <div v-if="store.loading" class="loading-message">
+        <div class="avatar assistant">P</div>
+        <div class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
     </div>
 
     <!-- Input bar -->
@@ -122,4 +129,27 @@ watch(() => store.messages.length, () => {
 .send-btn:hover:not(:disabled) { color: #ececec; }
 .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .input-hint { text-align: center; font-size: 12px; color: #8e8e8e; margin-top: 8px; }
+
+/* Loading animation */
+.loading-message {
+  display: flex; gap: 16px; padding: 24px;
+  max-width: 768px; margin: 0 auto; width: 100%;
+}
+.loading-message .avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; background: #1b7c5a; color: #fff;
+}
+.loading-dots { display: flex; gap: 4px; align-items: center; padding: 8px 0; }
+.loading-dots span {
+  width: 8px; height: 8px; background: #8e8e8e; border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+.loading-dots span:nth-child(1) { animation-delay: 0s; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
 </style>
