@@ -112,7 +112,7 @@ class PolarisFeishuBot:
             logger.error(f"[feishu] 处理消息失败: {e}", exc_info=True)
 
     def _process_message(self, user_id: str, text: str) -> str:
-        from src.session_manager import get_session_manager
+        from src.session.manager import get_session_manager
         from src.server import process_message
 
         session_mgr = get_session_manager()

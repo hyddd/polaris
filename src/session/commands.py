@@ -12,7 +12,7 @@ Commands:
   /help           — Show available commands
 """
 
-from src.session_manager import SessionManager
+from src.session.manager import SessionManager
 
 
 def handle_command(text: str, session_mgr: SessionManager) -> str | None:

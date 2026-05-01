@@ -1,10 +1,10 @@
 """Polaris Agent Graph — command interception → agent ⇄ tools."""
 
 from langgraph.graph import StateGraph, END
-from src.state import AgentState
+from src.agent.state import AgentState
 from src.agent.executor import agent_node, tool_node, should_continue
-from src.system_commands import handle_command
-from src.session_manager import get_session_manager
+from src.session.commands import handle_command
+from src.session.manager import get_session_manager
 
 
 def command_node(state: AgentState) -> dict:

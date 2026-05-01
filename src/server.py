@@ -17,8 +17,8 @@ from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 
 from src.agent.graph import get_agent
-from src.state import AgentState
-from src.session_manager import get_session_manager, SessionManager
+from src.agent.state import AgentState
+from src.session.manager import get_session_manager, SessionManager
 from src.tools.registry import ToolRegistry
 from src.tools.todos import TodoTool
 from src.tools.notes import NoteTool

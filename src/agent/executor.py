@@ -8,10 +8,10 @@ from datetime import date
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage
-from src.state import AgentState
+from src.agent.state import AgentState
 import src.config as _cfg  # Read at call time for hot-reload support
 from src.tools.registry import ToolRegistry
-from src.session_manager import get_session_manager
+from src.session.manager import get_session_manager
 
 UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 

@@ -119,15 +119,23 @@ Polaris/
 │
 ├── src/
 │   ├── server.py               # FastAPI Agent Server（统一入口）
+│   ├── chainlit_app.py         # Chainlit 入口（→ channels/web.py）
 │   ├── config.py               # 配置中心（热重载支持）
-│   ├── state.py                # AgentState 类型定义
-│   ├── protocol.py             # 消息协议
-│   ├── session_manager.py      # 多会话管理 + 持久化
-│   ├── system_commands.py      # 系统命令（/sessions、/reset 等）
 │   │
 │   ├── agent/
 │   │   ├── graph.py            # LangGraph 图组装（command → agent ⇄ tools）
-│   │   └── executor.py         # agent_node / tool_node / should_continue
+│   │   ├── executor.py         # agent_node / tool_node / should_continue
+│   │   └── state.py            # AgentState 类型定义
+│   │
+│   ├── session/
+│   │   ├── manager.py          # SessionManager（多会话 + 持久化）
+│   │   └── commands.py         # 系统命令（/sessions、/reset 等）
+│   │
+│   ├── channels/
+│   │   ├── __init__.py         # ChannelPlugin 基类 + ChannelManager
+│   │   ├── feishu.py           # 飞书通道（WebSocket Bot）
+│   │   ├── qq.py               # QQ 通道（botpy SDK）
+│   │   └── web.py              # Web 通道（Chainlit SSE 客户端）
 │   │
 │   ├── tools/
 │   │   ├── registry.py         # ToolRegistry 单例
@@ -139,14 +147,6 @@ Polaris/
 │   ├── memory/
 │   │   ├── store.py            # MemoryManager（对话记忆）
 │   │   └── compressor.py       # ConversationCompressor（Token 预算压缩）
-│   │
-│   ├── channels/
-│   │   ├── __init__.py         # ChannelPlugin 基类 + ChannelManager
-│   │   ├── feishu.py           # 飞书通道（WebSocket Bot）
-│   │   ├── qq.py               # QQ 通道（botpy SDK）
-│   │   └── web.py              # Web 通道（Chainlit SSE 客户端）
-│   │
-│   ├── chainlit_app.py         # Chainlit 入口（→ channels/web.py）
 │   │
 │   ├── data_layer/
 │   │   ├── loader.py           # JSON/Markdown 数据读写
