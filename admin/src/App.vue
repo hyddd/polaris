@@ -62,7 +62,7 @@ async function newChat() {
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #212121; color: #ececec; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif; background: #212121; color: #ececec; }
 
 .app-layout { display: flex; height: 100vh; }
 
