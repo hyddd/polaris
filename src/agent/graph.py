@@ -5,26 +5,48 @@ from src.agent.state import AgentState
 from src.agent.executor import agent_node, tool_node, should_continue
 from src.session.commands import handle_command
 from src.session.manager import get_session_manager
+from src.tools.registry import ToolRegistry
 
 
 def command_node(state: AgentState) -> dict:
-    """Pre-processing: intercept /commands, pass everything else through."""
+    """Pre-processing: intercept /commands, handle confirm/cancel, pass through."""
     messages = state.get("messages", [])
     if not messages:
         return {}
 
     last_msg = messages[-1]
     content = last_msg.content if hasattr(last_msg, "content") else ""
+    stripped = content.strip()
 
-    if not content.strip().startswith("/"):
-        return {}
+    # Handle pending action confirmation
+    pending = state.get("pending_action")
+    if pending:
+        if stripped in ("确认", "yes", "ok", "确定"):
+            registry = ToolRegistry.get_instance()
+            tool = registry.get(pending["target_tool"])
+            if tool:
+                try:
+                    result = tool.invoke(pending["params"])
+                    result_str = str(result) if not isinstance(result, str) else result
+                except Exception as e:
+                    result_str = f"执行失败：{e}"
+            else:
+                result_str = f"未找到工具：{pending['target_tool']}"
+            return {"pending_action": None, "messages": [], "final_response": result_str}
+        elif stripped in ("取消", "cancel", "no"):
+            return {"pending_action": None, "messages": [], "final_response": "已取消操作。"}
+        else:
+            # User said something else — implicit cancel, pass through
+            return {"pending_action": None}
 
-    session_mgr = get_session_manager()
-    response = handle_command(content.strip(), session_mgr)
-    if response:
-        if content.strip() == "/reset":
-            session_mgr.reset_active()
-        return {"messages": [], "final_response": response}
+    # Handle /commands
+    if stripped.startswith("/"):
+        session_mgr = get_session_manager()
+        response = handle_command(stripped, session_mgr)
+        if response:
+            if stripped == "/reset":
+                session_mgr.reset_active()
+            return {"messages": [], "final_response": response}
 
     return {}
 

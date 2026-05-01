@@ -5,6 +5,7 @@ Supports token-level streaming via LangGraph get_stream_writer().
 """
 
 from datetime import date
+from pathlib import Path
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage
@@ -25,6 +26,16 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 用中文回复，简洁直接
 """
 
+PERSONA_PATH = _cfg.DATA_DIR / "persona.md"
+
+
+def _load_persona() -> str:
+    """Load persona from data/persona.md. Returns empty string if missing."""
+    try:
+        return PERSONA_PATH.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
 AGENT_PROMPT = ChatPromptTemplate.from_messages([
     ("system", "{system_prompt}"),
     MessagesPlaceholder(variable_name="messages"),
@@ -43,7 +54,10 @@ def agent_node(state: AgentState) -> dict:
     summary, recent = compressor.process(list(messages))
 
     today = date.today().isoformat()
+    persona = _load_persona()
     system_prompt = f"今天是 {today}。\n\n"
+    if persona:
+        system_prompt += f"[人设]\n{persona}\n\n"
     if summary:
         system_prompt += f"[对话摘要]\n{summary}\n\n"
     system_prompt += UNIFIED_SYSTEM_PROMPT
@@ -74,6 +88,8 @@ def tool_node(state: AgentState) -> dict:
 
     registry = ToolRegistry.get_instance()
     results = []
+    pending_action = None
+
     for i, tc in enumerate(last_message.tool_calls):
         if tc is None:
             continue
@@ -83,8 +99,29 @@ def tool_node(state: AgentState) -> dict:
         else:
             tool_name = getattr(tc, "name", "")
             tool_args = getattr(tc, "args", None) or {}
-        tool = registry.get(tool_name)
 
+        raw_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+        fallback_id = f"call_{tool_name}_{i}"
+        call_id = raw_id or fallback_id
+
+        # Intercept delete operations — set pending_action instead of executing
+        if tool_args.get("action") == "delete":
+            target_id = tool_args.get("event_id") or tool_args.get("todo_id") or tool_args.get("filename", "")
+            pending_action = {
+                "action_type": "delete",
+                "target_tool": tool_name,
+                "target_id": target_id,
+                "description": f"删除 {tool_name} {target_id}",
+                "params": tool_args,
+                "tool_call_id": call_id,
+            }
+            results.append(ToolMessage(
+                content=f"操作需要确认：删除 {tool_name}「{target_id}」。回复「确认」执行，「取消」放弃。",
+                tool_call_id=call_id,
+            ))
+            continue
+
+        tool = registry.get(tool_name)
         if tool:
             try:
                 result = tool.invoke(tool_args)
@@ -94,11 +131,12 @@ def tool_node(state: AgentState) -> dict:
         else:
             result_str = f"未找到工具：{tool_name}"
 
-        raw_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-        fallback_id = f"call_{tool_name}_{i}"
-        results.append(ToolMessage(content=result_str, tool_call_id=raw_id or fallback_id))
+        results.append(ToolMessage(content=result_str, tool_call_id=call_id))
 
-    return {"messages": results}
+    out = {"messages": results}
+    if pending_action:
+        out["pending_action"] = pending_action
+    return out
 
 
 def should_continue(state: AgentState) -> str:
