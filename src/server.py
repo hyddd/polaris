@@ -15,7 +15,9 @@ import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from pathlib import Path
 from langchain_core.messages import HumanMessage, AIMessage
 
 from src.agent.graph import get_agent
@@ -87,6 +89,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
+
+# Mount admin frontend static files
+ADMIN_DIR = Path(__file__).parent.parent / "admin" / "dist"
+if ADMIN_DIR.exists():
+    app.mount("/admin", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin")
 
 
 def _get_active_session(session_id: str | None, session_mgr: SessionManager):
@@ -280,6 +287,110 @@ def delete_session(session_id: str):
     session_mgr = get_session_manager()
     if not session_mgr.delete(session_id):
         raise HTTPException(status_code=400, detail=f"Cannot delete session: {session_id}")
+    return {"ok": True}
+
+
+# --- Admin API: Config management ---
+
+from dotenv import dotenv_values
+
+@app.get("/api/config")
+def get_config():
+    env_path = Path(__file__).parent.parent / ".env"
+    if not env_path.exists():
+        return {"vars": {}}
+    values = dotenv_values(env_path)
+    # Mask sensitive values
+    masked = {}
+    for k, v in values.items():
+        if any(s in k.upper() for s in ["KEY", "SECRET", "TOKEN", "PASSWORD"]):
+            masked[k] = v[:4] + "****" if len(v) > 4 else "****"
+        else:
+            masked[k] = v
+    return {"vars": masked}
+
+
+class ConfigUpdate(BaseModel):
+    vars: dict[str, str]
+
+
+@app.post("/api/config")
+def update_config(req: ConfigUpdate):
+    env_path = Path(__file__).parent.parent / ".env"
+    existing = dotenv_values(env_path) if env_path.exists() else {}
+    existing.update(req.vars)
+    lines = [f"{k}={v}" for k, v in existing.items()]
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"ok": True}
+
+
+# --- Admin API: Data management ---
+
+import json as _json
+
+
+@app.get("/api/data/{data_type}")
+def list_data(data_type: str):
+    if data_type == "calendar":
+        path = CALENDAR_FILE
+    elif data_type == "todos":
+        path = TODOS_FILE
+    else:
+        raise HTTPException(400, f"Unknown type: {data_type}")
+
+    if not path.exists():
+        return {"items": []}
+    return {"items": _json.loads(path.read_text(encoding="utf-8"))}
+
+
+class DataUpdate(BaseModel):
+    data: list | dict
+
+
+@app.post("/api/data/{data_type}")
+def create_data(data_type: str, req: DataUpdate):
+    if data_type == "calendar":
+        path = CALENDAR_FILE
+    elif data_type == "todos":
+        path = TODOS_FILE
+    else:
+        raise HTTPException(400, f"Unknown type: {data_type}")
+
+    existing = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    if isinstance(existing, list):
+        existing.append(req.data)
+    else:
+        existing = req.data
+    path.write_text(_json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True}
+
+
+@app.put("/api/data/{data_type}/{item_id}")
+def update_data(data_type: str, item_id: str, req: DataUpdate):
+    if data_type == "todos":
+        path = TODOS_FILE
+    else:
+        raise HTTPException(400, f"Update not supported for {data_type}")
+
+    items = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    for i, item in enumerate(items):
+        if item.get("id") == item_id:
+            items[i] = req.data
+            break
+    path.write_text(_json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True}
+
+
+@app.delete("/api/data/{data_type}/{item_id}")
+def delete_data(data_type: str, item_id: str):
+    if data_type == "todos":
+        path = TODOS_FILE
+    else:
+        raise HTTPException(400, f"Delete not supported for {data_type}")
+
+    items = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    items = [i for i in items if i.get("id") != item_id]
+    path.write_text(_json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True}
 
 

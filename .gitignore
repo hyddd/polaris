@@ -11,3 +11,6 @@ chainlit.md
 logs/
 docs/
 botpy.log
+deploy.sh
+admin/node_modules/
+admin/dist/
