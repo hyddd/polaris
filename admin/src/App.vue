@@ -26,13 +26,14 @@
           <el-icon><Document /></el-icon> 数据
         </router-link>
         <div class="theme-options">
-          <button :class="['theme-btn', { active: theme.mode === 'light' }]" @click="theme.setMode('light')" title="浅色">
+          <div class="theme-slider" :style="sliderStyle"></div>
+          <button class="theme-btn" @click="theme.setMode('light')" title="浅色">
             <el-icon><Sunny /></el-icon>
           </button>
-          <button :class="['theme-btn', { active: theme.mode === 'dark' }]" @click="theme.setMode('dark')" title="深色">
+          <button class="theme-btn" @click="theme.setMode('dark')" title="深色">
             <el-icon><Moon /></el-icon>
           </button>
-          <button :class="['theme-btn', { active: theme.mode === 'system' }]" @click="theme.setMode('system')" title="跟随系统">
+          <button class="theme-btn" @click="theme.setMode('system')" title="跟随系统">
             <el-icon><Monitor /></el-icon>
           </button>
         </div>
@@ -61,6 +62,15 @@ const route = useRoute()
 
 const sessions = computed(() => store.sessions)
 const activeId = computed(() => store.activeId)
+
+const sliderIndex = computed(() => {
+  if (theme.mode === 'light') return 0
+  if (theme.mode === 'dark') return 1
+  return 2
+})
+const sliderStyle = computed(() => ({
+  transform: `translateX(${sliderIndex.value * 100}%)`,
+}))
 
 onMounted(async () => {
   theme.init()
@@ -162,13 +172,21 @@ body {
 
 /* Theme options */
 .theme-options {
-  display: flex; gap: 4px; padding: 8px 12px; margin-top: 4px;
+  display: flex; position: relative; padding: 4px; margin: 8px 12px 0;
+  background: var(--bg-tertiary); border-radius: 10px;
+}
+.theme-slider {
+  position: absolute; top: 4px; left: 4px;
+  width: calc(33.333% - 2.67px); height: calc(100% - 8px);
+  background: var(--bg-secondary); border-radius: 8px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .theme-btn {
-  flex: 1; padding: 8px; border: 1px solid var(--border-primary); border-radius: 8px;
+  flex: 1; padding: 8px; border: none; border-radius: 8px;
   background: transparent; color: var(--text-tertiary); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.2s; position: relative; z-index: 1;
 }
-.theme-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
-.theme-btn.active { background: var(--bg-secondary); color: var(--accent); border-color: var(--accent); }
+.theme-btn:hover { color: var(--text-primary); }
 </style>
