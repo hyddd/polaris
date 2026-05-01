@@ -36,6 +36,18 @@ export function streamSSE(path, data, onToken, onEvent) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
+
+      if (!r.ok) {
+        const text = await r.text()
+        reject(new Error(`HTTP ${r.status}: ${text}`))
+        return
+      }
+
+      if (!r.body) {
+        reject(new Error('Response body is empty'))
+        return
+      }
+
       const reader = r.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -55,9 +67,17 @@ export function streamSSE(path, data, onToken, onEvent) {
             else if (line.startsWith('data: ')) dataStr = line.slice(6)
           }
           if (eventType && dataStr) {
-            onEvent(eventType, JSON.parse(dataStr))
+            try {
+              onEvent(eventType, JSON.parse(dataStr))
+            } catch (e) {
+              console.warn('Failed to parse SSE event:', dataStr, e)
+            }
           } else if (dataStr) {
-            onToken(JSON.parse(dataStr))
+            try {
+              onToken(JSON.parse(dataStr))
+            } catch (e) {
+              console.warn('Failed to parse SSE token:', dataStr, e)
+            }
           }
         }
       }
