@@ -127,6 +127,22 @@ watch(() => store.messages.length, () => {
     if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   })
 })
+
+// Auto-scroll during streaming when pending message content changes
+watch(() => {
+  const pending = store.messages.find(m => m.pending)
+  return pending?.content
+}, () => {
+  nextTick(() => {
+    if (messagesRef.value) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
+      // Only auto-scroll if user is near the bottom (within 200px)
+      if (scrollHeight - scrollTop - clientHeight < 200) {
+        messagesRef.value.scrollTop = scrollHeight
+      }
+    }
+  })
+})
 </script>
 
 <style scoped>

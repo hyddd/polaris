@@ -25,10 +25,17 @@
         <router-link to="/data" class="sidebar-link">
           <el-icon><Document /></el-icon> 数据
         </router-link>
-        <button class="sidebar-link theme-toggle" @click="theme.toggle()">
-          <el-icon><Sunny v-if="theme.resolved === 'dark'" /><Moon v-else /></el-icon>
-          {{ theme.resolved === 'dark' ? '浅色模式' : '深色模式' }}
-        </button>
+        <div class="theme-options">
+          <button :class="['theme-btn', { active: theme.mode === 'light' }]" @click="theme.setMode('light')" title="浅色">
+            <el-icon><Sunny /></el-icon>
+          </button>
+          <button :class="['theme-btn', { active: theme.mode === 'dark' }]" @click="theme.setMode('dark')" title="深色">
+            <el-icon><Moon /></el-icon>
+          </button>
+          <button :class="['theme-btn', { active: theme.mode === 'system' }]" @click="theme.setMode('system')" title="跟随系统">
+            <el-icon><Monitor /></el-icon>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -153,6 +160,15 @@ body {
 /* Main */
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
-/* Theme toggle */
-.theme-toggle { margin-top: 4px; }
+/* Theme options */
+.theme-options {
+  display: flex; gap: 4px; padding: 8px 12px; margin-top: 4px;
+}
+.theme-btn {
+  flex: 1; padding: 8px; border: 1px solid var(--border-primary); border-radius: 8px;
+  background: transparent; color: var(--text-tertiary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.theme-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+.theme-btn.active { background: var(--bg-secondary); color: var(--accent); border-color: var(--accent); }
 </style>
