@@ -5,10 +5,15 @@ langgraph
 langchain
 langchain-openai
 chromadb
-chainlit
 google-auth
 google-api-python-client
 python-dotenv
 pyyaml
+tiktoken
+lark-oapi
+fastapi
+uvicorn
+httpx
+qq-botpy
 pytest
 pytest-asyncio

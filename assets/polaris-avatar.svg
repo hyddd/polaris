@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8d44d"/>
+      <stop offset="100%" style="stop-color:#f5e642"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 背景圆形 -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+
+  <!-- 星星光芒 -->
+  <g filter="url(#glow)" opacity="0.3">
+    <line x1="256" y1="120" x2="256" y2="392" stroke="#e8d44d" stroke-width="2"/>
+    <line x1="120" y1="256" x2="392" y2="256" stroke="#e8d44d" stroke-width="2"/>
+    <line x1="160" y1="160" x2="352" y2="352" stroke="#e8d44d" stroke-width="1.5"/>
+    <line x1="352" y1="160" x2="160" y2="352" stroke="#e8d44d" stroke-width="1.5"/>
+  </g>
+
+  <!-- 北极星主体 - 四角星 -->
+  <polygon
+    points="256,140 276,220 356,220 292,268 312,348 256,300 200,348 220,268 156,220 236,220"
+    fill="url(#star)"
+    filter="url(#glow)"
+  />
+
+  <!-- 中心光点 -->
+  <circle cx="256" cy="256" r="20" fill="#fff" opacity="0.9"/>
+  <circle cx="256" cy="256" r="10" fill="#f5e642"/>
+</svg>

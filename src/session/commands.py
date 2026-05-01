@@ -139,33 +139,48 @@ def _compact(session_mgr: SessionManager) -> str:
 
 
 def _status(session_mgr: SessionManager) -> str:
+    import json
+    from datetime import date
+    from src.agent.executor import UNIFIED_SYSTEM_PROMPT, _load_persona
+    from src.tools.registry import ToolRegistry
+
     session = session_mgr.active_session
     messages = session.memory.get_history()
     compressor = session.compressor
     summary = compressor.summary
 
-    total_tokens = compressor._count_tokens(messages)
-    summary_tokens = compressor._summary_tokens
-    budget = compressor.compress_trigger
+    # system prompt = 日期 + 人设 + 摘要 + 行为准则
+    today = date.today().isoformat()
+    persona = _load_persona()
+    system_parts = [f"今天是 {today}。"]
+    if persona:
+        system_parts.append(persona)
+    if summary:
+        system_parts.append(summary)
+    system_parts.append(UNIFIED_SYSTEM_PROMPT)
+    system_tokens = compressor._count_tokens_str("\n\n".join(system_parts))
+
+    # 工具定义 token
+    tools = ToolRegistry.get_instance().list_tools()
+    tool_schemas = [t.args_schema.model_json_schema() if hasattr(t, 'args_schema') and t.args_schema else {} for t in tools]
+    tool_text = json.dumps(tool_schemas, ensure_ascii=False)
+    tool_tokens = compressor._count_tokens_str(tool_text)
+
+    # 消息 + system prompt + 工具 = LLM 实际上下文
+    message_tokens = compressor._count_tokens(messages)
+    used = system_tokens + message_tokens + tool_tokens
     model_max = compressor.model_max_context
+    pct = (used / model_max * 100) if model_max else 0
 
     user_msgs = sum(1 for m in messages if m.type == "human")
     ai_msgs = sum(1 for m in messages if m.type == "ai")
-    used = total_tokens + summary_tokens
-    pct = (used / model_max * 100) if model_max else 0
 
     lines = [
         f"📊 「{session.name}」会话状态",
         "",
-        "**消息统计**",
-        f"• 总消息数: {len(messages)} (用户:{user_msgs} AI:{ai_msgs})",
-        f"• 摘要: {len(summary)} 字符 (~{summary_tokens} tokens)",
+        f"• 消息: {len(messages)} (用户:{user_msgs} AI:{ai_msgs})",
+        f"• Token: {used:,} / {model_max:,} ({pct:.1f}%)",
         "",
-        "**上下文 Token**",
-        f"• 当前/最大: {used:,} / {model_max:,} ({pct:.1f}%)",
-        f"• 压缩触发线: {budget:,} ({(budget/model_max)*100:.0f}%)",
-        "",
-        "**会话**",
         f"• ID: {session.session_id}",
         f"• 总会话数: {len(session_mgr._sessions)}",
     ]

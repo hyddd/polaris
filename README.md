@@ -2,7 +2,7 @@
 
 基于 **LangGraph** 的个人效率 AI Agent，你可以随时随地让它帮你记日程、记待办、记笔记，也可随时问它你的日程，帮你规划一天，它就是你的私人秘书。
 
-> 一句话介绍：一个基于 LangGraph 的个人效率 AI Agent（Polaris）。它通过 ReAct 工具执行循环，将日历、待办、笔记的增删改查统一为一个自然语言对话入口——用户一句话即可完成日程规划、会议准备、知识检索或快速记录。Agent 采用 Command → Agent Node ⇄ Tool Node 的三层架构，支持 Chainlit Web UI 和飞书 Bot 双入口，具备 Token 预算感知的上下文压缩、多会话管理、SSE 流式输出和可插拔通道系统。
+> 一句话介绍：一个基于 LangGraph 的个人效率 AI Agent（Polaris）。它通过 ReAct 工具执行循环，将日历、待办、笔记的增删改查统一为一个自然语言对话入口——用户一句话即可完成日程规划、会议准备、知识检索或快速记录。Agent 采用 Command → Agent Node ⇄ Tool Node 的三层架构，内置 Vue 3 管理后台，支持飞书和 QQ 通道接入，具备 Token 预算感知的上下文压缩、多会话管理、SSE 流式输出和可插拔通道系统。
 
 ## 项目亮点
 
@@ -42,7 +42,7 @@
 ```
 通道层               Agent Server 层               LangGraph 层
 ──────────────────────────────────────────────────────────────
-Chainlit Web ──┐   ┌──────────────────┐     ┌──────────────────┐
+Admin UI ──────┐   ┌──────────────────┐     ┌──────────────────┐
                ├──▶│ /chat/stream SSE │     │  command_node    │
 飞书 Bot ──────┤   │ /chat            │     │  (拦截 / 命令)    │
                │   │ /sessions        │     │      ↓           │
@@ -87,18 +87,12 @@ cp .env.example .env
 ### 启动
 
 ```bash
-# 一键启动（Agent Server + 所有通道）
+# 构建前端（首次）
+cd admin && npm install && npm run build && cd ..
+
+# 启动服务（Agent Server + 所有通道 + Admin UI）
 python run.py
-# Server 启动在 http://localhost:8700
-```
-
-### 启动 Web UI
-
-```bash
-# 另开终端
-source venv/bin/activate
-chainlit run src/chainlit_app.py
-# Web UI 启动在 http://localhost:8000
+# 访问 http://localhost:8700 进入管理后台
 ```
 
 ### 启用飞书 Bot
@@ -120,9 +114,15 @@ Polaris/
 ├── run.py                      # 一键启动入口
 ├── .env.example                # 环境变量模板
 │
+├── admin/                      # Vue 3 管理后台
+│   ├── src/
+│   │   ├── views/              # 页面组件（Chat/Session/Config/Data）
+│   │   ├── components/         # 通用组件
+│   │   └── stores/             # Pinia 状态管理
+│   └── dist/                   # 构建产物（FastAPI 挂载）
+│
 ├── src/
-│   ├── server.py               # FastAPI Agent Server（统一入口）
-│   ├── chainlit_app.py         # Chainlit 入口（→ channels/web.py）
+│   ├── server.py               # FastAPI Agent Server（统一入口 + API）
 │   ├── config.py               # 配置中心（热重载支持）
 │   │
 │   ├── agent/
@@ -131,14 +131,13 @@ Polaris/
 │   │   └── state.py            # AgentState 类型定义
 │   │
 │   ├── session/
-│   │   ├── manager.py          # SessionManager（多会话 + 持久化）
+│   │   ├── manager.py          # SessionManager（多会话 + 独立文件持久化）
 │   │   └── commands.py         # 系统命令（/sessions、/reset 等）
 │   │
 │   ├── channels/
 │   │   ├── __init__.py         # ChannelPlugin 基类 + ChannelManager
 │   │   ├── feishu.py           # 飞书通道（WebSocket Bot）
-│   │   ├── qq.py               # QQ 通道（botpy SDK）
-│   │   └── web.py              # Web 通道（Chainlit SSE 客户端）
+│   │   └── qq.py               # QQ 通道（botpy SDK）
 │   │
 │   ├── tools/
 │   │   ├── registry.py         # ToolRegistry 单例
@@ -155,14 +154,15 @@ Polaris/
 │   │   ├── loader.py           # JSON/Markdown 数据读写
 │   │   └── vector_store.py     # ChromaDB 向量存储
 │
-├── data/                       # 种子数据
+├── data/                       # 运行时数据
+│   ├── sessions/               # 会话存储（每个会话独立 JSON）
 │   ├── calendar.json
 │   ├── todos.json
-│   ├── user_profile.json
+│   ├── persona.md              # Agent 人设
 │   └── notes/
 │
 └── docs/superpowers/           # 设计文档
-    ├── specs/                  # 3 份设计规范
+    ├── specs/                  # 设计规范
     └── plans/                  # 实施计划
 ```
 
@@ -200,7 +200,7 @@ Polaris/
 | 工具定义 | LangChain BaseTool + Pydantic args_schema |
 | 向量检索 | ChromaDB + 硅基流动 Embedding API（OpenAI 兼容） |
 | Web 服务 | FastAPI + SSE |
-| Web UI | Chainlit + httpx 流式客户端 |
-| Bot 通道 | 飞书 WebSocket（lark-oapi） |
+| 管理后台 | Vue 3 + Vite + Element Plus + Pinia |
+| Bot 通道 | 飞书 WebSocket（lark-oapi）、QQ（botpy） |
 | Token 计数 | tiktoken |
 | 包管理 | venv + pyproject.toml + pip（PEP 621） |
