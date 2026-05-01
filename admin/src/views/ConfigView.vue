@@ -53,32 +53,32 @@ function addVar() {
 </script>
 
 <style scoped>
-.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; }
+.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; overflow-y: auto; }
 .page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 400; margin-bottom: 8px; }
 .hint { font-size: 13px; color: #8e8e8e; }
 
-.config-list { display: flex; flex-direction: column; gap: 1px; background: #424242; border-radius: 12px; overflow: hidden; }
+.config-list { display: flex; flex-direction: column; gap: 1px; background: var(--border-primary); border-radius: 12px; overflow: hidden; }
 .config-row {
-  display: flex; align-items: center; padding: 12px 16px; background: #2f2f2f;
+  display: flex; align-items: center; padding: 12px 16px; background: var(--bg-secondary);
 }
-.config-key { width: 280px; font-size: 14px; color: #b4b4b4; font-family: 'SF Mono', Monaco, monospace; }
+.config-key { width: 280px; font-size: 14px; color: var(--text-secondary); font-family: 'SF Mono', Monaco, monospace; }
 .config-value { flex: 1; font-size: 14px; }
 .config-actions { width: 120px; display: flex; gap: 8px; justify-content: flex-end; }
 
 .dark-input {
-  width: 100%; padding: 6px 10px; background: #1a1a1a; border: 1px solid #424242;
-  border-radius: 6px; color: #ececec; font-size: 14px; outline: none;
+  width: 100%; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-primary);
+  border-radius: 6px; color: var(--text-primary); font-size: 14px; outline: none;
 }
-.dark-input:focus { border-color: #6b9eff; }
+.dark-input:focus { border-color: var(--accent); }
 
 .btn {
-  padding: 8px 16px; border: 1px solid #424242; border-radius: 8px;
-  background: transparent; color: #ececec; font-size: 13px; cursor: pointer;
+  padding: 8px 16px; border: 1px solid var(--border-primary); border-radius: 8px;
+  background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer;
   transition: all 0.2s; display: flex; align-items: center; gap: 6px;
 }
-.btn:hover { background: #3a3a3a; }
-.btn-primary { background: #3b6bed; border-color: #3b6bed; }
-.btn-primary:hover { background: #4a7af0; }
+.btn:hover { background: var(--bg-tertiary); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
 .btn-small { padding: 6px 12px; font-size: 12px; }
 </style>

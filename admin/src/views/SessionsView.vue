@@ -74,36 +74,36 @@ async function handleRename(sid) {
 </script>
 
 <style scoped>
-.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; }
+.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; overflow-y: auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 400; }
 
 .session-list { display: flex; flex-direction: column; gap: 8px; }
 .session-card {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 16px; background: #2f2f2f; border: 1px solid #424242; border-radius: 12px;
+  padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 12px;
   transition: border-color 0.2s;
 }
-.session-card.active { border-color: #6b9eff; }
+.session-card.active { border-color: var(--accent); }
 .session-name { font-size: 15px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
 .active-badge {
-  font-size: 11px; background: #1b7c5a; color: #fff; padding: 2px 8px;
+  font-size: 11px; background: var(--success); color: #fff; padding: 2px 8px;
   border-radius: 10px;
 }
-.session-meta { font-size: 13px; color: #8e8e8e; }
+.session-meta { font-size: 13px; color: var(--text-tertiary); }
 .session-actions { display: flex; gap: 8px; }
 
 /* Buttons */
 .btn {
-  padding: 8px 16px; border: 1px solid #424242; border-radius: 8px;
-  background: transparent; color: #ececec; font-size: 13px; cursor: pointer;
+  padding: 8px 16px; border: 1px solid var(--border-primary); border-radius: 8px;
+  background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer;
   transition: all 0.2s; display: flex; align-items: center; gap: 6px;
 }
-.btn:hover { background: #3a3a3a; }
-.btn-primary { background: #3b6bed; border-color: #3b6bed; }
-.btn-primary:hover { background: #4a7af0; }
-.btn-danger { color: #ef4444; border-color: #7f1d1d; }
-.btn-danger:hover { background: #7f1d1d; }
+.btn:hover { background: var(--bg-tertiary); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-danger { color: var(--danger); border-color: var(--danger-bg); }
+.btn-danger:hover { background: var(--danger-bg); }
 .btn-small { padding: 6px 12px; font-size: 12px; }
 
 /* Modal */
@@ -112,14 +112,14 @@ async function handleRename(sid) {
   align-items: center; justify-content: center; z-index: 100;
 }
 .modal {
-  background: #2f2f2f; border: 1px solid #424242; border-radius: 16px;
+  background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 16px;
   padding: 24px; width: 400px;
 }
 .modal h3 { margin-bottom: 16px; font-weight: 400; }
 .dark-input {
-  width: 100%; padding: 10px 14px; background: #1a1a1a; border: 1px solid #424242;
-  border-radius: 8px; color: #ececec; font-size: 14px; outline: none;
+  width: 100%; padding: 10px 14px; background: var(--bg-tertiary); border: 1px solid var(--border-primary);
+  border-radius: 8px; color: var(--text-primary); font-size: 14px; outline: none;
 }
-.dark-input:focus { border-color: #6b9eff; }
+.dark-input:focus { border-color: var(--accent); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 </style>

@@ -25,6 +25,10 @@
         <router-link to="/data" class="sidebar-link">
           <el-icon><Document /></el-icon> 数据
         </router-link>
+        <button class="sidebar-link theme-toggle" @click="theme.toggle()">
+          <el-icon><Sunny v-if="theme.resolved === 'dark'" /><Moon v-else /></el-icon>
+          {{ theme.resolved === 'dark' ? '浅色模式' : '深色模式' }}
+        </button>
       </div>
     </aside>
 
@@ -36,13 +40,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useSessionsStore } from './stores/sessions.js'
 import { useChatStore } from './stores/chat.js'
+import { useThemeStore } from './stores/theme.js'
 import { useRouter, useRoute } from 'vue-router'
 
 const store = useSessionsStore()
 const chatStore = useChatStore()
+const theme = useThemeStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -50,6 +56,7 @@ const sessions = computed(() => store.sessions)
 const activeId = computed(() => store.activeId)
 
 onMounted(async () => {
+  theme.init()
   await store.fetch()
   if (store.activeId) chatStore.loadSession(store.activeId)
 })
@@ -68,42 +75,84 @@ async function newChat() {
 </script>
 
 <style>
+/* CSS Variables - Dark Theme (default) */
+:root, [data-theme="dark"] {
+  --bg-primary: #212121;
+  --bg-secondary: #2f2f2f;
+  --bg-tertiary: #1a1a1a;
+  --bg-sidebar: #171717;
+  --border-primary: #424242;
+  --border-secondary: #333;
+  --text-primary: #ececec;
+  --text-secondary: #b4b4b4;
+  --text-tertiary: #8e8e8e;
+  --accent: #3b6bed;
+  --accent-hover: #4a7af0;
+  --success: #1b7c5a;
+  --danger: #ef4444;
+  --danger-bg: #7f1d1d;
+}
+
+/* CSS Variables - Light Theme */
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #e5e5e5;
+  --bg-sidebar: #f9f9f9;
+  --border-primary: #e0e0e0;
+  --border-secondary: #d4d4d4;
+  --text-primary: #1a1a1a;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --accent: #3b6bed;
+  --accent-hover: #2563eb;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --danger-bg: #fecaca;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif; background: #212121; color: #ececec; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+  background: var(--bg-primary); color: var(--text-primary);
+}
 
 .app-layout { display: flex; height: 100vh; }
 
 /* Sidebar */
 .sidebar {
-  width: 260px; background: #171717; display: flex; flex-direction: column;
-  border-right: 1px solid #2f2f2f; flex-shrink: 0;
+  width: 260px; background: var(--bg-sidebar); display: flex; flex-direction: column;
+  border-right: 1px solid var(--border-primary); flex-shrink: 0;
 }
 .new-chat-btn {
-  margin: 12px; padding: 10px; background: transparent; border: 1px solid #424242;
-  border-radius: 8px; color: #ececec; cursor: pointer; font-size: 14px;
+  margin: 12px; padding: 10px; background: transparent; border: 1px solid var(--border-primary);
+  border-radius: 8px; color: var(--text-primary); cursor: pointer; font-size: 14px;
   display: flex; align-items: center; gap: 8px; transition: background 0.2s;
 }
-.new-chat-btn:hover { background: #2f2f2f; }
+.new-chat-btn:hover { background: var(--bg-secondary); }
 
 .chat-history { flex: 1; overflow-y: auto; padding: 0 8px; }
 .history-item {
   padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px;
-  color: #b4b4b4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: background 0.2s;
 }
-.history-item:hover { background: #2f2f2f; color: #ececec; }
-.history-item.active { background: #2f2f2f; color: #fff; }
+.history-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
+.history-item.active { background: var(--bg-secondary); color: var(--text-primary); }
 
 .sidebar-bottom {
-  padding: 8px; border-top: 1px solid #2f2f2f;
+  padding: 8px; border-top: 1px solid var(--border-primary);
 }
 .sidebar-link {
   display: flex; align-items: center; gap: 8px; padding: 10px 12px;
-  border-radius: 8px; color: #b4b4b4; text-decoration: none; font-size: 14px;
-  transition: background 0.2s;
+  border-radius: 8px; color: var(--text-secondary); text-decoration: none; font-size: 14px;
+  transition: background 0.2s; border: none; background: transparent; cursor: pointer; width: 100%;
 }
-.sidebar-link:hover { background: #2f2f2f; color: #ececec; }
+.sidebar-link:hover { background: var(--bg-secondary); color: var(--text-primary); }
 
 /* Main */
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Theme toggle */
+.theme-toggle { margin-top: 4px; }
 </style>

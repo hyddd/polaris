@@ -70,41 +70,41 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; }
+.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; overflow-y: auto; }
 .page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 400; }
 
 /* Tabs */
-.tabs { display: flex; gap: 4px; margin-bottom: 24px; background: #1a1a1a; border-radius: 10px; padding: 4px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--bg-tertiary); border-radius: 10px; padding: 4px; }
 .tab {
   flex: 1; padding: 8px 16px; border: none; border-radius: 8px;
-  background: transparent; color: #8e8e8e; font-size: 14px; cursor: pointer;
+  background: transparent; color: var(--text-tertiary); font-size: 14px; cursor: pointer;
   transition: all 0.2s;
 }
-.tab.active { background: #2f2f2f; color: #ececec; }
-.tab:hover:not(.active) { color: #b4b4b4; }
+.tab.active { background: var(--bg-secondary); color: var(--text-primary); }
+.tab:hover:not(.active) { color: var(--text-secondary); }
 
 /* Calendar */
 .day-section { margin-bottom: 24px; }
-.day-title { font-size: 16px; font-weight: 500; margin-bottom: 12px; color: #b4b4b4; }
+.day-title { font-size: 16px; font-weight: 500; margin-bottom: 12px; color: var(--text-secondary); }
 .event-list { display: flex; flex-direction: column; gap: 8px; }
 .event-card {
-  display: flex; gap: 16px; padding: 14px 16px; background: #2f2f2f;
-  border: 1px solid #424242; border-radius: 10px;
+  display: flex; gap: 16px; padding: 14px 16px; background: var(--bg-secondary);
+  border: 1px solid var(--border-primary); border-radius: 10px;
 }
-.event-time { font-size: 14px; color: #8e8e8e; min-width: 50px; }
+.event-time { font-size: 14px; color: var(--text-tertiary); min-width: 50px; }
 .event-title { font-size: 15px; margin-bottom: 4px; }
-.event-meta { font-size: 13px; color: #8e8e8e; }
+.event-meta { font-size: 13px; color: var(--text-tertiary); }
 
 /* Todos */
 .todo-list { display: flex; flex-direction: column; gap: 8px; }
 .todo-card {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 16px; background: #2f2f2f; border: 1px solid #424242; border-radius: 10px;
+  padding: 14px 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 10px;
 }
 .todo-title { font-size: 15px; margin-bottom: 8px; }
 .todo-meta { display: flex; gap: 8px; align-items: center; }
-.todo-due { font-size: 13px; color: #8e8e8e; }
+.todo-due { font-size: 13px; color: var(--text-tertiary); }
 
 /* Badges */
 .badge {
@@ -119,16 +119,16 @@ onMounted(loadData)
 .status-in_progress { background: #1e3a5f; color: #93c5fd; }
 
 /* Empty */
-.empty { text-align: center; padding: 40px; color: #8e8e8e; font-size: 14px; }
+.empty { text-align: center; padding: 40px; color: var(--text-tertiary); font-size: 14px; }
 
 /* Button */
 .btn {
-  padding: 8px 16px; border: 1px solid #424242; border-radius: 8px;
-  background: transparent; color: #ececec; font-size: 13px; cursor: pointer;
+  padding: 8px 16px; border: 1px solid var(--border-primary); border-radius: 8px;
+  background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer;
   transition: all 0.2s;
 }
-.btn:hover { background: #3a3a3a; }
-.btn-danger { color: #ef4444; border-color: #7f1d1d; }
-.btn-danger:hover { background: #7f1d1d; }
+.btn:hover { background: var(--bg-tertiary); }
+.btn-danger { color: var(--danger); border-color: var(--danger-bg); }
+.btn-danger:hover { background: var(--danger-bg); }
 .btn-small { padding: 6px 12px; font-size: 12px; }
 </style>
