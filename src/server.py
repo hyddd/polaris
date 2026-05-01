@@ -93,7 +93,7 @@ app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
 # Mount admin frontend static files
 ADMIN_DIR = Path(__file__).parent.parent / "admin" / "dist"
 if ADMIN_DIR.exists():
-    app.mount("/admin", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin")
+    app.mount("/", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin")
 
 
 def _get_active_session(session_id: str | None, session_mgr: SessionManager):
