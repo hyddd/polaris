@@ -275,6 +275,14 @@ def get_session_detail(session_id: str):
     }
 
 
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    session_mgr = get_session_manager()
+    if not session_mgr.delete(session_id):
+        raise HTTPException(status_code=400, detail=f"Cannot delete session: {session_id}")
+    return {"ok": True}
+
+
 # --- Shared message processing (used by HTTP endpoints & in-process channels) ---
 
 _message_lock = threading.Lock()

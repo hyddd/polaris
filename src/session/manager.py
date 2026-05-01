@@ -152,6 +152,17 @@ class SessionManager:
         self.save()
         return True
 
+    def delete(self, session_id: str) -> bool:
+        if session_id not in self._sessions:
+            return False
+        if len(self._sessions) <= 1:
+            return False
+        del self._sessions[session_id]
+        if self._active_id == session_id:
+            self._active_id = next(iter(self._sessions))
+        self.save()
+        return True
+
     def reset_active(self):
         self.active_session.memory._messages.clear()
         self.active_session.compressor.summary = ""
