@@ -22,7 +22,6 @@ export const useChatStore = defineStore('chat', {
           '/chat/stream',
           { message: text, channel: 'admin' },
           (token) => {
-            console.log('SSE token:', token)
             if (hasToolCalls) {
               response += token.token || ''
             } else {
@@ -31,7 +30,6 @@ export const useChatStore = defineStore('chat', {
             this._updateLastAssistant(thinking || response, hasToolCalls)
           },
           (eventType, data) => {
-            console.log('SSE event:', eventType, data)
             if (eventType === 'tool_call') {
               hasToolCalls = true
               if (thinking.trim()) {
@@ -57,11 +55,18 @@ export const useChatStore = defineStore('chat', {
           }
         )
       } catch (e) {
-        console.error('SSE error:', e)
         response = `连接失败: ${e.message}`
       }
 
-      this.messages.push({ role: 'assistant', content: response || thinking, tools: [...this.toolSteps] })
+      // Mark pending message as complete, or create final message
+      const pending = this.messages.find(m => m.role === 'assistant' && m.pending)
+      if (pending) {
+        pending.content = response || thinking
+        pending.tools = [...this.toolSteps]
+        delete pending.pending
+      } else {
+        this.messages.push({ role: 'assistant', content: response || thinking, tools: [...this.toolSteps] })
+      }
       this.loading = false
       this.toolSteps = []
     },
