@@ -142,14 +142,15 @@ Polaris/
 │   │
 │   ├── channels/
 │   │   ├── __init__.py         # ChannelPlugin 基类 + ChannelManager
-│   │   └── feishu.py           # 飞书通道插件
+│   │   ├── feishu.py           # 飞书通道（WebSocket Bot）
+│   │   ├── qq.py               # QQ 通道（botpy SDK）
+│   │   └── web.py              # Web 通道（Chainlit SSE 客户端）
+│   │
+│   ├── chainlit_app.py         # Chainlit 入口（→ channels/web.py）
 │   │
 │   ├── data_layer/
 │   │   ├── loader.py           # JSON/Markdown 数据读写
 │   │   └── vector_store.py     # ChromaDB 向量存储
-│   │
-│   ├── chainlit_app.py         # Chainlit Web UI（SSE 客户端）
-│   └── feishu_bot.py           # 飞书 WebSocket Bot
 │
 ├── data/                       # 种子数据
 │   ├── calendar.json
