@@ -1,10 +1,14 @@
 <template>
   <div :class="['message', msg.role]">
-    <div class="bubble">
+    <div class="avatar">
+      <span v-if="msg.role === 'user'">U</span>
+      <span v-else>P</span>
+    </div>
+    <div class="content-wrapper">
       <div v-if="msg.tools?.length" class="tools">
-        <ToolStep v-for="t in msg.tools" :key="t.call_id" :step="t" />
+        <ToolStep v-for="t in msg.tools" :key="t.call_id || Math.random()" :step="t" />
       </div>
-      <div class="content" v-html="formatContent(msg.content)"></div>
+      <div class="content">{{ msg.content }}</div>
     </div>
   </div>
 </template>
@@ -12,22 +16,27 @@
 <script setup>
 import ToolStep from './ToolStep.vue'
 defineProps({ msg: Object })
-
-function formatContent(text) {
-  if (!text) return ''
-  return text.replace(/\n/g, '<br>')
-}
 </script>
 
 <style scoped>
-.message { display: flex; margin: 8px 16px; }
-.message.user { justify-content: flex-end; }
-.message.assistant { justify-content: flex-start; }
-.bubble {
-  max-width: 70%; padding: 10px 14px; border-radius: 12px;
-  font-size: 14px; line-height: 1.6;
+.message {
+  display: flex; gap: 16px; padding: 24px 0;
+  max-width: 768px; margin: 0 auto; width: 100%;
 }
-.user .bubble { background: #409eff; color: #fff; border-bottom-right-radius: 4px; }
-.assistant .bubble { background: #f4f4f5; color: #333; border-bottom-left-radius: 4px; }
-.tools { margin-bottom: 8px; }
+.message.user { padding: 16px 0; }
+
+.avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+}
+.user .avatar { background: #5b6abf; color: #fff; }
+.assistant .avatar { background: #1b7c5a; color: #fff; }
+
+.content-wrapper { flex: 1; min-width: 0; }
+.content {
+  font-size: 15px; line-height: 1.7; color: #ececec;
+  white-space: pre-wrap; word-break: break-word;
+}
+.tools { margin-bottom: 12px; }
 </style>
