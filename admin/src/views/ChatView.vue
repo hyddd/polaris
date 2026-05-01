@@ -16,7 +16,7 @@
     <div v-else class="messages" ref="messagesRef">
       <ChatMessage v-for="(msg, i) in store.messages" :key="i" :msg="msg" />
       <!-- Loading indicator -->
-      <div v-if="store.loading" class="loading-message">
+      <div v-if="store.loading && !hasPendingMessage" class="loading-message">
         <div class="avatar assistant">P</div>
         <div class="loading-dots">
           <span></span><span></span><span></span>
@@ -45,11 +45,12 @@
 </template>
 
 <script setup>
-import { ref, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useChatStore } from '../stores/chat.js'
 import ChatMessage from '../components/ChatMessage.vue'
 
 const store = useChatStore()
+const hasPendingMessage = computed(() => store.messages.some(m => m.role === 'assistant' && m.pending))
 const input = ref('')
 const messagesRef = ref(null)
 const inputRef = ref(null)
