@@ -45,6 +45,7 @@ class ChannelManager:
     def discover_and_start(self) -> None:
         """Import known channel modules, check config, start enabled ones."""
         self._try_import("src.channels.feishu", "FeishuChannel")
+        self._try_import("src.channels.qq", "QQChannel")
 
         for channel in self._channels:
             if channel.is_configured():

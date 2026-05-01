@@ -59,10 +59,17 @@ async def lifespan(app: FastAPI):
     if not _tools_registered:
         registry = ToolRegistry.get_instance()
         registry.register(TodoTool(data_file=str(TODOS_FILE)))
-        registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR)))
+        registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR), persist_dir=str(CHROMA_PERSIST_DIR), collection_name="notes"))
         registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
         registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
         _tools_registered = True
+
+    # Pre-warm embedding model (avoids first-request download delay)
+    try:
+        from src.data_layer.vector_store import prewarm_embedding_model
+        prewarm_embedding_model()
+    except Exception:
+        pass
 
     # Discover and start channel plugins
     from src.channels import ChannelManager

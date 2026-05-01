@@ -3,12 +3,12 @@ from pydantic import BaseModel, Field
 
 
 class RAGInput(BaseModel):
-    query: str = Field(description="搜索查询，自然语言即可")
+    query: str = Field(description="自然语言查询，例如'Polaris用了什么向量库'、'Polaris是什么？'")
 
 
 class RAGSearchTool(BaseTool):
     name: str = "rag_search"
-    description: str = "语义搜索笔记内容。输入自然语言查询，返回相关笔记片段。"
+    description: str = "搜索用户的知识库和所有笔记。当用户提问时用此工具。输入自然语言，返回语义匹配的内容。"
     args_schema: type[BaseModel] = RAGInput
     persist_dir: str = ""
     collection_name: str = "notes"

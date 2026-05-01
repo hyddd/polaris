@@ -1,16 +1,27 @@
+import os
 from pathlib import Path
 from chromadb import PersistentClient
 from chromadb.utils import embedding_functions
 
 
 def get_embedding_function():
-    import os
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if api_key and api_key not in ("sk-placeholder", "sk-..."):
-        return embedding_functions.OpenAIEmbeddingFunction(
-            api_key=api_key, model_name="text-embedding-3-small"
-        )
-    return embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+    api_key = os.getenv("EMBEDDING_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("未配置 EMBEDDING_API_KEY，向量检索不可用。请在 .env 中配置硅基流动 API。")
+    base_url = os.getenv("EMBEDDING_BASE_URL", "")
+    model = os.getenv("EMBEDDING_MODEL", "netease-youdao/bce-embedding-base_v1")
+    kwargs = {"api_key": api_key, "model_name": model}
+    if base_url:
+        kwargs["api_base"] = base_url
+    return embedding_functions.OpenAIEmbeddingFunction(**kwargs)
+
+
+def prewarm_embedding_model() -> None:
+    api_key = os.getenv("EMBEDDING_API_KEY", "")
+    if not api_key:
+        print("⚠ 未配置 EMBEDDING_API_KEY，向量检索功能不可用")
+        return
+    print(f"使用云端 Embedding: {os.getenv('EMBEDDING_MODEL', 'netease-youdao/bce-embedding-base_v1')}")
 
 
 def get_vector_store(persist_dir: str, collection_name: str = "notes"):
@@ -38,6 +49,26 @@ def index_notes(notes_dir: str, persist_dir: str, collection_name: str = "notes"
                 "tags": ",".join(note["metadata"].get("tags", [])),
             }],
         )
+
+
+def add_note_to_index(filename: str, title: str, content: str, tags: list[str],
+                      persist_dir: str, collection_name: str = "notes") -> None:
+    """Index a single note into the vector store."""
+    collection = get_vector_store(persist_dir, collection_name)
+    note_id = filename.replace(".md", "").replace(" ", "-")
+    # Upsert: update if exists, insert if not
+    collection.upsert(
+        ids=[note_id],
+        documents=[content],
+        metadatas=[{"title": title, "tags": ",".join(tags)}],
+    )
+
+
+def remove_note_from_index(filename: str, persist_dir: str, collection_name: str = "notes") -> None:
+    """Remove a note from the vector store."""
+    collection = get_vector_store(persist_dir, collection_name)
+    note_id = filename.replace(".md", "").replace(" ", "-")
+    collection.delete(ids=[note_id])
 
 
 def search_notes(query: str, persist_dir: str, collection_name: str = "notes", top_k: int = 3) -> list[dict]:

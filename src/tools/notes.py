@@ -1,3 +1,4 @@
+import threading
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -5,26 +6,26 @@ from pathlib import Path
 
 
 class NoteInput(BaseModel):
-    action: Literal["list", "read", "create", "search", "archive"] = Field(
-        description="操作类型：list=列出, read=读取, create=创建, search=搜索, archive=归档"
+    action: Literal["list", "read", "create", "archive"] = Field(
+        description="操作类型：list=列出, read=读取, create=创建, archive=归档"
     )
     filename: Optional[str] = Field(default=None, description="read 或 archive 时的文件名")
     title: Optional[str] = Field(default=None, description="create 时的笔记标题")
     content: Optional[str] = Field(default=None, description="create 时的笔记正文")
     tags: Optional[list[str]] = Field(default=None, description="create 时的标签")
-    keyword: Optional[str] = Field(default=None, description="search 时的搜索关键词")
 
 
 class NoteTool(BaseTool):
     name: str = "notes"
-    description: str = "管理笔记：列出、读取、创建、搜索（关键词）、归档。"
+    description: str = "管理笔记：列出、读取、创建、归档。如需语义搜索笔记内容请用 rag_search 工具。"
     args_schema: type[BaseModel] = NoteInput
     notes_dir: str = ""
     archive_dir: str = ""
+    persist_dir: str = ""
+    collection_name: str = "notes"
 
     def _run(self, action: str, filename: str | None = None, title: str | None = None,
-             content: str | None = None, tags: list[str] | None = None,
-             keyword: str | None = None) -> str:
+             content: str | None = None, tags: list[str] | None = None) -> str:
         from src.data_layer.loader import load_notes, save_note, archive_note
 
         notes_path = Path(self.notes_dir)
@@ -51,27 +52,28 @@ class NoteTool(BaseTool):
             if not title:
                 return "创建笔记需要提供标题。"
             filepath = save_note(notes_path, title, content or "", tags)
+            # Auto-index in background, don't block the response
+            if self.persist_dir:
+                threading.Thread(
+                    target=_index_note,
+                    args=(filepath.name, title, content or "", tags or [],
+                          self.persist_dir, self.collection_name),
+                    daemon=True,
+                ).start()
             return f"已记录笔记：{title} ({filepath.name})"
-
-        elif action == "search":
-            if not keyword:
-                return "请提供搜索关键词。"
-            notes = load_notes(notes_path)
-            matches = [n for n in notes
-                       if keyword.lower() in n["content"].lower()
-                       or keyword.lower() in n["metadata"].get("title", "").lower()]
-            if not matches:
-                return f"没有找到包含「{keyword}」的笔记。"
-            return "\n\n".join(
-                f"## {n['metadata'].get('title', n['filename'])}\n{n['content'][:300]}"
-                for n in matches
-            )
 
         elif action == "archive":
             if not filename:
                 return "请提供要归档的文件名。"
             filepath = notes_path / filename
             if archive_note(filepath, archive_path):
+                # Remove from vector index in background
+                if self.persist_dir:
+                    threading.Thread(
+                        target=_deindex_note,
+                        args=(filename, self.persist_dir, self.collection_name),
+                        daemon=True,
+                    ).start()
                 return f"已归档笔记：{filename}"
             return f"归档失败：{filename}"
 
@@ -79,3 +81,22 @@ class NoteTool(BaseTool):
 
     async def _arun(self, **kwargs) -> str:
         return self._run(**kwargs)
+
+
+def _index_note(filename: str, title: str, content: str, tags: list[str],
+                persist_dir: str, collection_name: str) -> None:
+    """Background indexing, swallows all errors."""
+    try:
+        from src.data_layer.vector_store import add_note_to_index
+        add_note_to_index(filename, title, content, tags, persist_dir, collection_name)
+    except Exception:
+        pass
+
+
+def _deindex_note(filename: str, persist_dir: str, collection_name: str) -> None:
+    """Background de-indexing, swallows all errors."""
+    try:
+        from src.data_layer.vector_store import remove_note_from_index
+        remove_note_from_index(filename, persist_dir, collection_name)
+    except Exception:
+        pass

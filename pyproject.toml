@@ -19,6 +19,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "httpx",
+    "qq-botpy",
 ]
 
 [project.optional-dependencies]
