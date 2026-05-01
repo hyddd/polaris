@@ -1,13 +1,37 @@
 import { defineStore } from 'pinia'
-import { streamSSE } from '../api.js'
+import { streamSSE, get } from '../api.js'
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
     messages: [],
     loading: false,
     toolSteps: [],
+    sessionId: null,
   }),
   actions: {
+    async loadSession(sid) {
+      this.messages = []
+      this.sessionId = sid
+      // Load recent messages from session
+      try {
+        const data = await get(`/sessions/${sid}`)
+        if (data.messages) {
+          for (const m of data.messages) {
+            if (m.type === 'human') {
+              this.messages.push({ role: 'user', content: m.content })
+            } else if (m.type === 'ai') {
+              this.messages.push({ role: 'assistant', content: m.content })
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore - session might be new
+      }
+    },
+    clearMessages() {
+      this.messages = []
+      this.toolSteps = []
+    },
     async sendMessage(text) {
       this.messages.push({ role: 'user', content: text })
       this.loading = true

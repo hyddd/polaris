@@ -36,26 +36,33 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useSessionsStore } from './stores/sessions.js'
+import { useChatStore } from './stores/chat.js'
 import { useRouter, useRoute } from 'vue-router'
 
 const store = useSessionsStore()
+const chatStore = useChatStore()
 const router = useRouter()
 const route = useRoute()
 
 const sessions = computed(() => store.sessions)
 const activeId = computed(() => store.activeId)
 
-onMounted(() => store.fetch())
+onMounted(async () => {
+  await store.fetch()
+  if (store.activeId) chatStore.loadSession(store.activeId)
+})
 
 async function switchSession(sid) {
   await store.switchTo(sid)
+  chatStore.loadSession(sid)
   if (route.path !== '/') router.push('/')
 }
 
 async function newChat() {
   await store.create(`对话 ${store.sessions.length + 1}`)
+  chatStore.clearMessages()
   if (route.path !== '/') router.push('/')
 }
 </script>

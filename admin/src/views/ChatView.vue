@@ -75,7 +75,10 @@ async function send() {
   const text = input.value.trim()
   if (!text) return
   input.value = ''
-  if (inputRef.value) inputRef.value.style.height = 'auto'
+  if (inputRef.value) {
+    inputRef.value.style.height = 'auto'
+    inputRef.value.focus()
+  }
   await store.sendMessage(text)
   await nextTick()
   if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
@@ -83,7 +86,10 @@ async function send() {
 
 function sendSuggestion(text) {
   input.value = text
-  send()
+  nextTick(() => {
+    if (inputRef.value) inputRef.value.focus()
+    send()
+  })
 }
 
 function autoResize() {
