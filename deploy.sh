@@ -31,7 +31,7 @@ echo "远程: $REMOTE:$REMOTE_DIR"
 echo ""
 
 # 1. 同步文件
-echo "[1/4] 同步文件..."
+echo "[1/3] 同步文件..."
 rsync -avz --progress \
     --exclude='.env' \
     --exclude='.git/' \
@@ -45,7 +45,7 @@ echo ""
 
 # 2. 远程安装依赖 + 构建前端 + 配置 systemd
 if $DO_SETUP; then
-    echo "[2/4] 远程安装依赖..."
+    echo "[2/3] 远程安装依赖..."
     ssh "$REMOTE" bash <<'SETUP_EOF'
         set -euo pipefail
         cd ~/Code/polaris
@@ -106,7 +106,7 @@ fi
 
 # 3. 启动/重启服务
 if $DO_RUN; then
-    echo "[3/4] 启动服务..."
+    echo "[3/3] 启动服务..."
     ssh "$REMOTE" bash <<'RUN_EOF'
         systemctl daemon-reload
         systemctl restart polaris
