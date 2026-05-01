@@ -90,10 +90,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
 
-# Mount admin frontend static files
+# Admin frontend static files
 ADMIN_DIR = Path(__file__).parent.parent / "admin" / "dist"
-if ADMIN_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin")
 
 
 def _get_active_session(session_id: str | None, session_mgr: SessionManager):
@@ -489,3 +487,17 @@ def _extract_tool_calls(result: dict) -> list[dict]:
                         "args": getattr(tc, "args", {}) or {},
                     })
     return calls
+
+
+# --- Admin frontend catch-all (must be LAST) ---
+from fastapi.responses import FileResponse
+
+@app.get("/{full_path:path}")
+async def serve_admin(full_path: str):
+    """Serve admin frontend — index.html for SPA routes, static files for assets."""
+    if not ADMIN_DIR.exists():
+        raise HTTPException(404, "Admin frontend not built. Run: cd admin && npm run build")
+    file_path = ADMIN_DIR / full_path
+    if file_path.is_file():
+        return FileResponse(file_path)
+    return FileResponse(ADMIN_DIR / "index.html")
