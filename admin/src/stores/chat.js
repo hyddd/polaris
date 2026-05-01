@@ -30,7 +30,9 @@ export const useChatStore = defineStore('chat', {
             this._updateLastAssistant(thinking || response, hasToolCalls)
           },
           (eventType, data) => {
-            if (eventType === 'tool_call') {
+            if (eventType === 'message') {
+              response = data.content || ''
+            } else if (eventType === 'tool_call') {
               hasToolCalls = true
               if (thinking.trim()) {
                 this.toolSteps.push({ type: 'thought', content: thinking.trim() })
