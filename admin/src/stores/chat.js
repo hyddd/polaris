@@ -4,6 +4,7 @@ import { streamSSE, get } from '../api.js'
 export const useChatStore = defineStore('chat', {
   state: () => ({
     messages: [],
+    allMessages: [],
     loading: false,
     toolSteps: [],
     sessionId: null,
@@ -12,21 +13,37 @@ export const useChatStore = defineStore('chat', {
     async loadSession(sid) {
       this.messages = []
       this.sessionId = sid
-      // Load recent messages from session
+      this.allMessages = []
       try {
         const data = await get(`/sessions/${sid}`)
         if (data.messages) {
-          for (const m of data.messages) {
-            if (m.type === 'human') {
-              this.messages.push({ role: 'user', content: m.content })
-            } else if (m.type === 'ai') {
-              this.messages.push({ role: 'assistant', content: m.content })
-            }
+          this.allMessages = data.messages.filter(m => m.type === 'human' || m.type === 'ai')
+          // Load last 50 messages
+          const recent = this.allMessages.slice(-50)
+          for (const m of recent) {
+            this.messages.push({
+              role: m.type === 'human' ? 'user' : 'assistant',
+              content: m.content,
+            })
           }
         }
       } catch (e) {
         // Ignore - session might be new
       }
+    },
+    loadMore() {
+      const currentCount = this.messages.length
+      if (currentCount >= this.allMessages.length) return false
+      const start = Math.max(0, this.allMessages.length - currentCount - 50)
+      const end = this.allMessages.length - currentCount
+      const older = this.allMessages.slice(start, end)
+      for (const m of older.reverse()) {
+        this.messages.unshift({
+          role: m.type === 'human' ? 'user' : 'assistant',
+          content: m.content,
+        })
+      }
+      return true
     },
     clearMessages() {
       this.messages = []

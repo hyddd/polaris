@@ -13,7 +13,12 @@
     </div>
 
     <!-- Messages -->
-    <div v-else class="messages" ref="messagesRef">
+    <div v-else class="messages" ref="messagesRef" @scroll="onScroll">
+      <div v-if="hasMore" class="load-more">
+        <button class="btn-load-more" @click="loadMore" :disabled="loadingMore">
+          {{ loadingMore ? '加载中...' : '加载更多' }}
+        </button>
+      </div>
       <ChatMessage v-for="(msg, i) in store.messages" :key="i" :msg="msg" />
       <!-- Loading indicator -->
       <div v-if="store.loading && !hasPendingMessage" class="loading-message">
@@ -53,10 +58,27 @@ import ChatMessage from '../components/ChatMessage.vue'
 
 const store = useChatStore()
 const hasPendingMessage = computed(() => store.messages.some(m => m.role === 'assistant' && m.pending))
+const hasMore = computed(() => store.messages.length < store.allMessages.length)
 const input = ref('')
 const messagesRef = ref(null)
 const inputRef = ref(null)
 const isComposing = ref(false)
+const loadingMore = ref(false)
+
+async function loadMore() {
+  loadingMore.value = true
+  const prevHeight = messagesRef.value?.scrollHeight || 0
+  store.loadMore()
+  await nextTick()
+  if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight - prevHeight
+  loadingMore.value = false
+}
+
+function onScroll() {
+  if (messagesRef.value?.scrollTop < 50 && hasMore.value && !loadingMore.value) {
+    loadMore()
+  }
+}
 
 function onEnter(e) {
   if (isComposing.value) return
@@ -168,4 +190,13 @@ watch(() => store.messages.length, () => {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
 }
+
+/* Load more */
+.load-more { text-align: center; padding: 12px; }
+.btn-load-more {
+  background: transparent; border: 1px solid #424242; border-radius: 8px;
+  color: #8e8e8e; padding: 6px 16px; font-size: 13px; cursor: pointer;
+}
+.btn-load-more:hover { background: #2f2f2f; color: #ececec; }
+.btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
