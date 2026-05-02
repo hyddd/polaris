@@ -93,14 +93,16 @@ class GoogleCalendarTool(BaseTool):
             if not updates:
                 return "修改日程需要提供要修改的字段。"
             new_date = updates.get("date")
-            # Find by event_id or title+date
+            # Find by event_id or title (with optional date filter)
             for day in data:
+                if date and day.get("date") != date:
+                    continue
                 events = day.get("events", [])
                 for i, ev in enumerate(events):
                     matched = False
                     if event_id and ev["id"] == event_id:
                         matched = True
-                    elif title and date and day.get("date") == date and title.lower() in ev.get("title", "").lower():
+                    elif title and title.lower() in ev.get("title", "").lower():
                         matched = True
                     if matched:
                         if new_date and new_date != day.get("date"):
@@ -122,14 +124,16 @@ class GoogleCalendarTool(BaseTool):
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
         elif action == "delete":
-            # Find by event_id or title+date
+            # Find by event_id or title (with optional date filter)
             for day in data:
+                if date and day.get("date") != date:
+                    continue
                 events = day.get("events", [])
                 for i, ev in enumerate(events):
                     matched = False
                     if event_id and ev["id"] == event_id:
                         matched = True
-                    elif title and date and day.get("date") == date and title.lower() in ev.get("title", "").lower():
+                    elif title and title.lower() in ev.get("title", "").lower():
                         matched = True
                     if matched:
                         title = ev["title"]
