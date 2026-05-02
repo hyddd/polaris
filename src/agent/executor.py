@@ -37,8 +37,14 @@ def _format_persona(persona: dict) -> str:
     parts = []
     name = persona.get("name", "")
     call_user = persona.get("call_user", "")
+    identity = persona.get("identity", "")
+    personality = persona.get("personality", "")
     if name:
         parts.append(f"你是{name}。")
+    if identity:
+        parts.append(f"你的身份是{identity}。")
+    if personality:
+        parts.append(f"你的性格{personality}。")
     if call_user:
         parts.append(f"称呼用户为{call_user}。")
     notes = persona.get("notes", "")

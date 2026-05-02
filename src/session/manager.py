@@ -23,8 +23,8 @@ class Session:
     last_active: str
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
     persona: dict = field(default_factory=lambda: {
-        "name": "", "call_user": "", "pronouns": "",
-        "timezone": "Asia/Shanghai", "notes": "",
+        "name": "", "call_user": "", "identity": "",
+        "personality": "", "timezone": "Asia/Shanghai", "notes": "",
     })
     pending_action: dict | None = None
 
@@ -65,14 +65,14 @@ class Session:
     @staticmethod
     def _parse_persona(raw) -> dict:
         """Normalize persona from persisted data. Handles old string and old dict formats."""
-        default = {"name": "", "call_user": "", "pronouns": "", "timezone": "Asia/Shanghai", "notes": ""}
+        default = {"name": "", "call_user": "", "identity": "", "personality": "", "timezone": "Asia/Shanghai", "notes": ""}
         if isinstance(raw, str):
             if raw.strip():
                 default["notes"] = raw.strip()
             return default
         if isinstance(raw, dict):
             # New format — pass through with defaults for missing keys
-            if "notes" in raw or "call_user" in raw:
+            if "notes" in raw or "call_user" in raw or "identity" in raw:
                 for k in default:
                     if k not in raw:
                         raw[k] = default[k]

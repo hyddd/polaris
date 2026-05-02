@@ -7,7 +7,7 @@ def _reset():
     sm._session_manager = None
     mgr = get_session_manager()
     session = mgr.active_session()
-    session.persona = {"name": "", "call_user": "", "pronouns": "", "timezone": "Asia/Shanghai", "notes": ""}
+    session.persona = {"name": "", "call_user": "", "identity": "", "personality": "", "timezone": "Asia/Shanghai", "notes": ""}
     return mgr
 
 
@@ -82,14 +82,16 @@ def test_persona_persistence():
     """Persona survives session serialization round-trip."""
     mgr = _reset()
     session = mgr.active_session()
-    session.persona = {"name": "诸葛亮", "call_user": "主公", "pronouns": "他", "timezone": "Asia/Shanghai", "notes": "军师"}
+    session.persona = {"name": "诸葛亮", "call_user": "主公", "identity": "军师", "personality": "沉稳睿智", "timezone": "Asia/Shanghai", "notes": "足智多谋"}
 
     from src.session.manager import Session
     data = session.to_dict()
     restored = Session.from_dict(data)
     assert restored.persona["name"] == "诸葛亮"
     assert restored.persona["call_user"] == "主公"
-    assert restored.persona["notes"] == "军师"
+    assert restored.persona["identity"] == "军师"
+    assert restored.persona["personality"] == "沉稳睿智"
+    assert restored.persona["notes"] == "足智多谋"
 
 
 def test_persona_backward_compat_string():

@@ -9,9 +9,10 @@ class PersonaInput(BaseModel):
     )
     name: str | None = Field(default=None, description="助手名称，如「诸葛亮」")
     call_user: str | None = Field(default=None, description="称呼用户，如「主公」")
-    pronouns: str | None = Field(default=None, description="代词，如「他/她」")
+    identity: str | None = Field(default=None, description="身份设定，如「私人秘书」「诸葛亮的军师」")
+    personality: str | None = Field(default=None, description="性格特点，如「沉稳睿智」「温柔亲切」")
     timezone: str | None = Field(default=None, description="时区，如「Asia/Shanghai」")
-    notes: str | None = Field(default=None, description="自由备注，包含角色扮演设定、身份、性格等")
+    notes: str | None = Field(default=None, description="自由备注")
 
 
 def _persona_to_text(persona: dict) -> str:
@@ -21,8 +22,10 @@ def _persona_to_text(persona: dict) -> str:
         parts.append(f"名称：{persona['name']}")
     if persona.get("call_user"):
         parts.append(f"称呼用户：{persona['call_user']}")
-    if persona.get("pronouns"):
-        parts.append(f"代词：{persona['pronouns']}")
+    if persona.get("identity"):
+        parts.append(f"身份：{persona['identity']}")
+    if persona.get("personality"):
+        parts.append(f"性格：{persona['personality']}")
     if persona.get("timezone") and persona["timezone"] != "Asia/Shanghai":
         parts.append(f"时区：{persona['timezone']}")
     if persona.get("notes"):
@@ -34,6 +37,7 @@ class PersonaTool(BaseTool):
     name: str = "persona"
     description: str = (
         "设置助手身份和角色。用户说「你是诸葛亮，叫我主公」时，解析并设置对应字段。"
+        "支持设置身份设定(identity)和性格特点(personality)。"
         "只需传入要更新的字段，未传入的字段保持不变。"
         "查看当前人设时调用 get。"
     )
@@ -44,7 +48,8 @@ class PersonaTool(BaseTool):
         action: str,
         name: str | None = None,
         call_user: str | None = None,
-        pronouns: str | None = None,
+        identity: str | None = None,
+        personality: str | None = None,
         timezone: str | None = None,
         notes: str | None = None,
     ) -> str:
@@ -65,8 +70,10 @@ class PersonaTool(BaseTool):
                 updates["name"] = name.strip()
             if call_user is not None:
                 updates["call_user"] = call_user.strip()
-            if pronouns is not None:
-                updates["pronouns"] = pronouns.strip()
+            if identity is not None:
+                updates["identity"] = identity.strip()
+            if personality is not None:
+                updates["personality"] = personality.strip()
             if timezone is not None:
                 updates["timezone"] = timezone.strip()
             if notes is not None:
@@ -87,11 +94,13 @@ class PersonaTool(BaseTool):
         action: str,
         name: str | None = None,
         call_user: str | None = None,
-        pronouns: str | None = None,
+        identity: str | None = None,
+        personality: str | None = None,
         timezone: str | None = None,
         notes: str | None = None,
     ) -> str:
         return self._run(
             action=action, name=name, call_user=call_user,
-            pronouns=pronouns, timezone=timezone, notes=notes,
+            identity=identity, personality=personality,
+            timezone=timezone, notes=notes,
         )
