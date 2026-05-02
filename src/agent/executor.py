@@ -5,7 +5,6 @@ Supports token-level streaming via LangGraph get_stream_writer().
 """
 
 from datetime import date
-from pathlib import Path
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage
@@ -26,16 +25,6 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 用中文回复，简洁直接
 """
 
-PERSONA_PATH = _cfg.DATA_DIR / "persona.md"
-
-
-def _load_persona() -> str:
-    """Load persona from data/persona.md. Returns empty string if missing."""
-    try:
-        return PERSONA_PATH.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        return ""
-
 AGENT_PROMPT = ChatPromptTemplate.from_messages([
     ("system", "{system_prompt}"),
     MessagesPlaceholder(variable_name="messages"),
@@ -55,7 +44,8 @@ def agent_node(state: AgentState) -> dict:
     summary, recent = compressor.process(list(messages))
 
     today = date.today().isoformat()
-    persona = _load_persona()
+    session = session_mgr.active_session(channel)
+    persona = session.persona
     system_prompt = f"今天是 {today}。\n\n"
     if persona:
         system_prompt += f"[人设]\n{persona}\n\n"

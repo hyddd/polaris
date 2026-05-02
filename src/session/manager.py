@@ -22,6 +22,7 @@ class Session:
     created_at: str
     last_active: str
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
+    persona: str = ""
     pending_action: dict | None = None
 
     def to_dict(self) -> dict:
@@ -54,6 +55,7 @@ class Session:
             "messages": serialized,
             "summary": self.compressor.summary,
             "summary_tokens": self.compressor._summary_tokens,
+            "persona": self.persona,
             "pending_action": self.pending_action,
         }
 
@@ -86,6 +88,7 @@ class Session:
             created_at=data.get("created_at", ""),
             last_active=data.get("last_active", ""),
             metadata={"message_count": data.get("message_count", 0)},
+            persona=data.get("persona", ""),
             pending_action=data.get("pending_action"),
         )
 

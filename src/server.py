@@ -28,6 +28,7 @@ from src.tools.todos import TodoTool
 from src.tools.notes import NoteTool
 from src.tools.calendar import GoogleCalendarTool
 from src.tools.rag import RAGSearchTool
+from src.tools.persona import PersonaTool
 from src.config import CALENDAR_FILE, TODOS_FILE, NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
 
 
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
         registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR), persist_dir=str(CHROMA_PERSIST_DIR), collection_name="notes"))
         registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
         registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
+        registry.register(PersonaTool())
         _tools_registered = True
 
     # Check embedding config (cloud API, no local model to pre-warm)
