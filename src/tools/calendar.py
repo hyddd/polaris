@@ -53,7 +53,7 @@ class GoogleCalendarTool(BaseTool):
                     if not events:
                         return f"{date} 没有日程安排。"
                     return "\n".join(
-                        f"- {ev['time']} {ev['title']} ({ev.get('duration', 60)}分钟)"
+                        f"- [{ev['id']}] {ev['time']} {ev['title']} ({ev.get('duration', 60)}分钟)"
                         for ev in sorted(events, key=lambda e: e.get("time", ""))
                     )
             return f"{date} 没有日程安排。"
@@ -68,7 +68,7 @@ class GoogleCalendarTool(BaseTool):
                         matches.append((day["date"], ev))
             if not matches:
                 return f"没有找到包含「{keyword}」的日程。"
-            return "\n".join(f"- {date}: {ev['time']} {ev['title']}" for date, ev in matches)
+            return "\n".join(f"- [{ev['id']}] {date} {ev['time']} {ev['title']}" for date, ev in matches)
 
         elif action == "create":
             if not title or not date:

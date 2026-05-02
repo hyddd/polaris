@@ -62,7 +62,7 @@ class TodoTool(BaseTool):
             for t in filtered:
                 st = status_map.get(t.get("status", ""), "未知")
                 pr = priority_map.get(t.get("priority", ""), "-")
-                lines.append(f"- [{st}] 优先级{pr} {t['title']} (截止: {t.get('due', '无')})")
+                lines.append(f"- [{t['id']}] [{st}] 优先级{pr} {t['title']} (截止: {t.get('due', '无')})")
             return "\n".join(lines)
 
         elif action == "search":
@@ -76,7 +76,7 @@ class TodoTool(BaseTool):
             for t in matches:
                 st = status_map.get(t.get("status", ""), "未知")
                 pr = priority_map.get(t.get("priority", ""), "-")
-                lines.append(f"- [{st}] 优先级{pr} {t['title']} (截止: {t.get('due', '无')})")
+                lines.append(f"- [{t['id']}] [{st}] 优先级{pr} {t['title']} (截止: {t.get('due', '无')})")
             return "\n".join(lines)
 
         elif action == "create":
