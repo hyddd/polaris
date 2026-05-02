@@ -40,7 +40,9 @@ class _PolarisQQClient(botpy.Client):
 
         session_mgr = get_session_manager()
         loop = asyncio.get_running_loop()
-        response_text, _ = await loop.run_in_executor(None, process_message, text, session_mgr)
+        response_text, _ = await loop.run_in_executor(
+            None, lambda: process_message(text, session_mgr, channel="qq")
+        )
 
         if response_text:
             await self._reply(message, response_text[:2000])

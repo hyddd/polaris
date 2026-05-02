@@ -135,7 +135,7 @@ class PolarisFeishuBot:
         from src.server import process_message
 
         session_mgr = get_session_manager()
-        response_text, _ = process_message(text, session_mgr)
+        response_text, _ = process_message(text, session_mgr, channel="feishu")
         return response_text
 
     def _send_typing(self, message_id: str) -> str | None:
