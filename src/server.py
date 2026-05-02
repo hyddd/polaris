@@ -138,7 +138,7 @@ async def chat_stream(req: ChatRequest):
 
     # System commands: wrap in SSE
     if req.message.strip().startswith("/"):
-        response_text, _ = process_message(req.message, session_mgr)
+        response_text, _ = process_message(req.message, session_mgr, channel)
 
         async def cmd_gen() -> AsyncGenerator[str, None]:
             import json as _j
