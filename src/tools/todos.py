@@ -19,7 +19,7 @@ class TodoInput(BaseModel):
     )
     due: Optional[str] = Field(default=None, description="create/update 时的截止日期，格式 YYYY-MM-DD")
     todo_id: Optional[str] = Field(default=None, description="update/done/delete 时的待办 ID（优先级高于 title）")
-    updates: Optional[dict] = Field(default=None, description="update 时要修改的字段，如 {\"title\":\"新标题\", \"due\":\"2026-05-03\"}")
+    updates: Optional[dict | str] = Field(default=None, description="update 时要修改的字段，如 {\"title\":\"新标题\", \"due\":\"2026-05-03\"}")
 
 
 class TodoTool(BaseTool):

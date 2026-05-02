@@ -16,7 +16,7 @@ class CalendarInput(BaseModel):
     attendees: Optional[list[str]] = Field(default=None, description="create 时的参与者列表")
     duration: Optional[int] = Field(default=60, description="create 时的事件时长（分钟），默认 60")
     event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID（优先级高于 title+date）")
-    updates: Optional[dict] = Field(default=None, description='update 时要修改的字段，key 可选: time(格式HH:MM), date(格式YYYY-MM-DD), title, duration. 示例: {"time":"15:00"}')
+    updates: Optional[dict | str] = Field(default=None, description='update 时要修改的字段，key 可选: time(格式HH:MM), date(格式YYYY-MM-DD), title, duration. 示例: {"time":"15:00"}')
 
 
 class GoogleCalendarTool(BaseTool):
@@ -90,8 +90,6 @@ class GoogleCalendarTool(BaseTool):
             return f"已添加日程：{date} {new_event['time']} {title}"
 
         elif action == "update":
-            print(f"[calendar] update called: event_id={event_id}, title={title}, date={date}, time={time}, updates={updates} (type={type(updates).__name__})")
-
             # Fallback: if updates dict not provided, build it from individual fields
             # This handles models that struggle with dict parameters
             if not updates:
@@ -100,7 +98,6 @@ class GoogleCalendarTool(BaseTool):
                     updates["time"] = time
                 # Note: title param is used for matching, not for updating
                 if not updates:
-                    print("[calendar] update failed: no updates provided")
                     return "修改日程需要提供要修改的字段。请在 updates 中指定要修改的内容，例如 {\"time\": \"15:00\"}"
 
             # Defensive: some models pass updates as a JSON string instead of dict
@@ -108,15 +105,12 @@ class GoogleCalendarTool(BaseTool):
                 import json as _json
                 try:
                     updates = _json.loads(updates)
-                    print(f"[calendar] parsed updates from string: {updates}")
                 except _json.JSONDecodeError:
-                    print(f"[calendar] update failed: updates is a non-JSON string: {updates}")
                     return "修改日程需要提供要修改的字段（JSON 对象），收到的却是字符串。"
 
             # Normalize update keys: LLM may pass "new_time" instead of "time", "new_date" instead of "date"
             _key_map = {"new_time": "time", "new_date": "date", "new_title": "title", "new_duration": "duration"}
             updates = {_key_map.get(k, k): v for k, v in updates.items()}
-            print(f"[calendar] normalized updates: {updates}")
 
             new_date = updates.get("date")
             # Find by event_id or title (with optional date filter)
@@ -128,12 +122,9 @@ class GoogleCalendarTool(BaseTool):
                     matched = False
                     if event_id and ev["id"] == event_id:
                         matched = True
-                        print(f"[calendar] matched by event_id: {ev['id']}")
                     elif title and title.lower() in ev.get("title", "").lower():
                         matched = True
-                        print(f"[calendar] matched by title: {ev['title']}")
                     if matched:
-                        print(f"[calendar] updating event: {ev}")
                         if new_date and new_date != day.get("date"):
                             # Date changed: move event to new date
                             events.pop(i)
@@ -150,9 +141,7 @@ class GoogleCalendarTool(BaseTool):
                             # Same date update — filter out "date" key to avoid corrupting event
                             ev.update({k: v for k, v in updates.items() if k != "date"})
                         save_json(path, data)
-                        print(f"[calendar] update success: {ev}")
                         return f"已更新日程：{ev.get('title', event_id)}"
-            print(f"[calendar] update failed: no match found for event_id={event_id}, title={title}, date={date}")
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
         elif action == "delete":

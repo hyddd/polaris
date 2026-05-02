@@ -4,7 +4,7 @@ LLM always gets ALL tools and decides autonomously whether to call them.
 Supports token-level streaming via LangGraph get_stream_writer().
 """
 
-from datetime import date
+from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage
@@ -22,6 +22,7 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 结合对话历史理解上下文
 - 删除操作先确认再执行
 - 工具返回空结果时如实告知，不编造数据
+- 信任工具返回的结果。工具返回成功消息（如"已更新""已添加""已删除"）时，直接告知用户操作成功，不要说"遇到了问题""无法完成"等。工具结果就是事实，不需要质疑
 - 用中文回复，简洁直接
 """
 
@@ -66,10 +67,10 @@ def agent_node(state: AgentState) -> dict:
     compressor = session_mgr.active_session(channel).compressor
     summary, recent = compressor.process(list(messages))
 
-    today = date.today().isoformat()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
     session = session_mgr.active_session(channel)
     persona = session.persona
-    system_prompt = f"今天是 {today}。\n\n"
+    system_prompt = f"现在是 {now}。\n\n"
     persona_line = _format_persona(persona)
     if persona_line:
         system_prompt += f"[人设]\n{persona_line}\n\n"
@@ -129,8 +130,6 @@ def tool_node(state: AgentState) -> dict:
         else:
             tool_name = getattr(tc, "name", "")
             tool_args = getattr(tc, "args", None) or {}
-
-        print(f"[tool_node] call #{i}: {tool_name}({tool_args})")
 
         raw_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
         fallback_id = f"call_{tool_name}_{i}"
