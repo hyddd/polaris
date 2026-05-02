@@ -21,9 +21,16 @@ class CalendarInput(BaseModel):
 
 class GoogleCalendarTool(BaseTool):
     name: str = "calendar"
-    description: str = """管理日历事件。修改/删除时，必须先用 search 搜索获取 event_id，再用 event_id 操作。
-修改日程用 update（支持改时间、改日期、改标题），不要 delete + create。
-示例：用户说"把明天晨会改到下午3点" → search(keyword="晨会") 获取 event_id → update(event_id="xxx", updates={"time":"15:00"})"""
+    description: str = """管理日历事件。
+
+规则：
+1. 修改日程必须用 update，禁止 delete + create
+2. 删除/修改前必须先 search 获取 event_id
+3. 用户说"推迟""改到""换个时间""取消"等，都是修改意图，用 update
+
+示例流程：
+- "把明天晨会改到下午3点" → search(keyword="晨会") → update(event_id="xxx", updates={"time":"15:00"})
+- "推迟会议1小时" → search(keyword="会议") → update(event_id="xxx", updates={"time":"原时间+1h"})"""
     args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
     use_mock: bool = True

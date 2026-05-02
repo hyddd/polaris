@@ -23,10 +23,6 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 删除操作先确认再执行
 - 工具返回空结果时如实告知，不编造数据
 - 用中文回复，简洁直接
-
-## 重要：修改日程/待办
-- 用户说"推迟""改到""换个时间"等修改意图时，必须用 update，不要 delete + create
-- 先 search 获取 ID，再 update(id, updates={...})
 """
 
 AGENT_PROMPT = ChatPromptTemplate.from_messages([

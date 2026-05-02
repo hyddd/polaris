@@ -24,8 +24,16 @@ class TodoInput(BaseModel):
 
 class TodoTool(BaseTool):
     name: str = "todo"
-    description: str = """管理待办事项。修改/完成/删除时，必须先用 search 搜索获取 todo_id，再用 todo_id 操作。
-示例流程：用户说"把晨会标为完成" → 先 search(keyword="晨会") 获取 todo_id → 再 done(todo_id="xxx")"""
+    description: str = """管理待办事项。
+
+规则：
+1. 修改待办必须用 update，禁止 delete + create
+2. 完成/删除/修改前必须先 search 获取 todo_id
+3. 用户说"改一下""推迟""换个优先级"等，都是修改意图，用 update
+
+示例流程：
+- "把晨会标为完成" → search(keyword="晨会") → done(todo_id="xxx")
+- "把明天的截止日期改到后天" → search(keyword="xxx") → update(todo_id="xxx", due="后天日期")"""
     args_schema: type[BaseModel] = TodoInput
     data_file: str = ""
 
