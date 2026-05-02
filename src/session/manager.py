@@ -136,21 +136,21 @@ class SessionManager:
         # Exact match
         if session_id in self._sessions:
             self._active_ids[channel] = session_id
-            self._touch()
+            self._touch(channel)
             return self._sessions[session_id]
 
         # Prefix match
         matches = [s for sid, s in self._sessions.items() if sid.startswith(session_id)]
         if len(matches) == 1:
             self._active_ids[channel] = matches[0].session_id
-            self._touch()
+            self._touch(channel)
             return matches[0]
 
         # Name match (contains)
         name_matches = [s for s in self._sessions.values() if session_id.lower() in s.name.lower()]
         if len(name_matches) == 1:
             self._active_ids[channel] = name_matches[0].session_id
-            self._touch()
+            self._touch(channel)
             return name_matches[0]
 
         return None
@@ -279,9 +279,9 @@ class SessionManager:
         # Rename old file as backup
         old_file.rename(old_file.with_suffix(".json.bak"))
 
-    def _touch(self):
+    def _touch(self, channel: str = "default"):
         """Update last_active on the active session."""
-        self.active_session.last_active = datetime.now(timezone.utc).isoformat()
+        self.active_session(channel).last_active = datetime.now(timezone.utc).isoformat()
         self.save()
 
 
