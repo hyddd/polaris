@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useChatStore } from '../stores/chat.js'
 import ChatMessage from '../components/ChatMessage.vue'
 
@@ -71,6 +71,13 @@ const suggestions = [
   '查看最近的笔记',
   '总结一下本周的工作',
 ]
+
+// Scroll to bottom on mount after messages are loaded
+onMounted(() => {
+  setTimeout(() => {
+    if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+  }, 100)
+})
 
 function onEnter(e) {
   if (isComposing.value) return
@@ -122,11 +129,12 @@ function onScroll() {
   }
 }
 
-watch(() => store.messages.length, () => {
+// Scroll to bottom when messages are loaded or new message added
+watch(() => store.messages.length, (newLen, oldLen) => {
   nextTick(() => {
     if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   })
-})
+}, { immediate: true })
 
 // Auto-scroll during streaming when pending message content changes
 watch(() => {
