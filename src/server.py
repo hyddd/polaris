@@ -184,9 +184,19 @@ async def chat_stream(req: ChatRequest):
         channel=channel,
     )
 
+    # Acquire per-session lock before streaming starts
+    session_lock = _get_session_lock(channel, session.session_id)
+
     async def generate() -> AsyncGenerator[str, None]:
         full_response = ""
         new_pending_action = None
+
+        # Non-blocking try_lock: if another request is already processing
+        # for this session, return an error instead of blocking the SSE stream.
+        if not session_lock.acquire(blocking=False):
+            yield f"event: error\ndata: {json.dumps({'error': '该会话正在处理中，请稍后再试'}, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
+            return
 
         try:
             async for event in agent.astream_events(state, version="v2"):
@@ -230,6 +240,9 @@ async def chat_stream(req: ChatRequest):
             import traceback
             tb = traceback.format_exc()
             yield f"event: error\ndata: {json.dumps({'error': str(e), 'traceback': tb[-300:]}, ensure_ascii=False)}\n\n"
+
+        finally:
+            session_lock.release()
 
         if full_response:
             # Strip intermediate tool messages, keep only user + final AI reply
@@ -471,12 +484,30 @@ def delete_data(data_type: str, item_id: str):
 
 # --- Shared message processing (used by HTTP endpoints & in-process channels) ---
 
-_message_lock = threading.Lock()
+# Per-session locks: each session/channel pair gets its own lock so independent
+# sessions can be processed concurrently.  A separate dict-level lock protects
+# creation of new per-session locks.
+_message_locks: dict[str, threading.Lock] = {}
+_message_locks_guard = threading.Lock()
+
+
+def _get_session_lock(channel: str, session_id: str) -> threading.Lock:
+    """Return (and lazily create) the lock for a given session+channel."""
+    key = f"{channel}:{session_id}"
+    lock = _message_locks.get(key)
+    if lock is None:
+        with _message_locks_guard:
+            lock = _message_locks.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                _message_locks[key] = lock
+    return lock
 
 
 def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
-    """统一消息处理入口。全局锁保证同一时间只处理一条消息。"""
-    with _message_lock:
+    """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
+    session_id = session_mgr.active_session(channel).session_id
+    with _get_session_lock(channel, session_id):
         return _process_message_impl(text, session_mgr, channel)
 
 

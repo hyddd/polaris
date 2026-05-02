@@ -1,5 +1,6 @@
 """Polaris Agent Graph — command interception → agent ⇄ tools."""
 
+import threading
 from langgraph.graph import StateGraph, END
 from src.agent.state import AgentState
 from src.agent.executor import agent_node, tool_node, should_continue
@@ -83,5 +84,14 @@ def build_agent_graph() -> StateGraph:
     return builder.compile()
 
 
+_compiled_agent = None
+_agent_lock = threading.Lock()
+
+
 def get_agent():
-    return build_agent_graph()
+    global _compiled_agent
+    if _compiled_agent is None:
+        with _agent_lock:
+            if _compiled_agent is None:
+                _compiled_agent = build_agent_graph()
+    return _compiled_agent

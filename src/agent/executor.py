@@ -7,11 +7,29 @@ Supports token-level streaming via LangGraph get_stream_writer().
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import ToolMessage, AIMessage
+from langchain_core.messages import ToolMessage, AIMessage, SystemMessage
 from src.agent.state import AgentState
 import src.config as _cfg  # Read at call time for hot-reload support
 from src.tools.registry import ToolRegistry
 from src.session.manager import get_session_manager
+
+
+# --- Cached LLM instance (rebuilds when config changes) ---
+
+_llm_cache: ChatOpenAI | None = None
+_llm_cache_key: tuple[str, str, str] = ("", "", "")  # (model, api_key, base_url)
+
+
+def _get_llm() -> ChatOpenAI:
+    """Return a cached ChatOpenAI instance, rebuilding if config changed."""
+    global _llm_cache, _llm_cache_key
+    key = (_cfg.LLM_MODEL, _cfg.LLM_API_KEY, _cfg.LLM_BASE_URL)
+    if _llm_cache is None or _llm_cache_key != key:
+        _llm_cache = ChatOpenAI(
+            model=key[0], api_key=key[1], base_url=key[2], temperature=0.3
+        )
+        _llm_cache_key = key
+    return _llm_cache
 
 UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 
@@ -70,7 +88,7 @@ def agent_node(state: AgentState) -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     session = session_mgr.active_session(channel)
     persona = session.persona
-    system_prompt = f"现在是 {now}。\n\n"
+    system_prompt = ""
     persona_line = _format_persona(persona)
     if persona_line:
         system_prompt += f"[人设]\n{persona_line}\n\n"
@@ -78,7 +96,10 @@ def agent_node(state: AgentState) -> dict:
         system_prompt += f"[对话摘要]\n{summary}\n\n"
     system_prompt += UNIFIED_SYSTEM_PROMPT
 
-    llm = ChatOpenAI(model=_cfg.LLM_MODEL, api_key=_cfg.LLM_API_KEY, base_url=_cfg.LLM_BASE_URL, temperature=0.3)
+    # Time goes at the end so the system prompt + history stay cacheable
+    llm_messages = list(recent) + [SystemMessage(content=f"当前时间：{now}")]
+
+    llm = _get_llm()
     if tools:
         llm = llm.bind_tools(tools)
 
@@ -86,11 +107,11 @@ def agent_node(state: AgentState) -> dict:
     if state.get("streaming"):
         # Streaming path: accumulate AIMessageChunks for token-level SSE events
         full = None
-        for chunk in chain.stream({"system_prompt": system_prompt, "messages": recent}):
+        for chunk in chain.stream({"system_prompt": system_prompt, "messages": llm_messages}):
             full = full + chunk if full is not None else chunk
         response = full if full is not None else AIMessage(content="")
     else:
-        response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
+        response = chain.invoke({"system_prompt": system_prompt, "messages": llm_messages})
 
     return {"messages": [response]}
 
