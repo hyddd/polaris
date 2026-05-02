@@ -156,12 +156,13 @@ async def chat_stream(req: ChatRequest):
         tool_results={},
         final_response="",
         needs_clarification=False,
-        pending_action=None,
+        pending_action=session.pending_action,
         streaming=True,
     )
 
     async def generate() -> AsyncGenerator[str, None]:
         full_response = ""
+        new_pending_action = None
 
         try:
             async for event in agent.astream_events(state, version="v2"):
@@ -191,6 +192,14 @@ async def chat_stream(req: ChatRequest):
                         tool_output = tool_output.content
                     yield f"event: tool_result\ndata: {json.dumps({'tool': tool_name, 'result': str(tool_output), 'call_id': call_id}, ensure_ascii=False)}\n\n"
 
+                # Track pending_action changes from tool_node or command_node
+                elif kind == "on_chain_end":
+                    node_name = event.get("name", "")
+                    if node_name in ("tool", "tools", "command"):
+                        output = event.get("data", {}).get("output", {})
+                        if isinstance(output, dict) and "pending_action" in output:
+                            new_pending_action = output["pending_action"]
+
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
@@ -205,6 +214,9 @@ async def chat_stream(req: ChatRequest):
                 AIMessage(content=full_response),
             ]
             session_mgr.record_message(req.message, full_response)
+
+        # Save pending_action to session for next invocation
+        session.pending_action = new_pending_action
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -426,7 +438,7 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
         tool_results={},
         final_response="",
         needs_clarification=False,
-        pending_action=None,
+        pending_action=session.pending_action,
     )
 
     try:
@@ -439,6 +451,9 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
         import logging
         logging.getLogger("polaris.agent").error(f"Agent 调用失败: {e}", exc_info=True)
         return (f"抱歉，处理请求时出错：{e}", [])
+
+    # Save pending_action from result
+    session.pending_action = result.get("pending_action")
 
     if result.get("final_response"):
         return (response_text, tool_calls)

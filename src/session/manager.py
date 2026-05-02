@@ -22,6 +22,7 @@ class Session:
     created_at: str
     last_active: str
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
+    pending_action: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize for persistence. Only clean conversation messages (human + ai without tool_calls)."""
@@ -53,6 +54,7 @@ class Session:
             "messages": serialized,
             "summary": self.compressor.summary,
             "summary_tokens": self.compressor._summary_tokens,
+            "pending_action": self.pending_action,
         }
 
     @classmethod
@@ -84,6 +86,7 @@ class Session:
             created_at=data.get("created_at", ""),
             last_active=data.get("last_active", ""),
             metadata={"message_count": data.get("message_count", 0)},
+            pending_action=data.get("pending_action"),
         )
 
 

@@ -9,13 +9,13 @@ class CalendarInput(BaseModel):
     action: Literal["list", "search", "create", "update", "delete"] = Field(
         description="操作类型：list=查看日程, search=搜索事件, create=创建, update=修改, delete=删除"
     )
-    date: Optional[str] = Field(default=None, description="list 或 create 时的日期，格式 YYYY-MM-DD")
+    date: Optional[str] = Field(default=None, description="list/create/update/delete 时的日期，格式 YYYY-MM-DD")
     keyword: Optional[str] = Field(default=None, description="search 时的搜索关键词")
-    title: Optional[str] = Field(default=None, description="create 时的事件标题")
-    time: Optional[str] = Field(default=None, description="create 时的事件时间，格式 HH:MM")
+    title: Optional[str] = Field(default=None, description="create/update/delete 时的事件标题（用于匹配）")
+    time: Optional[str] = Field(default=None, description="create/update 时的事件时间，格式 HH:MM")
     attendees: Optional[list[str]] = Field(default=None, description="create 时的参与者列表")
     duration: Optional[int] = Field(default=60, description="create 时的事件时长（分钟），默认 60")
-    event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID")
+    event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID（优先级高于 title+date）")
     updates: Optional[dict] = Field(default=None, description="update 时要修改的字段")
 
 
@@ -81,28 +81,38 @@ class GoogleCalendarTool(BaseTool):
             return f"已添加日程：{date} {new_event['time']} {title}"
 
         elif action == "update":
-            if not event_id or not updates:
-                return "修改日程需要提供事件 ID 和要修改的字段。"
+            if not updates:
+                return "修改日程需要提供要修改的字段。"
+            # Find by event_id or title+date
             for day in data:
                 for ev in day.get("events", []):
-                    if ev["id"] == event_id:
+                    matched = False
+                    if event_id and ev["id"] == event_id:
+                        matched = True
+                    elif title and date and day.get("date") == date and title.lower() in ev.get("title", "").lower():
+                        matched = True
+                    if matched:
                         ev.update(updates)
                         save_json(path, data)
                         return f"已更新日程：{ev.get('title', event_id)}"
-            return f"未找到事件 ID: {event_id}"
+            return f"未找到日程：{event_id or f'{date} {title}'}"
 
         elif action == "delete":
-            if not event_id:
-                return "删除需要提供事件 ID。"
+            # Find by event_id or title+date
             for day in data:
                 events = day.get("events", [])
                 for i, ev in enumerate(events):
-                    if ev["id"] == event_id:
+                    matched = False
+                    if event_id and ev["id"] == event_id:
+                        matched = True
+                    elif title and date and day.get("date") == date and title.lower() in ev.get("title", "").lower():
+                        matched = True
+                    if matched:
                         title = ev["title"]
                         events.pop(i)
                         save_json(path, data)
                         return f"已删除日程：{title}"
-            return f"未找到事件 ID: {event_id}"
+            return f"未找到日程：{event_id or f'{date} {title}'}"
 
         return "未知操作。"
 
