@@ -4,12 +4,14 @@ from pydantic import BaseModel, Field
 
 
 class PersonaInput(BaseModel):
+    model_config = {"extra": "allow"}
+
     action: Literal["get", "set"] = Field(
         description="操作类型：get=查看当前人设, set=更新人设"
     )
     name: str | None = Field(default=None, description="助手名称，如「诸葛亮」")
     call_user: str | None = Field(default=None, description="称呼用户，如「主公」")
-    identity: str | None = Field(default=None, description="身份设定，如「私人秘书」「诸葛亮的军师」")
+    identity: str | None = Field(default=None, description="身份设定，如「私人秘书」「刘备的军师」")
     personality: str | None = Field(default=None, description="性格特点，如「沉稳睿智」「温柔亲切」")
     timezone: str | None = Field(default=None, description="时区，如「Asia/Shanghai」")
     notes: str | None = Field(default=None, description="自由备注")
