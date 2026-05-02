@@ -13,8 +13,8 @@ Endpoints:
 
 import threading
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pathlib import Path
@@ -91,6 +91,25 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
+
+
+# --- Admin API auth middleware ---
+
+@app.middleware("http")
+async def admin_auth_middleware(request: Request, call_next):
+    """Require Bearer token for /api/* endpoints when ADMIN_TOKEN is set."""
+    if request.url.path.startswith("/api/"):
+        import src.config as _cfg
+        token = _cfg.ADMIN_TOKEN  # re-read from config module on each request
+        if token:
+            auth_header = request.headers.get("authorization", "")
+            if auth_header != f"Bearer {token}":
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Missing or invalid admin token"},
+                )
+    return await call_next(request)
+
 
 # Admin frontend static files
 ADMIN_DIR = Path(__file__).parent.parent / "admin" / "dist"
@@ -308,7 +327,44 @@ def delete_session(session_id: str):
 
 # --- Admin API: Config management ---
 
+import re as _re
 from dotenv import dotenv_values
+
+# Whitelist of config keys that can be written via the admin API.
+# Unknown keys are rejected to prevent environment variable injection.
+ALLOWED_CONFIG_KEYS: set[str] = {
+    "LLM_MODEL",
+    "LLM_API_KEY",
+    "LLM_BASE_URL",
+    "ADMIN_TOKEN",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_BASE_URL",
+    "EMBEDDING_MODEL",
+    "DATA_DIR",
+    "CHROMA_PERSIST_DIR",
+    "POLARIS_MODEL_MAX_CONTEXT",
+    "POLARIS_COMPRESSION_THRESHOLD",
+    "GOOGLE_CALENDAR_CREDENTIALS_PATH",
+    "GOOGLE_CALENDAR_ID",
+    "FEISHU_APP_ID",
+    "FEISHU_APP_SECRET",
+}
+
+_SENSITIVE_KEY_PATTERN = _re.compile(r"KEY|SECRET|TOKEN|PASSWORD", _re.IGNORECASE)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    return bool(_SENSITIVE_KEY_PATTERN.search(key))
+
+
+def _mask_value(key: str, value: str) -> str:
+    """Fully mask sensitive values — leak no characters."""
+    if _is_sensitive_key(key):
+        return "****"
+    return value
+
 
 @app.get("/api/config")
 def get_config():
@@ -316,13 +372,7 @@ def get_config():
     if not env_path.exists():
         return {"vars": {}}
     values = dotenv_values(env_path)
-    # Mask sensitive values
-    masked = {}
-    for k, v in values.items():
-        if any(s in k.upper() for s in ["KEY", "SECRET", "TOKEN", "PASSWORD"]):
-            masked[k] = v[:4] + "****" if len(v) > 4 else "****"
-        else:
-            masked[k] = v
+    masked = {k: _mask_value(k, v) for k, v in values.items()}
     return {"vars": masked}
 
 
@@ -332,11 +382,20 @@ class ConfigUpdate(BaseModel):
 
 @app.post("/api/config")
 def update_config(req: ConfigUpdate):
+    unknown_keys = set(req.vars.keys()) - ALLOWED_CONFIG_KEYS
+    if unknown_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rejected unknown config keys: {', '.join(sorted(unknown_keys))}",
+        )
     env_path = Path(__file__).parent.parent / ".env"
     existing = dotenv_values(env_path) if env_path.exists() else {}
     existing.update(req.vars)
     lines = [f"{k}={v}" for k, v in existing.items()]
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Reload config module so changes take effect immediately
+    from src.config import reload
+    reload()
     return {"ok": True}
 
 

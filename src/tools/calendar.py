@@ -157,10 +157,10 @@ class GoogleCalendarTool(BaseTool):
                     elif title and title.lower() in ev.get("title", "").lower():
                         matched = True
                     if matched:
-                        title = ev["title"]
+                        matched_title = ev["title"]
                         events.pop(i)
                         save_json(path, data)
-                        return f"已删除日程：{title}"
+                        return f"已删除日程：{matched_title}"
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
         return "未知操作。"

@@ -20,6 +20,8 @@ LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 GCAL_CREDENTIALS = os.getenv("GOOGLE_CALENDAR_CREDENTIALS_PATH")
 GCAL_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+
 # --- Config reload event system ---
 
 _listeners: list = []
@@ -35,7 +37,7 @@ def reload() -> dict:
 
     Returns a dict of changed values for display.
     """
-    global LLM_MODEL, LLM_API_KEY, LLM_BASE_URL
+    global LLM_MODEL, LLM_API_KEY, LLM_BASE_URL, ADMIN_TOKEN
 
     load_dotenv(override=True)
 
@@ -47,6 +49,7 @@ def reload() -> dict:
     LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
     LLM_API_KEY = os.getenv("OPENAI_API_KEY", "sk-placeholder")
     LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
     changes = {}
     if old["LLM_MODEL"] != LLM_MODEL:

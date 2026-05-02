@@ -96,11 +96,10 @@ class TodoTool(BaseTool):
             return f"已添加待办（优先级{pr}）：{title}，截止 {due or '未设'}"
 
         elif action == "update":
-            if not updates and not title and not priority and not due:
+            if not updates and not priority and not due:
                 return "修改待办需要提供要修改的字段。"
             updates = updates or {}
-            if title and "title" not in updates:
-                updates["title"] = title
+            # title param is for matching only, new title must go through updates["title"]
             if priority and "priority" not in updates:
                 updates["priority"] = priority
             if due and "due" not in updates:
@@ -141,10 +140,10 @@ class TodoTool(BaseTool):
                 elif title and not todo_id and title.lower() in t.get("title", "").lower():
                     matched = True
                 if matched:
-                    title = t["title"]
+                    matched_title = t["title"]
                     todos.pop(i)
                     save_json(path, todos)
-                    return f"已删除待办：{title}"
+                    return f"已删除待办：{matched_title}"
             return f"未找到待办：{todo_id or title}"
 
         return "未知操作。"

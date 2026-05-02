@@ -307,12 +307,15 @@ class SessionManager:
 
         active = data.get("active_session")
         if active and active in self._sessions:
-            self._active_id = active
+            self._active_ids["default"] = active
         elif self._sessions:
-            self._active_id = next(iter(self._sessions))
+            self._active_ids["default"] = next(iter(self._sessions))
 
-        if self._active_id:
-            self.ACTIVE_FILE.write_text(self._active_id, encoding="utf-8")
+        if self._active_ids:
+            self.ACTIVE_FILE.write_text(
+                json.dumps(self._active_ids, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
 
         # Rename old file as backup
         old_file.rename(old_file.with_suffix(".json.bak"))

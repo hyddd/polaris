@@ -1,7 +1,7 @@
 from unittest.mock import patch
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from src.agent.graph import build_agent_graph
-from src.state import AgentState
+from src.agent.state import AgentState
 
 
 def test_graph_builds():

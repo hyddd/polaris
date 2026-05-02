@@ -2,7 +2,7 @@
 from unittest.mock import patch
 from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import build_agent_graph
-from src.state import AgentState
+from src.agent.state import AgentState
 
 
 @patch("src.agent.graph.agent_node")
