@@ -50,7 +50,7 @@ def agent_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
 
     session_mgr = get_session_manager()
-    compressor = session_mgr.active_session.compressor
+    compressor = session_mgr.active_session("default").compressor
     summary, recent = compressor.process(list(messages))
 
     today = date.today().isoformat()

@@ -92,16 +92,23 @@ class Session:
 
 class SessionManager:
     SESSIONS_DIR = DATA_DIR / "sessions"
-    ACTIVE_FILE = SESSIONS_DIR / "active.txt"
+    ACTIVE_FILE = SESSIONS_DIR / "active.json"
 
     def __init__(self):
         self._sessions: dict[str, Session] = {}
-        self._active_id: str | None = None
+        self._active_ids: dict[str, str] = {}  # channel -> session_id
         self._load()
 
-    @property
-    def active_session(self) -> Session:
-        return self._sessions[self._active_id]
+    def active_session(self, channel: str = "default") -> Session:
+        sid = self._active_ids.get(channel)
+        if sid and sid in self._sessions:
+            return self._sessions[sid]
+        # Fallback to first session
+        if self._sessions:
+            sid = next(iter(self._sessions))
+            self._active_ids[channel] = sid
+            return self._sessions[sid]
+        raise RuntimeError("No sessions available")
 
     def get(self, session_id: str) -> Session | None:
         return self._sessions.get(session_id)
@@ -118,29 +125,31 @@ class SessionManager:
             metadata={"message_count": 0, "source_channel": source_channel},
         )
         self._sessions[sid] = session
-        self._active_id = sid
+        # Set as active for the source channel
+        if source_channel:
+            self._active_ids[source_channel] = sid
         self.save()
         return session
 
-    def switch(self, session_id: str) -> Session | None:
+    def switch(self, session_id: str, channel: str = "default") -> Session | None:
         """Switch to a session. Supports ID prefix matching and name matching."""
         # Exact match
         if session_id in self._sessions:
-            self._active_id = session_id
+            self._active_ids[channel] = session_id
             self._touch()
             return self._sessions[session_id]
 
         # Prefix match
         matches = [s for sid, s in self._sessions.items() if sid.startswith(session_id)]
         if len(matches) == 1:
-            self._active_id = matches[0].session_id
+            self._active_ids[channel] = matches[0].session_id
             self._touch()
             return matches[0]
 
         # Name match (contains)
         name_matches = [s for s in self._sessions.values() if session_id.lower() in s.name.lower()]
         if len(name_matches) == 1:
-            self._active_id = name_matches[0].session_id
+            self._active_ids[channel] = name_matches[0].session_id
             self._touch()
             return name_matches[0]
 
@@ -165,21 +174,24 @@ class SessionManager:
         # Delete session file
         path = self.SESSIONS_DIR / f"{session_id}.json"
         path.unlink(missing_ok=True)
-        if self._active_id == session_id:
-            self._active_id = next(iter(self._sessions))
+        # Update active IDs if deleted session was active
+        for ch, sid in list(self._active_ids.items()):
+            if sid == session_id:
+                self._active_ids[ch] = next(iter(self._sessions))
         self.save()
         return True
 
-    def reset_active(self):
-        self.active_session.memory._messages.clear()
-        self.active_session.compressor.summary = ""
-        self.active_session.compressor._summary_tokens = 0
-        self.active_session.metadata["message_count"] = 0
+    def reset_active(self, channel: str = "default"):
+        session = self.active_session(channel)
+        session.memory._messages.clear()
+        session.compressor.summary = ""
+        session.compressor._summary_tokens = 0
+        session.metadata["message_count"] = 0
         self.save()
 
-    def record_message(self, user_msg: str, assistant_msg: str):
+    def record_message(self, user_msg: str, assistant_msg: str, channel: str = "default"):
         """Called after each agent interaction to update metadata."""
-        session = self.active_session
+        session = self.active_session(channel)
         session.metadata["message_count"] = session.metadata.get("message_count", 0) + 2
         session.last_active = datetime.now(timezone.utc).isoformat()
         self.save()
@@ -191,9 +203,11 @@ class SessionManager:
             path = self.SESSIONS_DIR / f"{session.session_id}.json"
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(session.to_dict(), f, ensure_ascii=False, indent=2)
-        # Save active session ID
-        if self._active_id:
-            self.ACTIVE_FILE.write_text(self._active_id, encoding="utf-8")
+        # Save active session IDs per channel
+        self.ACTIVE_FILE.write_text(
+            json.dumps(self._active_ids, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
 
     def _load(self):
         if not self.SESSIONS_DIR.exists():
@@ -205,9 +219,17 @@ class SessionManager:
                 self.create(name="默认", source_channel="system")
             return
 
-        # Load active session ID
+        # Load active session IDs (per-channel or legacy single)
         if self.ACTIVE_FILE.exists():
-            self._active_id = self.ACTIVE_FILE.read_text(encoding="utf-8").strip()
+            try:
+                content = self.ACTIVE_FILE.read_text(encoding="utf-8").strip()
+                if content.startswith("{"):
+                    self._active_ids = json.loads(content)
+                else:
+                    # Legacy format: single session ID
+                    self._active_ids = {"default": content}
+            except Exception:
+                self._active_ids = {}
 
         # Load all session files
         for path in self.SESSIONS_DIR.glob("sess_*.json"):
@@ -219,9 +241,10 @@ class SessionManager:
             except Exception:
                 continue
 
-        # Validate active session exists
-        if self._active_id not in self._sessions:
-            self._active_id = next(iter(self._sessions)) if self._sessions else None
+        # Validate active sessions exist
+        for ch, sid in list(self._active_ids.items()):
+            if sid not in self._sessions:
+                self._active_ids[ch] = next(iter(self._sessions)) if self._sessions else ""
 
         # Ensure at least one session
         if not self._sessions:

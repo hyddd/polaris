@@ -8,16 +8,16 @@ export const useSessionsStore = defineStore('sessions', {
   }),
   actions: {
     async fetch() {
-      const data = await get('/sessions')
+      const data = await get('/sessions?channel=admin')
       this.sessions = data.sessions || []
       this.activeId = data.active_session_id || ''
     },
     async create(name) {
-      await post('/sessions', { name })
+      await post('/sessions', { name, source_channel: 'admin' })
       await this.fetch()
     },
     async switchTo(sid) {
-      await post(`/sessions/${sid}/activate`)
+      await post(`/sessions/${sid}/activate?channel=admin`)
       await this.fetch()
     },
     async remove(sid) {

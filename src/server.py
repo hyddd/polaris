@@ -94,13 +94,13 @@ app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
 ADMIN_DIR = Path(__file__).parent.parent / "admin" / "dist"
 
 
-def _get_active_session(session_id: str | None, session_mgr: SessionManager):
+def _get_active_session(session_id: str | None, session_mgr: SessionManager, channel: str = "default"):
     """Resolve session: use given ID, switch if needed, or use active."""
-    if session_id and session_id != session_mgr._active_id:
-        result = session_mgr.switch(session_id)
+    if session_id:
+        result = session_mgr.switch(session_id, channel)
         if result is None:
             raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
-    return session_mgr.active_session
+    return session_mgr.active_session(channel)
 
 
 # --- Chat endpoints (for external channels: admin UI, remote bots, etc.) ---
@@ -109,10 +109,11 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager):
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     session_mgr = get_session_manager()
-    _get_active_session(req.session_id, session_mgr)
-    response_text, tool_calls = process_message(req.message, session_mgr)
+    channel = req.channel or "default"
+    _get_active_session(req.session_id, session_mgr, channel)
+    response_text, tool_calls = process_message(req.message, session_mgr, channel)
     return ChatResponse(
-        session_id=session_mgr.active_session.session_id,
+        session_id=session_mgr.active_session(channel).session_id,
         response=response_text,
         tool_calls=tool_calls,
     )
@@ -132,7 +133,8 @@ async def chat_stream(req: ChatRequest):
     from typing import AsyncGenerator
 
     session_mgr = get_session_manager()
-    session = _get_active_session(req.session_id, session_mgr)
+    channel = req.channel or "default"
+    session = _get_active_session(req.session_id, session_mgr, channel)
 
     # System commands: wrap in SSE
     if req.message.strip().startswith("/"):
@@ -213,7 +215,7 @@ async def chat_stream(req: ChatRequest):
                 human_msg,
                 AIMessage(content=full_response),
             ]
-            session_mgr.record_message(req.message, full_response)
+            session_mgr.record_message(req.message, full_response, channel)
 
         # Save pending_action to session for next invocation
         session.pending_action = new_pending_action
@@ -224,10 +226,11 @@ async def chat_stream(req: ChatRequest):
 # --- Session management endpoints ---
 
 @app.get("/sessions")
-def list_sessions():
+def list_sessions(channel: str = "default"):
     session_mgr = get_session_manager()
     sessions = session_mgr.list_sessions()
-    active_id = session_mgr._active_id
+    active_session = session_mgr.active_session(channel)
+    active_id = active_session.session_id
     return {
         "active_session_id": active_id,
         "sessions": [
@@ -245,9 +248,9 @@ def list_sessions():
 
 
 @app.post("/sessions/{session_id}/activate")
-def activate_session(session_id: str):
+def activate_session(session_id: str, channel: str = "default"):
     session_mgr = get_session_manager()
-    result = session_mgr.switch(session_id)
+    result = session_mgr.switch(session_id, channel)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
     return {"ok": True, "active_session": result.session_id, "name": result.name}
@@ -409,13 +412,13 @@ def delete_data(data_type: str, item_id: str):
 _message_lock = threading.Lock()
 
 
-def process_message(text: str, session_mgr: SessionManager) -> tuple[str, list[dict]]:
+def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。全局锁保证同一时间只处理一条消息。"""
     with _message_lock:
-        return _process_message_impl(text, session_mgr)
+        return _process_message_impl(text, session_mgr, channel)
 
 
-def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, list[dict]]:
+def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。
 
     系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。
@@ -423,7 +426,7 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
     from langchain_core.messages import HumanMessage, AIMessage
     from src.agent.graph import get_agent
 
-    session = session_mgr.active_session
+    session = session_mgr.active_session(channel)
     memory = session.memory
     agent = get_agent()
 
@@ -463,7 +466,7 @@ def _process_message_impl(text: str, session_mgr: SessionManager) -> tuple[str, 
         HumanMessage(content=text),
         AIMessage(content=response_text),
     ]
-    session_mgr.record_message(text, response_text)
+    session_mgr.record_message(text, response_text, channel)
 
     return (response_text, tool_calls)
 

@@ -15,7 +15,7 @@ Commands:
 from src.session.manager import SessionManager
 
 
-def handle_command(text: str, session_mgr: SessionManager) -> str | None:
+def handle_command(text: str, session_mgr: SessionManager, channel: str = "default") -> str | None:
     """Try to handle a system command. Returns response string, or None if not a command."""
     text = text.strip()
     parts = text.split(maxsplit=1)
@@ -23,28 +23,28 @@ def handle_command(text: str, session_mgr: SessionManager) -> str | None:
     arg = parts[1] if len(parts) > 1 else ""
 
     if cmd == "/reset":
-        return _reset(session_mgr)
+        return _reset(session_mgr, channel)
 
     if cmd == "/compact":
-        return _compact(session_mgr)
+        return _compact(session_mgr, channel)
 
     if cmd == "/status":
-        return _status(session_mgr)
+        return _status(session_mgr, channel)
 
     if cmd == "/help":
         return _help()
 
     if cmd == "/new":
-        return _new(session_mgr, arg)
+        return _new(session_mgr, arg, channel)
 
     if cmd == "/sessions":
-        return _list_sessions(session_mgr)
+        return _list_sessions(session_mgr, channel)
 
     if cmd == "/session":
-        return _switch(session_mgr, arg)
+        return _switch(session_mgr, arg, channel)
 
     if cmd == "/rename":
-        return _rename(session_mgr, arg)
+        return _rename(session_mgr, arg, channel)
 
     if cmd == "/reload":
         return _reload()
@@ -56,20 +56,21 @@ def is_command(text: str) -> bool:
     return text.strip().startswith("/")
 
 
-def _new(session_mgr: SessionManager, name: str) -> str:
-    name = name.strip() if name else ""
-    session = session_mgr.create(name=name if name else None, source_channel="command")
+def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
+    name = arg.strip() if arg else ""
+    session = session_mgr.create(name=name if name else None, source_channel=channel)
     summary = f"已创建会话「{session.name}」({session.session_id})。已切换到该会话。"
     if name:
         summary += f"\n提示：随时用 /session {session.session_id[:9]} 或 /session {name} 切回其他会话。"
     return summary
 
 
-def _list_sessions(session_mgr: SessionManager) -> str:
+def _list_sessions(session_mgr: SessionManager, channel: str = "default") -> str:
     sessions = session_mgr.list_sessions()
-    active_id = session_mgr._active_id
+    active_session = session_mgr.active_session(channel)
+    active_id = active_session.session_id
 
-    lines = [f"当前活跃: 「{session_mgr.active_session.name}」({active_id})", "", "会话列表:"]
+    lines = [f"当前活跃: 「{active_session.name}」({active_id})", "", "会话列表:"]
     for s in sessions:
         marker = "[活跃]" if s.session_id == active_id else "      "
         msg_count = s.metadata.get("message_count", 0)
@@ -80,11 +81,11 @@ def _list_sessions(session_mgr: SessionManager) -> str:
     return "\n".join(lines)
 
 
-def _switch(session_mgr: SessionManager, arg: str) -> str:
+def _switch(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
     if not arg:
         return "用法: /session <会话ID或名称>。输入 /sessions 查看所有会话。"
 
-    result = session_mgr.switch(arg)
+    result = session_mgr.switch(arg, channel)
     if result:
         msg_count = result.metadata.get("message_count", 0)
         if msg_count > 0:
@@ -103,20 +104,22 @@ def _switch(session_mgr: SessionManager, arg: str) -> str:
     return "\n".join(lines)
 
 
-def _rename(session_mgr: SessionManager, name: str) -> str:
-    if not name.strip():
+def _rename(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
+    name = arg.strip()
+    if not name:
         return "用法: /rename <新名称>"
-    session_mgr.rename(session_mgr._active_id, name.strip())
-    return f"会话已重命名为「{name.strip()}」"
+    active_session = session_mgr.active_session(channel)
+    session_mgr.rename(active_session.session_id, name)
+    return f"会话已重命名为「{name}」"
 
 
-def _reset(session_mgr: SessionManager) -> str:
-    session_mgr.reset_active()
+def _reset(session_mgr: SessionManager, channel: str = "default") -> str:
+    session_mgr.reset_active(channel)
     return "已重置对话记忆。所有上下文已清除，让我们重新开始。"
 
 
-def _compact(session_mgr: SessionManager) -> str:
-    session = session_mgr.active_session
+def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
+    session = session_mgr.active_session(channel)
     messages = session.memory.get_history()
     if not messages:
         return "当前没有对话内容需要压缩。"
@@ -138,13 +141,13 @@ def _compact(session_mgr: SessionManager) -> str:
     )
 
 
-def _status(session_mgr: SessionManager) -> str:
+def _status(session_mgr: SessionManager, channel: str = "default") -> str:
     import json
     from datetime import date
     from src.agent.executor import UNIFIED_SYSTEM_PROMPT, _load_persona
     from src.tools.registry import ToolRegistry
 
-    session = session_mgr.active_session
+    session = session_mgr.active_session(channel)
     messages = session.memory.get_history()
     compressor = session.compressor
     summary = compressor.summary
