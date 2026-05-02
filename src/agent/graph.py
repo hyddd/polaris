@@ -42,10 +42,11 @@ def command_node(state: AgentState) -> dict:
     # Handle /commands
     if stripped.startswith("/"):
         session_mgr = get_session_manager()
-        response = handle_command(stripped, session_mgr, "default")
+        channel = state.get("channel", "default")
+        response = handle_command(stripped, session_mgr, channel)
         if response:
             if stripped == "/reset":
-                session_mgr.reset_active("default")
+                session_mgr.reset_active(channel)
             return {"messages": [], "final_response": response}
 
     return {}

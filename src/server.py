@@ -160,6 +160,7 @@ async def chat_stream(req: ChatRequest):
         needs_clarification=False,
         pending_action=session.pending_action,
         streaming=True,
+        channel=channel,
     )
 
     async def generate() -> AsyncGenerator[str, None]:
@@ -442,6 +443,7 @@ def _process_message_impl(text: str, session_mgr: SessionManager, channel: str =
         final_response="",
         needs_clarification=False,
         pending_action=session.pending_action,
+        channel=channel,
     )
 
     try:

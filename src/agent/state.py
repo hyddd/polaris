@@ -20,3 +20,4 @@ class AgentState(TypedDict):
     needs_clarification: bool
     pending_action: Optional[dict]
     streaming: bool  # True = chain.stream() for token events; False = chain.invoke()
+    channel: str  # "admin" | "feishu" | "qq" | "default"
