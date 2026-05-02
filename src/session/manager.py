@@ -22,7 +22,10 @@ class Session:
     created_at: str
     last_active: str
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
-    persona: str = ""
+    persona: dict = field(default_factory=lambda: {
+        "name": "", "role": "", "traits": [], "style": "",
+        "language": "中文", "extra": "",
+    })
     pending_action: dict | None = None
 
     def to_dict(self) -> dict:
@@ -59,6 +62,22 @@ class Session:
             "pending_action": self.pending_action,
         }
 
+    @staticmethod
+    def _parse_persona(raw) -> dict:
+        """Normalize persona from persisted data. Handles old string format."""
+        default = {"name": "", "role": "", "traits": [], "style": "", "language": "中文", "extra": ""}
+        if isinstance(raw, str):
+            # Legacy string persona — put it in extra so it's not lost
+            if raw.strip():
+                default["extra"] = raw.strip()
+            return default
+        if isinstance(raw, dict):
+            for k in default:
+                if k not in raw:
+                    raw[k] = default[k]
+            return raw
+        return default
+
     @classmethod
     def from_dict(cls, data: dict) -> "Session":
         """Restore from persisted dict."""
@@ -88,7 +107,7 @@ class Session:
             created_at=data.get("created_at", ""),
             last_active=data.get("last_active", ""),
             metadata={"message_count": data.get("message_count", 0)},
-            persona=data.get("persona", ""),
+            persona=Session._parse_persona(data.get("persona", {})),
             pending_action=data.get("pending_action"),
         )
 

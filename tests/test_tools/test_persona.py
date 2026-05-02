@@ -2,69 +2,103 @@ from src.tools.persona import PersonaTool
 from src.session.manager import get_session_manager
 
 
-def test_persona_get_empty():
-    """Get returns message when no persona is set."""
-    tool = PersonaTool()
-    # Reset global session manager to clean state
+def _reset():
     import src.session.manager as sm
     sm._session_manager = None
     mgr = get_session_manager()
+    # Ensure a clean persona for the active session
     session = mgr.active_session()
-    session.persona = ""
+    session.persona = {"name": "", "role": "", "traits": [], "style": "", "language": "中文", "extra": ""}
+    return mgr
+
+
+def test_persona_get_empty():
+    """Get returns message when no persona is set."""
+    tool = PersonaTool()
+    _reset()
     result = tool._run(action="get")
     assert "没有人设" in result
 
 
-def test_persona_set_and_get():
-    """Set updates persona, get reads it back."""
+def test_persona_set_single_field():
+    """Set with a single field updates only that field."""
     tool = PersonaTool()
-    import src.session.manager as sm
-    sm._session_manager = None
-    mgr = get_session_manager()
+    mgr = _reset()
     session = mgr.active_session()
 
-    result = tool._run(action="set", content="你是一个幽默的助手")
+    result = tool._run(action="set", name="小星")
     assert "已更新" in result
-    assert session.persona == "你是一个幽默的助手"
+    assert session.persona["name"] == "小星"
+    # Other fields untouched
+    assert session.persona["role"] == ""
+    assert session.persona["traits"] == []
 
-    result = tool._run(action="get")
-    assert "幽默的助手" in result
 
-
-def test_persona_set_replaces():
-    """Set fully replaces existing persona."""
+def test_persona_set_multiple_fields():
+    """Set with multiple fields updates all of them."""
     tool = PersonaTool()
-    import src.session.manager as sm
-    sm._session_manager = None
-    mgr = get_session_manager()
+    mgr = _reset()
     session = mgr.active_session()
 
-    tool._run(action="set", content="旧人设")
-    tool._run(action="set", content="新人设")
-    assert session.persona == "新人设"
+    tool._run(action="set", name="小星", role="私人秘书", traits=["温柔", "专业"])
+    assert session.persona["name"] == "小星"
+    assert session.persona["role"] == "私人秘书"
+    assert session.persona["traits"] == ["温柔", "专业"]
 
 
-def test_persona_set_empty_content():
-    """Set with no content returns error."""
+def test_persona_set_preserves_unset():
+    """Set with partial fields preserves existing values."""
     tool = PersonaTool()
-    import src.session.manager as sm
-    sm._session_manager = None
-    get_session_manager()
+    mgr = _reset()
+    session = mgr.active_session()
+
+    tool._run(action="set", name="小星", role="私人秘书")
+    tool._run(action="set", traits=["幽默"])  # only update traits
+    assert session.persona["name"] == "小星"  # preserved
+    assert session.persona["role"] == "私人秘书"  # preserved
+    assert session.persona["traits"] == ["幽默"]  # updated
+
+
+def test_persona_get_after_set():
+    """Get returns formatted text after set."""
+    tool = PersonaTool()
+    _reset()
+
+    tool._run(action="set", name="小星", role="私人秘书", traits=["温柔"])
+    result = tool._run(action="get")
+    assert "小星" in result
+    assert "私人秘书" in result
+    assert "温柔" in result
+
+
+def test_persona_set_no_fields():
+    """Set with no fields returns error."""
+    tool = PersonaTool()
+    _reset()
 
     result = tool._run(action="set")
     assert "请提供" in result
 
 
-def test_persona_persistence(tmp_path):
+def test_persona_persistence():
     """Persona survives session serialization round-trip."""
-    import src.session.manager as sm
-    sm._session_manager = None
-    mgr = get_session_manager()
+    mgr = _reset()
     session = mgr.active_session()
-    session.persona = "测试人设"
+    session.persona = {"name": "小星", "role": "秘书", "traits": ["温柔"], "style": "", "language": "中文", "extra": ""}
 
-    # Round-trip through to_dict/from_dict
     from src.session.manager import Session
     data = session.to_dict()
     restored = Session.from_dict(data)
-    assert restored.persona == "测试人设"
+    assert restored.persona["name"] == "小星"
+    assert restored.persona["role"] == "秘书"
+    assert restored.persona["traits"] == ["温柔"]
+
+
+def test_persona_backward_compat_string():
+    """Old string persona is migrated into extra field."""
+    from src.session.manager import Session
+    data = {"id": "s1", "name": "test", "created_at": "", "last_active": "",
+            "messages": [], "persona": "旧人设文本", "message_count": 0}
+    session = Session.from_dict(data)
+    assert session.persona["extra"] == "旧人设文本"
+    assert session.persona["name"] == ""

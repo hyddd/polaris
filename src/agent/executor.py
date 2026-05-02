@@ -30,6 +30,34 @@ AGENT_PROMPT = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="messages"),
 ])
 
+def _format_persona(persona: dict) -> str:
+    """Format structured persona dict into a single-line description for the system prompt."""
+    if not persona:
+        return ""
+    parts = []
+    name = persona.get("name", "")
+    role = persona.get("role", "")
+    if name and role:
+        parts.append(f"你是{name}，一位{role}。")
+    elif name:
+        parts.append(f"你是{name}。")
+    elif role:
+        parts.append(f"你的角色是{role}。")
+    traits = persona.get("traits", [])
+    if traits:
+        parts.append(f"性格：{'、'.join(traits)}。")
+    style = persona.get("style", "")
+    if style:
+        parts.append(f"沟通风格：{style}。")
+    language = persona.get("language", "")
+    if language and language != "中文":
+        parts.append(f"使用{language}沟通。")
+    extra = persona.get("extra", "")
+    if extra:
+        parts.append(extra)
+    return "".join(parts)
+
+
 def _get_all_tools() -> list:
     return ToolRegistry.get_instance().list_tools()
 
@@ -47,8 +75,9 @@ def agent_node(state: AgentState) -> dict:
     session = session_mgr.active_session(channel)
     persona = session.persona
     system_prompt = f"今天是 {today}。\n\n"
-    if persona:
-        system_prompt += f"[人设]\n{persona}\n\n"
+    persona_line = _format_persona(persona)
+    if persona_line:
+        system_prompt += f"[人设]\n{persona_line}\n\n"
     if summary:
         system_prompt += f"[对话摘要]\n{summary}\n\n"
     system_prompt += UNIFIED_SYSTEM_PROMPT
