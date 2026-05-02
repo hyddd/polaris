@@ -38,10 +38,13 @@ class _PolarisQQClient(botpy.Client):
         if not text:
             return
 
+        # Get user ID from message
+        user_id = getattr(message.author, 'id', None) or getattr(message, 'id', 'unknown')
+
         session_mgr = get_session_manager()
         loop = asyncio.get_running_loop()
         response_text, _ = await loop.run_in_executor(
-            None, lambda: process_message(text, session_mgr, channel="qq")
+            None, lambda: process_message(text, session_mgr, channel=f"qq:{user_id}")
         )
 
         if response_text:
