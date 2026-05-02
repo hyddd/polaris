@@ -91,6 +91,16 @@ def tool_node(state: AgentState) -> dict:
     results = []
     pending_action = None
 
+    # Check if this batch contains non-delete tool calls (indicating an update operation)
+    has_non_delete = False
+    for tc in last_message.tool_calls:
+        if tc is None:
+            continue
+        args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {}) or {}
+        if args.get("action") != "delete":
+            has_non_delete = True
+            break
+
     for i, tc in enumerate(last_message.tool_calls):
         if tc is None:
             continue
@@ -105,8 +115,8 @@ def tool_node(state: AgentState) -> dict:
         fallback_id = f"call_{tool_name}_{i}"
         call_id = raw_id or fallback_id
 
-        # Intercept delete operations — set pending_action instead of executing
-        if tool_args.get("action") == "delete":
+        # Intercept delete operations — but skip if part of a batch with non-delete calls (update)
+        if tool_args.get("action") == "delete" and not has_non_delete:
             target_id = tool_args.get("event_id") or tool_args.get("todo_id") or tool_args.get("filename", "")
             pending_action = {
                 "action_type": "delete",
