@@ -105,6 +105,11 @@ def tool_node(state: AgentState) -> dict:
     results = []
     pending_action = None
 
+    # Get current session_id to pass to tools
+    session_mgr = get_session_manager()
+    channel = state.get("channel", "default")
+    current_session_id = session_mgr.active_session(channel).session_id
+
     # Check if this batch contains non-delete tool calls (indicating an update operation)
     has_non_delete = False
     for tc in last_message.tool_calls:
@@ -145,6 +150,9 @@ def tool_node(state: AgentState) -> dict:
                 tool_call_id=call_id,
             ))
             continue
+
+        # Inject session_id for tools that need it (e.g., persona)
+        tool_args["_session_id"] = current_session_id
 
         tool = registry.get(tool_name)
         if tool:

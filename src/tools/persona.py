@@ -52,11 +52,18 @@ class PersonaTool(BaseTool):
         personality: str | None = None,
         timezone: str | None = None,
         notes: str | None = None,
+        _session_id: str | None = None,
     ) -> str:
         from src.session.manager import get_session_manager
 
         session_mgr = get_session_manager()
-        session = session_mgr.active_session()
+        # Use _session_id if provided, otherwise fall back to default
+        if _session_id:
+            session = session_mgr.get(_session_id)
+            if not session:
+                return f"未找到会话：{_session_id}"
+        else:
+            session = session_mgr.active_session()
 
         if action == "get":
             text = _persona_to_text(session.persona)
@@ -98,9 +105,10 @@ class PersonaTool(BaseTool):
         personality: str | None = None,
         timezone: str | None = None,
         notes: str | None = None,
+        _session_id: str | None = None,
     ) -> str:
         return self._run(
             action=action, name=name, call_user=call_user,
             identity=identity, personality=personality,
-            timezone=timezone, notes=notes,
+            timezone=timezone, notes=notes, _session_id=_session_id,
         )
