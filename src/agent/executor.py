@@ -73,7 +73,7 @@ def agent_node(state: AgentState) -> dict:
         full = None
         for chunk in chain.stream({"system_prompt": system_prompt, "messages": recent}):
             full = full + chunk if full is not None else chunk
-        response = full
+        response = full if full is not None else AIMessage(content="")
     else:
         response = chain.invoke({"system_prompt": system_prompt, "messages": recent})
 

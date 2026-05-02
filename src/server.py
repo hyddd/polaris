@@ -482,9 +482,9 @@ def _extract_response(result: dict) -> str:
         return response
     messages = result.get("messages", [])
     for m in reversed(messages):
-        if hasattr(m, "content") and m.content and not (
-            hasattr(m, "tool_calls") and m.tool_calls
-        ):
+        if (hasattr(m, "content") and m.content
+            and m.type == "ai"
+            and not (hasattr(m, "tool_calls") and m.tool_calls)):
             return m.content
     return "抱歉，处理出错了。"
 
