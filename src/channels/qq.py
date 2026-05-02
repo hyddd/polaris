@@ -38,14 +38,13 @@ class _PolarisQQClient(botpy.Client):
         if not text:
             return
 
-        # Get user ID based on message type
+        # Get openid: member_openid > user_openid > id
         author = getattr(message, 'author', None)
-        if isinstance(message, GroupMessage):
-            user_id = getattr(author, 'member_openid', None) or 'unknown'
-        elif isinstance(message, C2CMessage):
-            user_id = getattr(author, 'user_openid', None) or 'unknown'
-        else:
-            user_id = getattr(author, 'id', None) or 'unknown'
+        user_id = (
+            getattr(author, 'member_openid', None)
+            or getattr(author, 'user_openid', None)
+            or getattr(author, 'id', 'unknown')
+        )
 
         session_mgr = get_session_manager()
         loop = asyncio.get_running_loop()
