@@ -21,7 +21,9 @@ class CalendarInput(BaseModel):
 
 class GoogleCalendarTool(BaseTool):
     name: str = "calendar"
-    description: str = "管理日历事件：查看、搜索、创建、修改、删除。查看时传入日期可查当天日程。"
+    description: str = """管理日历事件。修改/删除时，必须先用 search 搜索获取 event_id，再用 event_id 操作。
+修改日程用 update（支持改时间、改日期、改标题），不要 delete + create。
+示例：用户说"把明天晨会改到下午3点" → search(keyword="晨会") 获取 event_id → update(event_id="xxx", updates={"time":"15:00"})"""
     args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
     use_mock: bool = True

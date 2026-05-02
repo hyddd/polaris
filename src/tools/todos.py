@@ -6,30 +6,32 @@ from pathlib import Path
 
 
 class TodoInput(BaseModel):
-    action: Literal["list", "search", "create", "done", "delete"] = Field(
-        description="操作类型：list=列出, search=搜索, create=创建, done=标记完成, delete=删除"
+    action: Literal["list", "search", "create", "update", "done", "delete"] = Field(
+        description="操作类型：list=列出, search=搜索, create=创建, update=修改, done=标记完成, delete=删除"
     )
     status: Optional[Literal["active", "all", "pending", "done"]] = Field(
         default=None, description="list 时使用：active=进行中的, all=全部, pending=待完成, done=已完成。默认 active"
     )
     keyword: Optional[str] = Field(default=None, description="search 时的搜索关键词")
-    title: Optional[str] = Field(default=None, description="create 时的待办标题")
+    title: Optional[str] = Field(default=None, description="create/update/done/delete 时的待办标题（用于匹配）")
     priority: Optional[Literal["high", "medium", "low"]] = Field(
-        default=None, description="create 时的优先级：high=高, medium=中, low=低"
+        default=None, description="create/update 时的优先级：high=高, medium=中, low=低"
     )
-    due: Optional[str] = Field(default=None, description="create 时的截止日期，格式 YYYY-MM-DD")
-    todo_id: Optional[str] = Field(default=None, description="done 或 delete 时的待办 ID")
+    due: Optional[str] = Field(default=None, description="create/update 时的截止日期，格式 YYYY-MM-DD")
+    todo_id: Optional[str] = Field(default=None, description="update/done/delete 时的待办 ID（优先级高于 title）")
+    updates: Optional[dict] = Field(default=None, description="update 时要修改的字段，如 {\"title\":\"新标题\", \"due\":\"2026-05-03\"}")
 
 
 class TodoTool(BaseTool):
     name: str = "todo"
-    description: str = "管理待办事项：查看、搜索、创建、标记完成、删除。查看时默认显示进行中的项目。"
+    description: str = """管理待办事项。修改/完成/删除时，必须先用 search 搜索获取 todo_id，再用 todo_id 操作。
+示例流程：用户说"把晨会标为完成" → 先 search(keyword="晨会") 获取 todo_id → 再 done(todo_id="xxx")"""
     args_schema: type[BaseModel] = TodoInput
     data_file: str = ""
 
     def _run(self, action: str, status: str | None = None, keyword: str | None = None,
              title: str | None = None, priority: str | None = None, due: str | None = None,
-             todo_id: str | None = None) -> str:
+             todo_id: str | None = None, updates: dict | None = None) -> str:
         from src.data_layer.loader import load_todos, save_json
 
         path = Path(self.data_file)
@@ -85,26 +87,57 @@ class TodoTool(BaseTool):
             pr = priority_map.get(new_todo["priority"], "-")
             return f"已添加待办（优先级{pr}）：{title}，截止 {due or '未设'}"
 
-        elif action == "done":
-            if not todo_id:
-                return "标记完成需要提供待办 ID。"
+        elif action == "update":
+            if not updates and not title and not priority and not due:
+                return "修改待办需要提供要修改的字段。"
+            updates = updates or {}
+            if title and "title" not in updates:
+                updates["title"] = title
+            if priority and "priority" not in updates:
+                updates["priority"] = priority
+            if due and "due" not in updates:
+                updates["due"] = due
+            # Find by todo_id or title
             for t in todos:
-                if t["id"] == todo_id:
+                matched = False
+                if todo_id and t["id"] == todo_id:
+                    matched = True
+                elif title and not todo_id and title.lower() in t.get("title", "").lower():
+                    matched = True
+                if matched:
+                    t.update(updates)
+                    save_json(path, todos)
+                    return f"已更新待办：{t.get('title', todo_id)}"
+            return f"未找到待办：{todo_id or title}"
+
+        elif action == "done":
+            # Find by todo_id or title
+            for t in todos:
+                matched = False
+                if todo_id and t["id"] == todo_id:
+                    matched = True
+                elif title and not todo_id and title.lower() in t.get("title", "").lower():
+                    matched = True
+                if matched:
                     t["status"] = "done"
                     save_json(path, todos)
                     return f"已将「{t['title']}」标记为已完成。"
-            return f"未找到待办 ID: {todo_id}"
+            return f"未找到待办：{todo_id or title}"
 
         elif action == "delete":
-            if not todo_id:
-                return "删除需要提供待办 ID。"
+            # Find by todo_id or title
             for i, t in enumerate(todos):
-                if t["id"] == todo_id:
+                matched = False
+                if todo_id and t["id"] == todo_id:
+                    matched = True
+                elif title and not todo_id and title.lower() in t.get("title", "").lower():
+                    matched = True
+                if matched:
                     title = t["title"]
                     todos.pop(i)
                     save_json(path, todos)
                     return f"已删除待办：{title}"
-            return f"未找到待办 ID: {todo_id}"
+            return f"未找到待办：{todo_id or title}"
 
         return "未知操作。"
 
