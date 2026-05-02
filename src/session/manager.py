@@ -23,8 +23,8 @@ class Session:
     last_active: str
     metadata: dict = field(default_factory=dict)  # {message_count, summary, source_channel}
     persona: dict = field(default_factory=lambda: {
-        "name": "", "role": "", "traits": [], "style": "",
-        "language": "中文", "extra": "",
+        "name": "", "call_user": "", "pronouns": "",
+        "timezone": "Asia/Shanghai", "notes": "",
     })
     pending_action: dict | None = None
 
@@ -64,18 +64,34 @@ class Session:
 
     @staticmethod
     def _parse_persona(raw) -> dict:
-        """Normalize persona from persisted data. Handles old string format."""
-        default = {"name": "", "role": "", "traits": [], "style": "", "language": "中文", "extra": ""}
+        """Normalize persona from persisted data. Handles old string and old dict formats."""
+        default = {"name": "", "call_user": "", "pronouns": "", "timezone": "Asia/Shanghai", "notes": ""}
         if isinstance(raw, str):
-            # Legacy string persona — put it in extra so it's not lost
             if raw.strip():
-                default["extra"] = raw.strip()
+                default["notes"] = raw.strip()
             return default
         if isinstance(raw, dict):
-            for k in default:
-                if k not in raw:
-                    raw[k] = default[k]
-            return raw
+            # New format — pass through with defaults for missing keys
+            if "notes" in raw or "call_user" in raw:
+                for k in default:
+                    if k not in raw:
+                        raw[k] = default[k]
+                return raw
+            # Old format (role/traits/style/language/extra) — migrate into notes
+            notes_parts = []
+            if raw.get("role"):
+                notes_parts.append(f"角色：{raw['role']}")
+            if raw.get("traits"):
+                notes_parts.append(f"性格：{'、'.join(raw['traits'])}")
+            if raw.get("style"):
+                notes_parts.append(f"沟通风格：{raw['style']}")
+            if raw.get("language") and raw["language"] != "中文":
+                notes_parts.append(f"语言：{raw['language']}")
+            if raw.get("extra"):
+                notes_parts.append(raw["extra"])
+            default["name"] = raw.get("name", "")
+            default["notes"] = "\n".join(notes_parts)
+            return default
         return default
 
     @classmethod

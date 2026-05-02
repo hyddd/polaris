@@ -31,30 +31,19 @@ AGENT_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 def _format_persona(persona: dict) -> str:
-    """Format structured persona dict into a single-line description for the system prompt."""
+    """Format persona as character-card style text for the system prompt."""
     if not persona:
         return ""
     parts = []
     name = persona.get("name", "")
-    role = persona.get("role", "")
-    if name and role:
-        parts.append(f"你是{name}，一位{role}。")
-    elif name:
+    call_user = persona.get("call_user", "")
+    if name:
         parts.append(f"你是{name}。")
-    elif role:
-        parts.append(f"你的角色是{role}。")
-    traits = persona.get("traits", [])
-    if traits:
-        parts.append(f"性格：{'、'.join(traits)}。")
-    style = persona.get("style", "")
-    if style:
-        parts.append(f"沟通风格：{style}。")
-    language = persona.get("language", "")
-    if language and language != "中文":
-        parts.append(f"使用{language}沟通。")
-    extra = persona.get("extra", "")
-    if extra:
-        parts.append(extra)
+    if call_user:
+        parts.append(f"称呼用户为{call_user}。")
+    notes = persona.get("notes", "")
+    if notes:
+        parts.append(notes)
     return "".join(parts)
 
 
