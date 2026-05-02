@@ -144,7 +144,7 @@ def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
 def _status(session_mgr: SessionManager, channel: str = "default") -> str:
     import json
     from datetime import date
-    from src.agent.executor import UNIFIED_SYSTEM_PROMPT, _load_persona
+    from src.agent.executor import UNIFIED_SYSTEM_PROMPT, _format_persona
     from src.tools.registry import ToolRegistry
 
     session = session_mgr.active_session(channel)
@@ -154,10 +154,10 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
 
     # system prompt = 日期 + 人设 + 摘要 + 行为准则
     today = date.today().isoformat()
-    persona = _load_persona()
+    persona_text = _format_persona(session.persona)
     system_parts = [f"今天是 {today}。"]
-    if persona:
-        system_parts.append(persona)
+    if persona_text:
+        system_parts.append(persona_text)
     if summary:
         system_parts.append(summary)
     system_parts.append(UNIFIED_SYSTEM_PROMPT)
