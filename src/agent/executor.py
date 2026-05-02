@@ -130,6 +130,8 @@ def tool_node(state: AgentState) -> dict:
             tool_name = getattr(tc, "name", "")
             tool_args = getattr(tc, "args", None) or {}
 
+        print(f"[tool_node] call #{i}: {tool_name}({tool_args})")
+
         raw_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
         fallback_id = f"call_{tool_name}_{i}"
         call_id = raw_id or fallback_id
