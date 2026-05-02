@@ -83,16 +83,31 @@ class GoogleCalendarTool(BaseTool):
         elif action == "update":
             if not updates:
                 return "修改日程需要提供要修改的字段。"
+            new_date = updates.get("date")
             # Find by event_id or title+date
             for day in data:
-                for ev in day.get("events", []):
+                events = day.get("events", [])
+                for i, ev in enumerate(events):
                     matched = False
                     if event_id and ev["id"] == event_id:
                         matched = True
                     elif title and date and day.get("date") == date and title.lower() in ev.get("title", "").lower():
                         matched = True
                     if matched:
-                        ev.update(updates)
+                        if new_date and new_date != day.get("date"):
+                            # Date changed: move event to new date
+                            events.pop(i)
+                            ev.update({k: v for k, v in updates.items() if k != "date"})
+                            moved = False
+                            for d in data:
+                                if d.get("date") == new_date:
+                                    d.setdefault("events", []).append(ev)
+                                    moved = True
+                                    break
+                            if not moved:
+                                data.append({"date": new_date, "events": [ev]})
+                        else:
+                            ev.update(updates)
                         save_json(path, data)
                         return f"已更新日程：{ev.get('title', event_id)}"
             return f"未找到日程：{event_id or f'{date} {title}'}"
