@@ -2,6 +2,7 @@ const BASE = ''
 
 export async function get(path) {
   const r = await fetch(`${BASE}${path}`)
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
   return r.json()
 }
 
@@ -11,11 +12,13 @@ export async function post(path, data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
   return r.json()
 }
 
 export async function del(path) {
   const r = await fetch(`${BASE}${path}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
   return r.json()
 }
 
@@ -25,6 +28,7 @@ export async function put(path, data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
   return r.json()
 }
 

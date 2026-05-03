@@ -19,7 +19,13 @@
           {{ loadingMore ? '加载中...' : '加载更多' }}
         </button>
       </div>
-      <ChatMessage v-for="(msg, i) in store.messages" :key="i" :msg="msg" />
+      <ChatMessage
+        v-for="(msg, i) in store.messages"
+        :key="msg.id || i"
+        :msg="msg"
+        @edit="startEdit"
+        @retry="retryMessage"
+      />
       <!-- Loading indicator -->
       <div v-if="store.loading && !hasPendingMessage" class="loading-message">
         <div class="avatar assistant">P</div>
@@ -48,6 +54,30 @@
       </div>
       <div class="input-hint">Polaris 可能会犯错。请核实重要信息。</div>
     </div>
+
+    <!-- Edit dialog -->
+    <div v-if="editingMsg" class="edit-overlay" @click.self="cancelEdit">
+      <div class="edit-dialog">
+        <div class="edit-header">
+          <h3>编辑消息</h3>
+          <button class="close-btn" @click="cancelEdit">&times;</button>
+        </div>
+        <textarea
+          v-model="editContent"
+          class="edit-textarea"
+          rows="4"
+          @keydown.enter.ctrl="confirmEdit"
+          @keydown.enter.meta="confirmEdit"
+        />
+        <div class="edit-footer">
+          <span class="edit-hint">Ctrl+Enter 发送</span>
+          <div class="edit-actions">
+            <button class="btn-cancel" @click="cancelEdit">取消</button>
+            <button class="btn-confirm" @click="confirmEdit" :disabled="!editContent.trim()">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -64,6 +94,8 @@ const messagesRef = ref(null)
 const inputRef = ref(null)
 const isComposing = ref(false)
 const loadingMore = ref(false)
+const editingMsg = ref(null)
+const editContent = ref('')
 
 const suggestions = [
   '今天有什么安排？',
@@ -127,6 +159,33 @@ function onScroll() {
   if (messagesRef.value?.scrollTop < 50 && hasMore.value && !loadingMore.value) {
     loadMore()
   }
+}
+
+function startEdit(msg) {
+  editingMsg.value = msg
+  editContent.value = msg.content
+}
+
+function cancelEdit() {
+  editingMsg.value = null
+  editContent.value = ''
+}
+
+async function confirmEdit() {
+  if (!editingMsg.value || !editContent.value.trim()) return
+  const msgId = editingMsg.value.id
+  const content = editContent.value.trim()
+  cancelEdit()
+  await store.editMessage(msgId, content)
+  await nextTick()
+  if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+}
+
+async function retryMessage(msg) {
+  if (!msg.id) return
+  await store.retryMessage(msg.id)
+  await nextTick()
+  if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
 }
 
 // Scroll to bottom when messages are loaded or new message added
@@ -223,4 +282,44 @@ watch(() => {
 }
 .btn-load-more:hover { background: var(--bg-secondary); color: var(--text-primary); }
 .btn-load-more:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Edit dialog */
+.edit-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.edit-dialog {
+  background: var(--bg-secondary); border-radius: 12px; width: 90%; max-width: 600px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+.edit-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border-primary);
+}
+.edit-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.close-btn {
+  background: none; border: none; font-size: 24px; color: var(--text-secondary);
+  cursor: pointer; padding: 0; line-height: 1;
+}
+.close-btn:hover { color: var(--text-primary); }
+.edit-textarea {
+  width: 100%; padding: 16px 20px; background: transparent; border: none;
+  color: var(--text-primary); font-size: 15px; line-height: 1.5; resize: vertical;
+  outline: none; font-family: inherit; box-sizing: border-box;
+}
+.edit-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-top: 1px solid var(--border-primary);
+}
+.edit-hint { font-size: 12px; color: var(--text-tertiary); }
+.edit-actions { display: flex; gap: 8px; }
+.btn-cancel, .btn-confirm {
+  padding: 8px 16px; border-radius: 8px; font-size: 14px; cursor: pointer;
+  border: 1px solid var(--border-primary);
+}
+.btn-cancel { background: transparent; color: var(--text-secondary); }
+.btn-cancel:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.btn-confirm { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-confirm:hover { opacity: 0.9; }
+.btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

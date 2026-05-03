@@ -46,6 +46,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import { useSessionsStore } from '../stores/sessions.js'
 
 const store = useSessionsStore()
@@ -68,8 +69,21 @@ async function handleDelete(sid) {
 }
 
 async function handleRename(sid) {
-  const name = prompt('输入新名称')
-  if (name) await store.rename(sid, name)
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新名称', '重命名会话', {
+      inputValue: store.sessions.find(s => s.session_id === sid)?.name || sid,
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputValidator: (val) => {
+        if (!val || !val.trim()) return '名称不能为空'
+        return true
+      },
+    })
+    await store.rename(sid, value.trim())
+    ElMessage.success('重命名成功')
+  } catch {
+    // 用户取消
+  }
 }
 </script>
 

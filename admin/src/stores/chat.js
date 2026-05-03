@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { streamSSE, get } from '../api.js'
 
+let _msgIdCounter = 0
+
 export const useChatStore = defineStore('chat', {
   state: () => ({
     messages: [],
@@ -22,6 +24,7 @@ export const useChatStore = defineStore('chat', {
           const recent = this.allMessages.slice(-50)
           for (const m of recent) {
             this.messages.push({
+              id: m.id || `msg_${++_msgIdCounter}`,
               role: m.type === 'human' ? 'user' : 'assistant',
               content: m.content,
             })
@@ -39,6 +42,7 @@ export const useChatStore = defineStore('chat', {
       const older = this.allMessages.slice(start, end)
       for (const m of older.reverse()) {
         this.messages.unshift({
+          id: m.id || `msg_${++_msgIdCounter}`,
           role: m.type === 'human' ? 'user' : 'assistant',
           content: m.content,
         })
@@ -50,10 +54,58 @@ export const useChatStore = defineStore('chat', {
       this.toolSteps = []
     },
     async sendMessage(text) {
-      this.messages.push({ role: 'user', content: text })
+      const msgId = `msg_${++_msgIdCounter}`
+      this.messages.push({ id: msgId, role: 'user', content: text })
       this.loading = true
       this.toolSteps = []
 
+      await this._streamResponse({ message: text, channel: 'admin' })
+    },
+    async retryMessage(messageId) {
+      // Find the message to retry
+      const msg = this.messages.find(m => m.id === messageId)
+      if (!msg || msg.role !== 'user') return
+
+      this.loading = true
+      this.toolSteps = []
+
+      // Remove all messages after the retried message
+      const idx = this.messages.findIndex(m => m.id === messageId)
+      if (idx >= 0) {
+        this.messages.splice(idx + 1)
+      }
+
+      await this._streamResponse({
+        message: msg.content,
+        channel: 'admin',
+        retry_message_id: messageId,
+      })
+    },
+    async editMessage(messageId, newContent) {
+      // Find the message to edit
+      const msg = this.messages.find(m => m.id === messageId)
+      if (!msg || msg.role !== 'user') return
+
+      // Update the message content
+      msg.content = newContent
+
+      this.loading = true
+      this.toolSteps = []
+
+      // Remove all messages after the edited message
+      const idx = this.messages.findIndex(m => m.id === messageId)
+      if (idx >= 0) {
+        this.messages.splice(idx + 1)
+      }
+
+      await this._streamResponse({
+        message: newContent,
+        channel: 'admin',
+        edit_message_id: messageId,
+        edit_content: newContent,
+      })
+    },
+    async _streamResponse(data) {
       let thinking = ''
       let response = ''
       let hasToolCalls = false
@@ -61,7 +113,7 @@ export const useChatStore = defineStore('chat', {
       try {
         await streamSSE(
           '/chat/stream',
-          { message: text, channel: 'admin' },
+          data,
           (token) => {
             if (hasToolCalls) {
               response += token.token || ''
@@ -108,7 +160,12 @@ export const useChatStore = defineStore('chat', {
         pending.tools = [...this.toolSteps]
         delete pending.pending
       } else {
-        this.messages.push({ role: 'assistant', content: response || thinking, tools: [...this.toolSteps] })
+        this.messages.push({
+          id: `msg_${++_msgIdCounter}`,
+          role: 'assistant',
+          content: response || thinking,
+          tools: [...this.toolSteps],
+        })
       }
       this.loading = false
       this.toolSteps = []
@@ -118,7 +175,12 @@ export const useChatStore = defineStore('chat', {
       if (pending) {
         pending.content = content
       } else {
-        this.messages.push({ role: 'assistant', content, pending: true })
+        this.messages.push({
+          id: `msg_${++_msgIdCounter}`,
+          role: 'assistant',
+          content,
+          pending: true,
+        })
       }
     },
   },

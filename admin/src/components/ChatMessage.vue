@@ -9,6 +9,20 @@
         <ToolStep v-for="t in msg.tools" :key="t.call_id || Math.random()" :step="t" />
       </div>
       <div class="content markdown-body" ref="contentRef"></div>
+      <div v-if="!msg.pending" class="actions">
+        <button v-if="msg.role === 'user'" class="action-btn" @click="$emit('edit', msg)" title="编辑">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button v-if="msg.role === 'user'" class="action-btn" @click="$emit('retry', msg)" title="重试">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+            <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -20,6 +34,7 @@ import katex from 'katex'
 import ToolStep from './ToolStep.vue'
 
 const props = defineProps({ msg: Object })
+defineEmits(['edit', 'retry'])
 const contentRef = ref(null)
 
 function renderMath(html) {
@@ -66,6 +81,20 @@ watch(() => props.msg.content, () => nextTick(updateContent))
 .content-wrapper { flex: 1; min-width: 0; }
 .content { font-size: 15px; line-height: 1.7; color: var(--text-primary); }
 .tools { margin-bottom: 12px; }
+
+.actions {
+  display: flex; gap: 4px; margin-top: 8px;
+  opacity: 0; transition: opacity 0.2s;
+}
+.message:hover .actions { opacity: 1; }
+.action-btn {
+  background: none; border: 1px solid var(--border-secondary); border-radius: 4px;
+  padding: 4px 6px; cursor: pointer; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+}
+.action-btn:hover {
+  background: var(--bg-tertiary); color: var(--text-primary);
+}
 
 /* Markdown */
 .markdown-body p { margin: 0 0 12px; }
