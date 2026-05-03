@@ -1,21 +1,21 @@
-from datetime import datetime, timedelta
-from src.reminders.models import Reminder, RepeatRule
-from src.reminders.scheduler import ReminderScheduler
+from datetime import datetime
+from src.tools.reminder.models import Reminder, RepeatRule
+from src.tools.reminder.service import repeat_rule_to_cron_kwargs
 
 
-def test_to_cron_daily():
-    scheduler = ReminderScheduler(None, None)
+def test_repeat_rule_to_cron_kwargs_daily():
     dt = datetime(2026, 5, 3, 14, 30)
-    assert scheduler._to_cron(dt, RepeatRule.DAILY) == "30 14 * * *"
+    kwargs = repeat_rule_to_cron_kwargs(dt, RepeatRule.DAILY)
+    assert kwargs == {"hour": 14, "minute": 30}
 
 
-def test_to_cron_weekly():
-    scheduler = ReminderScheduler(None, None)
+def test_repeat_rule_to_cron_kwargs_weekly():
     dt = datetime(2026, 5, 4, 9, 0)  # Monday
-    assert scheduler._to_cron(dt, RepeatRule.WEEKLY) == "0 9 * * 0"
+    kwargs = repeat_rule_to_cron_kwargs(dt, RepeatRule.WEEKLY)
+    assert kwargs == {"hour": 9, "minute": 0, "day_of_week": 0}
 
 
-def test_to_cron_monthly():
-    scheduler = ReminderScheduler(None, None)
+def test_repeat_rule_to_cron_kwargs_monthly():
     dt = datetime(2026, 5, 15, 10, 0)
-    assert scheduler._to_cron(dt, RepeatRule.MONTHLY) == "0 10 15 * *"
+    kwargs = repeat_rule_to_cron_kwargs(dt, RepeatRule.MONTHLY)
+    assert kwargs == {"hour": 10, "minute": 0, "day": 15}

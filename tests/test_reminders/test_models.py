@@ -1,5 +1,5 @@
 from datetime import datetime
-from src.reminders.models import Reminder, RepeatRule, ReminderStatus
+from src.tools.reminder.models import Reminder, RepeatRule, ReminderStatus
 
 
 def test_create_reminder():

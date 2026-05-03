@@ -186,7 +186,7 @@ class GoogleCalendarTool(BaseTool):
     def _create_event_reminder(self, event: dict, date: str):
         """为日程创建关联提醒（提前15分钟）"""
         from src.context import get_channel, get_session_id
-        from src.reminders import get_reminder_service
+        from src.tools.reminder import get_reminder_service
 
         try:
             channel = get_channel()
@@ -222,12 +222,12 @@ class GoogleCalendarTool(BaseTool):
             return
 
         # 正常更新逻辑委托给 ReminderService
-        from src.reminders import get_reminder_service
+        from src.tools.reminder import get_reminder_service
         service = get_reminder_service()
         service.update_event_reminder(event, date, updates)
 
     def _delete_event_reminder(self, event: dict):
         """删除日程关联提醒"""
-        from src.reminders import get_reminder_service
+        from src.tools.reminder import get_reminder_service
         service = get_reminder_service()
         service.delete_event_reminder(event)

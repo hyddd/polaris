@@ -1,4 +1,4 @@
-"""ReminderService — facade encapsulating reminder store + scheduler operations.
+"""ReminderService — facade encapsulating reminder store + cron scheduler operations.
 
 Calendar tools (and other callers) use this service instead of directly
 importing ReminderStore, Reminder models, or accessing the global scheduler.
@@ -16,13 +16,14 @@ logger = logging.getLogger("polaris.reminders.service")
 class ReminderService:
     """High-level API for event-related reminder operations.
 
-    Wraps ReminderStore persistence and ReminderScheduler scheduling into
+    Wraps ReminderStore persistence and CronScheduler scheduling into
     single-method calls used by calendar tools.
     """
 
-    def __init__(self, store, scheduler):
+    def __init__(self, store, cron_scheduler, handler):
         self._store = store
-        self._scheduler = scheduler
+        self._scheduler = cron_scheduler
+        self._handler = handler
 
     def create_event_reminder(
         self,
@@ -58,7 +59,9 @@ class ReminderService:
 
             # Only schedule future reminders
             if not is_past and self._scheduler:
-                self._scheduler.add_reminder(reminder)
+                self._scheduler.add_date_job(
+                    self._handler.handle, reminder.trigger_time, reminder.id, args=[reminder]
+                )
 
             logger.info(
                 f"已创建日程关联提醒: {reminder.id} @ {reminder_time} (past={is_past})"
@@ -106,9 +109,11 @@ class ReminderService:
 
             # Reschedule in scheduler
             if self._scheduler:
-                self._scheduler.remove_reminder(reminder_id)
+                self._scheduler.remove_job(reminder_id)
                 if new_reminder_time > datetime.now():
-                    self._scheduler.add_reminder(reminder)
+                    self._scheduler.add_date_job(
+                        self._handler.handle, new_reminder_time, reminder_id, args=[reminder]
+                    )
 
             logger.info(f"已更新日程关联提醒: {reminder_id} @ {new_reminder_time}")
         except Exception as e:
@@ -123,7 +128,41 @@ class ReminderService:
         try:
             if self._store.delete(reminder_id):
                 if self._scheduler:
-                    self._scheduler.remove_reminder(reminder_id)
+                    self._scheduler.remove_job(reminder_id)
                 logger.info(f"已删除日程关联提醒: {reminder_id}")
         except Exception as e:
             logger.error(f"删除日程关联提醒失败: {e}")
+
+# ── Scheduling helpers used by tool.py and setup.py ──────────────
+
+def schedule_reminder(cron, handler, reminder: Reminder):
+    """根据提醒的重复规则调度到 cron 中。"""
+    if reminder.repeat_rule == RepeatRule.NONE:
+        now = datetime.now()
+        if reminder.trigger_time <= now:
+            logger.info(f"提醒时间已过，立即触发: {reminder.id} - {reminder.title}")
+            handler.handle(reminder)
+        else:
+            cron.add_date_job(handler.handle, reminder.trigger_time, reminder.id, args=[reminder])
+    else:
+        kwargs = repeat_rule_to_cron_kwargs(reminder.trigger_time, reminder.repeat_rule)
+        cron.add_cron_job(handler.handle, reminder.id, **kwargs)
+
+
+def repeat_rule_to_cron_kwargs(trigger_time, repeat_rule):
+    """将重复规则转换为 APScheduler CronTrigger 关键字参数。"""
+    if repeat_rule == RepeatRule.DAILY:
+        return {"hour": trigger_time.hour, "minute": trigger_time.minute}
+    elif repeat_rule == RepeatRule.WEEKLY:
+        return {
+            "hour": trigger_time.hour,
+            "minute": trigger_time.minute,
+            "day_of_week": trigger_time.weekday(),
+        }
+    elif repeat_rule == RepeatRule.MONTHLY:
+        return {
+            "hour": trigger_time.hour,
+            "minute": trigger_time.minute,
+            "day": trigger_time.day,
+        }
+    return {}

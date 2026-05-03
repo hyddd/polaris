@@ -101,12 +101,16 @@ async def lifespan(app: FastAPI):
     from src.channels import discover_and_start, _discovered_channels, stop_all
     discover_and_start()
 
+    # 启动 cron 框架
+    from src.cron import CronScheduler, set_cron_scheduler
+    cron = CronScheduler()
+    cron.start()
+    set_cron_scheduler(cron)
+
     # 初始化提醒模块
-    from src.reminders.store import ReminderStore
-    from src.reminders.scheduler import ReminderScheduler
-    from src.reminders.handlers import ReminderHandler
-    from src.reminders import set_scheduler, set_reminder_service, set_reminder_store
-    from src.reminders.service import ReminderService
+    from src.tools.reminder.store import ReminderStore
+    from src.tools.reminder.handler import ReminderHandler
+    from src.tools.reminder.setup import reminder_setup
     from src.config import config
 
     reminder_store = ReminderStore(
@@ -114,28 +118,18 @@ async def lifespan(app: FastAPI):
     )
     reminder_handler = ReminderHandler(_discovered_channels)
     reminder_handler.set_store(reminder_store)
-    reminder_scheduler = ReminderScheduler(reminder_store, reminder_handler)
-    reminder_scheduler.start()
-    set_scheduler(reminder_scheduler)
 
-    reminder_service = ReminderService(reminder_store, reminder_scheduler)
-    set_reminder_service(reminder_service)
-    set_reminder_store(reminder_store)
+    # 注册提醒调度任务
+    reminder_setup(cron, reminder_store, reminder_handler)
 
-    # 数据清理定时任务（每天凌晨 3:00）
-    from apscheduler.triggers.cron import CronTrigger
+    # 注册清理定时任务
     from src.cleanup import DataCleanup
     cleanup = DataCleanup()
-    reminder_scheduler.scheduler.add_job(
-        cleanup.run,
-        trigger=CronTrigger(hour=3, minute=0),
-        id="data-cleanup",
-        replace_existing=True,
-    )
+    cron.add_cron_job(cleanup.run, id="data-cleanup", hour=3, minute=0)
     srv_logger = logging.getLogger("polaris.server")
     srv_logger.info("数据清理任务已注册: 每天 03:00")
 
-    app.state.reminder_scheduler = reminder_scheduler
+    app.state.reminder_scheduler = cron
     app.state.reminder_store = reminder_store
 
     yield
@@ -143,8 +137,8 @@ async def lifespan(app: FastAPI):
     # 停止所有 channel
     stop_all()
 
-    # 清理提醒调度器
-    reminder_scheduler.shutdown()
+    # 清理 cron 调度器
+    cron.shutdown()
 
 
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)

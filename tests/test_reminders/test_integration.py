@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta
-from src.reminders.models import Reminder, RepeatRule, ReminderStatus
-from src.reminders.store import ReminderStore
+from src.tools.reminder.models import Reminder, RepeatRule, ReminderStatus
+from src.tools.reminder.store import ReminderStore
 
 
 def test_full_lifecycle(tmp_path):

@@ -4,6 +4,11 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+from .models import Reminder, RepeatRule, ReminderStatus
+from .setup import get_reminder_store, get_reminder_handler
+from .service import schedule_reminder
+from src.cron import get_cron_scheduler
+
 logger = logging.getLogger("polaris.tools.reminder")
 
 
@@ -32,8 +37,6 @@ class ReminderTool(BaseTool):
     def _run(self, action: str, reminder_id: str | None = None, title: str | None = None,
              description: str | None = None, trigger_time: str | None = None,
              repeat_rule: str | None = None, event_id: str | None = None) -> str:
-        from src.reminders.models import Reminder, RepeatRule, ReminderStatus
-        from src.reminders import get_reminder_store
         from src.context import get_channel, get_session_id
 
         _channel = get_channel()
@@ -72,8 +75,10 @@ class ReminderTool(BaseTool):
                 session_id=_session_id or "",
             )
             store.create(r)
-            # 添加到调度器
-            self._get_scheduler().add_reminder(r)
+            # 添加到 cron 调度器
+            handler = get_reminder_handler()
+            scheduler = self._get_scheduler()
+            schedule_reminder(scheduler, handler, r)
             return f"已创建提醒：{r.title} @ {dt.strftime('%Y-%m-%d %H:%M')} [{r.id}]"
 
         elif action == "update":
@@ -100,7 +105,7 @@ class ReminderTool(BaseTool):
             if not reminder_id:
                 return "删除提醒需要提供提醒 ID。"
             if store.delete(reminder_id):
-                self._get_scheduler().remove_reminder(reminder_id)
+                self._get_scheduler().remove_job(reminder_id)
                 return f"已删除提醒：{reminder_id}"
             return f"未找到提醒：{reminder_id}"
 
@@ -110,7 +115,7 @@ class ReminderTool(BaseTool):
             r = store.update(reminder_id, status=ReminderStatus.PAUSED)
             if not r:
                 return f"未找到提醒：{reminder_id}"
-            self._get_scheduler().remove_reminder(reminder_id)
+            self._get_scheduler().remove_job(reminder_id)
             return f"已暂停提醒：{r.title}"
 
         elif action == "resume":
@@ -119,7 +124,9 @@ class ReminderTool(BaseTool):
             r = store.update(reminder_id, status=ReminderStatus.ACTIVE)
             if not r:
                 return f"未找到提醒：{reminder_id}"
-            self._get_scheduler().add_reminder(r)
+            handler = get_reminder_handler()
+            scheduler = self._get_scheduler()
+            schedule_reminder(scheduler, handler, r)
             return f"已恢复提醒：{r.title}"
 
         return "未知操作。"
@@ -128,9 +135,8 @@ class ReminderTool(BaseTool):
         return self._run(**kwargs)
 
     def _get_scheduler(self):
-        """获取调度器实例"""
-        from src.reminders import get_scheduler
-        scheduler = get_scheduler()
+        """获取 cron 调度器实例"""
+        scheduler = get_cron_scheduler()
         if not scheduler:
             raise RuntimeError("提醒调度器未初始化")
         return scheduler
