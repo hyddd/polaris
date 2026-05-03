@@ -29,7 +29,7 @@ class TodoInput(BaseModel):
     )
     due: Optional[str] = Field(default=None, description="create/update 时的截止日期，格式 YYYY-MM-DD")
     todo_id: Optional[str] = Field(default=None, description="update/done/delete 时的待办 ID（优先级高于 title）")
-    updates: Optional[dict | str] = Field(default=None, description="update 时要修改的字段，如 {\"title\":\"新标题\", \"due\":\"2026-05-03\"}")
+    updates: Optional[dict] = Field(default=None, description="update 时要修改的字段，如 {\"title\":\"新标题\", \"due\":\"2026-05-03\"}")
 
 
 class TodoTool(BaseTool):
@@ -112,12 +112,6 @@ class TodoTool(BaseTool):
         elif action == "update":
             if not updates and not priority and not due:
                 return "修改待办需要提供要修改的字段。"
-            if isinstance(updates, str):
-                import json as _json
-                try:
-                    updates = _json.loads(updates)
-                except _json.JSONDecodeError:
-                    return "updates 需要是 JSON 对象，收到的却是无法解析的字符串。"
             updates = updates or {}
             # title param is for matching only, new title must go through updates["title"]
             if priority and "priority" not in updates:

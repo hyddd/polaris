@@ -31,7 +31,7 @@ class CalendarInput(BaseModel):
     attendees: Optional[list[str]] = Field(default=None, description="create 时的参与者列表")
     duration: Optional[int] = Field(default=60, description="create 时的事件时长（分钟），默认 60")
     event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID（优先级高于 title+date）")
-    updates: Optional[dict | str] = Field(default=None, description='update 时要修改的字段，key 可选: time(格式HH:MM), date(格式YYYY-MM-DD), title, duration. 示例: {"time":"15:00"}')
+    updates: Optional[dict] = Field(default=None, description='update 时要修改的字段，key 可选: time(格式HH:MM), date(格式YYYY-MM-DD), title, duration. 示例: {"time":"15:00"}')
 
 
 class GoogleCalendarTool(BaseTool):
@@ -118,14 +118,6 @@ class GoogleCalendarTool(BaseTool):
                 # Note: title param is used for matching, not for updating
                 if not updates:
                     return "修改日程需要提供要修改的字段。请在 updates 中指定要修改的内容，例如 {\"time\": \"15:00\"}"
-
-            # Defensive: some models pass updates as a JSON string instead of dict
-            if isinstance(updates, str):
-                import json as _json
-                try:
-                    updates = _json.loads(updates)
-                except _json.JSONDecodeError:
-                    return "修改日程需要提供要修改的字段（JSON 对象），收到的却是字符串。"
 
             # Normalize update keys: LLM may pass "new_time" instead of "time", "new_date" instead of "date"
             _key_map = {"new_time": "time", "new_date": "date", "new_title": "title", "new_duration": "duration"}
