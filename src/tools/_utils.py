@@ -25,6 +25,14 @@ def find_by_id_or_title(
         for item in items:
             if item.get(id_key) == id_value:
                 return item
+        # 后缀匹配：LLM 可能省略前缀（如 862ffcd9 匹配 todo-862ffcd9）
+        for item in items:
+            if item.get(id_key, "").endswith(id_value):
+                return item
+        # 包含匹配：最后兜底
+        for item in items:
+            if id_value in item.get(id_key, ""):
+                return item
 
     # 标题模糊匹配（大小写不敏感）
     if title_value:
