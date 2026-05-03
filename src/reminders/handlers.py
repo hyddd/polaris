@@ -26,11 +26,12 @@ class ReminderHandler:
             self._push_to_admin_session(reminder, message)
         else:
             # 其他渠道：通过 channel 插件发送
-            channel = self._get_channel(channel_name)
-            if channel:
-                success = channel.send_message(
+            channel_plugin = self._get_channel(channel_name)
+            if channel_plugin:
+                success = channel_plugin.send_message(
                     session_id=reminder.session_id,
                     message=message,
+                    channel=reminder.channel,
                 )
                 if success:
                     logger.info(f"提醒已推送: {reminder.id} -> {reminder.channel}")

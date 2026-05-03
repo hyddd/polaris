@@ -129,27 +129,27 @@ class QQChannel(ChannelPlugin):
             self._client = None
             logger.info("[qq] 已停止")
 
-    def send_message(self, session_id: str, message: str) -> bool:
-        """主动发送消息给用户。session_id 格式: qq:{openid}"""
+    def send_message(self, session_id: str, message: str, channel: str = "") -> bool:
+        """主动发送消息给用户。
+
+        Args:
+            session_id: 会话 ID（未使用）
+            message: 消息内容
+            channel: 渠道标识，格式 "qq:{openid}"
+        """
         try:
             if not self._client:
                 logger.warning("QQ Bot 未启动")
                 return False
 
-            # 从 session_id 或 active.json 中获取 openid
-            # session_id 格式可能是 "sess_xxx"，需要从 active.json 反查
-            from src.session.manager import get_session_manager
-            session_mgr = get_session_manager()
+            # 直接从 channel 提取 openid
+            if not channel or not channel.startswith("qq:"):
+                logger.warning(f"无效的 QQ channel: {channel}")
+                return False
 
-            # 尝试从 session_id 找到对应的 channel (qq:{openid})
-            openid = None
-            for ch, sid in session_mgr._active_ids.items():
-                if sid == session_id and ch.startswith("qq:"):
-                    openid = ch.split(":", 1)[1]
-                    break
-
+            openid = channel.split(":", 1)[1]
             if not openid:
-                logger.warning(f"未找到 session {session_id} 对应的 QQ openid")
+                logger.warning("openid 为空")
                 return False
 
             # 使用 asyncio 发送消息
