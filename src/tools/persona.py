@@ -3,6 +3,11 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 
+def create_default() -> "PersonaTool":
+    """Factory for auto-discovery. Creates a PersonaTool with default config."""
+    return PersonaTool()
+
+
 class PersonaInput(BaseModel):
     model_config = {"extra": "allow"}
 

@@ -5,6 +5,17 @@ from pydantic import BaseModel, Field
 from pathlib import Path
 
 
+def create_default() -> "NoteTool":
+    """Factory for auto-discovery. Creates a NoteTool with default config."""
+    from src.config import NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
+    return NoteTool(
+        notes_dir=str(NOTES_DIR),
+        archive_dir=str(ARCHIVE_DIR),
+        persist_dir=str(CHROMA_PERSIST_DIR),
+        collection_name="notes",
+    )
+
+
 class NoteInput(BaseModel):
     action: Literal["list", "read", "create", "archive"] = Field(
         description="操作类型：list=列出, read=读取, create=创建, archive=归档"

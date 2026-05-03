@@ -2,6 +2,12 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 
+def create_default() -> "RAGSearchTool":
+    """Factory for auto-discovery. Creates a RAGSearchTool with default config."""
+    from src.config import CHROMA_PERSIST_DIR
+    return RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes")
+
+
 class RAGInput(BaseModel):
     query: str = Field(description="自然语言查询，例如'Polaris用了什么向量库'、'Polaris是什么？'")
 

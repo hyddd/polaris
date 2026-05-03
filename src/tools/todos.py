@@ -5,6 +5,12 @@ from pydantic import BaseModel, Field
 from pathlib import Path
 
 
+def create_default() -> "TodoTool":
+    """Factory for auto-discovery. Creates a TodoTool with default config."""
+    from src.config import TODOS_FILE
+    return TodoTool(data_file=str(TODOS_FILE))
+
+
 class TodoInput(BaseModel):
     action: Literal["list", "search", "create", "update", "done", "delete"] = Field(
         description="操作类型：list=列出, search=搜索, create=创建, update=修改, done=标记完成, delete=删除"
