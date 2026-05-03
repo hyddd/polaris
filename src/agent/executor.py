@@ -103,7 +103,7 @@ def agent_node(state: AgentState) -> dict:
     compressor = session_mgr.active_session(channel).compressor
     summary, recent = compressor.process(list(messages))
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session = session_mgr.active_session(channel)
     persona = session.persona
     system_prompt = ""
