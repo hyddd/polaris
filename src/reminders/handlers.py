@@ -12,13 +12,16 @@ class ReminderHandler:
         """处理提醒触发"""
         message = self._format_message(reminder)
 
+        # 提取渠道名（qq:user123 -> qq）
+        channel_name = reminder.channel.split(":")[0] if reminder.channel else ""
+
         # admin 渠道特殊处理：写入 session 消息
-        if reminder.channel == "admin":
+        if channel_name == "admin":
             self._push_to_admin_session(reminder, message)
             return
 
         # 其他渠道：通过 channel 插件发送
-        channel = self._get_channel(reminder.channel)
+        channel = self._get_channel(channel_name)
         if channel:
             success = channel.send_message(
                 session_id=reminder.session_id,
@@ -29,7 +32,7 @@ class ReminderHandler:
             else:
                 logger.warning(f"提醒推送失败: {reminder.id}")
         else:
-            logger.warning(f"渠道未找到: {reminder.channel}")
+            logger.warning(f"渠道未找到: {channel_name}")
 
         # 一次性提醒触发后标记为完成
         if reminder.repeat_rule == RepeatRule.NONE:

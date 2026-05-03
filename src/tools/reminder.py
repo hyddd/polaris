@@ -1,7 +1,10 @@
+import logging
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from datetime import datetime
+
+logger = logging.getLogger("polaris.tools.reminder")
 
 
 def create_default() -> "ReminderTool":
@@ -56,6 +59,7 @@ class ReminderTool(BaseTool):
                 return "时间格式错误，请使用 ISO 8601 格式（如 2026-05-03T09:00:00）。"
             if dt < datetime.now():
                 return "触发时间不能是过去。"
+            logger.info(f"Creating reminder: channel={_channel}, session_id={_session_id}")
             r = Reminder(
                 title=title,
                 description=description or "",
