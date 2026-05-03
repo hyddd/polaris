@@ -62,13 +62,15 @@ class PersonaTool(BaseTool):
         _session_id: str | None = None,
     ) -> str:
         from src.session.manager import get_session_manager
+        from src.context import get_session_id as _ctx_session_id
 
         session_mgr = get_session_manager()
-        # Use _session_id if provided, otherwise fall back to default
-        if _session_id:
-            session = session_mgr.get(_session_id)
+        # Priority: explicit _session_id param > context > default
+        effective_session_id = _session_id or _ctx_session_id()
+        if effective_session_id:
+            session = session_mgr.get(effective_session_id)
             if not session:
-                return f"未找到会话：{_session_id}"
+                return f"未找到会话：{effective_session_id}"
         else:
             session = session_mgr.active_session()
 

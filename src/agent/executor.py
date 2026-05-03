@@ -6,7 +6,6 @@ Supports token-level streaming via LangGraph get_stream_writer().
 
 import logging
 import time
-import contextvars
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -20,14 +19,7 @@ from src.session.manager import get_session_manager
 
 logger = logging.getLogger("polaris.tools")
 
-# Context for passing channel/session_id to tools
-_tool_context: contextvars.ContextVar[dict] = contextvars.ContextVar("tool_context", default={})
-
-
-def get_tool_context() -> dict:
-    """Get current tool context (channel, session_id, etc.)."""
-    return _tool_context.get({})
-
+from src.context import set_context as _set_ctx
 
 # --- Cached LLM instance (rebuilds when config changes) ---
 
@@ -222,7 +214,7 @@ def tool_node(state: AgentState) -> dict:
                 continue
 
         # Set tool context for tools that need channel/session info
-        _tool_context.set({"channel": channel, "session_id": current_session_id})
+        _set_ctx(channel=channel, session_id=current_session_id, user_id=channel.split(":", 1)[-1] if ":" in channel else "")
 
         start_time = time.time()
         logger.info(f"[tool] {tool_name} start args={_summarize_args(tool_args)}")

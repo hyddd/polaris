@@ -15,8 +15,11 @@ Commands:
 from src.session.manager import SessionManager
 
 
-def handle_command(text: str, session_mgr: SessionManager, channel: str = "default") -> str | None:
+def handle_command(text: str, session_mgr: SessionManager, channel: str = "") -> str | None:
     """Try to handle a system command. Returns response string, or None if not a command."""
+    from src.context import get_channel as _ctx_channel
+    channel = channel or _ctx_channel() or "default"
+
     text = text.strip()
     parts = text.split(maxsplit=1)
     cmd = parts[0]
@@ -127,9 +130,9 @@ def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
     compressor = session.compressor
     summary, recent = compressor.process(list(messages))
 
-    session.memory._messages.clear()
+    session.memory.clear_messages()
     for msg in recent:
-        session.memory._messages.append(msg)
+        session.memory.add_message(msg)
 
     before = len(messages)
     after = len(recent)

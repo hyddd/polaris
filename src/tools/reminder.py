@@ -35,11 +35,10 @@ class ReminderTool(BaseTool):
         from src.reminders.models import Reminder, RepeatRule, ReminderStatus
         from src.reminders.store import ReminderStore
         from src.config import REMINDERS_FILE
-        from src.agent.executor import get_tool_context
+        from src.context import get_channel, get_session_id
 
-        ctx = get_tool_context()
-        _channel = ctx.get("channel", "")
-        _session_id = ctx.get("session_id", "")
+        _channel = get_channel()
+        _session_id = get_session_id()
 
         store = ReminderStore(str(REMINDERS_FILE))
 
