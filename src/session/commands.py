@@ -199,7 +199,7 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
 
 
 def _reload() -> str:
-    """Re-read .env and trigger config reload event."""
+    """Re-read YAML config files and publish config:reload event."""
     try:
         from src.config import config
         config.reload()

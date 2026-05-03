@@ -20,7 +20,7 @@ def get_embedding_function():
 
     api_key = config.get("embedding.api_key", "")
     if not api_key:
-        raise RuntimeError("未配置 EMBEDDING_API_KEY，向量检索不可用。请在 .env 中配置硅基流动 API。")
+        raise RuntimeError("未配置 embedding.api_key，向量检索不可用。请在 config.yaml 中配置。")
     base_url = config.get("embedding.base_url", "")
     model = config.get("embedding.model", "netease-youdao/bce-embedding-base_v1")
     kwargs = {"api_key": api_key, "model_name": model}

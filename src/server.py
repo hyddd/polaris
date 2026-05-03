@@ -16,7 +16,6 @@ import re as _re
 import json as _json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from dotenv import dotenv_values
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
@@ -81,7 +80,7 @@ async def lifespan(app: FastAPI):
     from src.config import config
     if not config.get("llm.api_key", ""):
         raise RuntimeError(
-            "LLM_API_KEY 未配置。请在环境变量或 .env 文件中设置 OPENAI_API_KEY。"
+            "LLM API Key 未配置。请在 data/config.local.yaml 中设置 llm.api_key。"
         )
 
     global _tools_registered
@@ -461,29 +460,6 @@ def delete_session(session_id: str):
 
 # --- Admin API: Config management ---
 
-# Whitelist of config keys that can be written via the admin API.
-# Unknown keys are rejected to prevent environment variable injection.
-ALLOWED_CONFIG_KEYS: set[str] = {
-    "LLM_MODEL",
-    "LLM_API_KEY",
-    "LLM_BASE_URL",
-    "ADMIN_TOKEN",
-    "CHAT_TOKEN",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "EMBEDDING_API_KEY",
-    "EMBEDDING_BASE_URL",
-    "EMBEDDING_MODEL",
-    "DATA_DIR",
-    "CHROMA_PERSIST_DIR",
-    "POLARIS_MODEL_MAX_CONTEXT",
-    "POLARIS_COMPRESSION_THRESHOLD",
-    "GOOGLE_CALENDAR_CREDENTIALS_PATH",
-    "GOOGLE_CALENDAR_ID",
-    "FEISHU_APP_ID",
-    "FEISHU_APP_SECRET",
-}
-
 _SENSITIVE_KEY_PATTERN = _re.compile(r"KEY|SECRET|TOKEN|PASSWORD", _re.IGNORECASE)
 
 
@@ -492,20 +468,31 @@ def _is_sensitive_key(key: str) -> bool:
 
 
 def _mask_value(key: str, value: str) -> str:
-    """Fully mask sensitive values — leak no characters."""
     if _is_sensitive_key(key):
         return "****"
-    return value
+    return str(value)
 
 
 @app.get("/api/config")
 def get_config():
-    env_path = Path(__file__).parent.parent / ".env"
-    if not env_path.exists():
-        return {"vars": {}}
-    values = dotenv_values(env_path)
-    masked = {k: _mask_value(k, v) for k, v in values.items()}
+    from src.config import config
+    cfg = config._data
+    lines = []
+    _flatten_config(cfg, "", lines)
+    masked = {}
+    for key, value in lines:
+        masked[key] = _mask_value(key, value)
     return {"vars": masked}
+
+
+def _flatten_config(d: dict, prefix: str, out: list):
+    """递归展平 YAML 配置树为 key=value 列表。"""
+    for k, v in d.items():
+        full_key = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, dict):
+            _flatten_config(v, full_key, out)
+        else:
+            out.append((full_key, v))
 
 
 class ConfigUpdate(BaseModel):
@@ -514,21 +501,33 @@ class ConfigUpdate(BaseModel):
 
 @app.post("/api/config")
 def update_config(req: ConfigUpdate):
-    unknown_keys = set(req.vars.keys()) - ALLOWED_CONFIG_KEYS
-    if unknown_keys:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Rejected unknown config keys: {', '.join(sorted(unknown_keys))}",
-        )
-    env_path = Path(__file__).parent.parent / ".env"
-    existing = dotenv_values(env_path) if env_path.exists() else {}
-    existing.update(req.vars)
-    lines = [f"{k}={v}" for k, v in existing.items()]
-    _atomic_write(env_path, "\n".join(lines) + "\n")
-    # Reload config module so changes take effect immediately
+    import yaml
     from src.config import config
+
+    # Write to config.local.yaml to override defaults
+    local_path = config._local_path
+    local_data = {}
+    if local_path.exists():
+        local_data = yaml.safe_load(local_path.read_text(encoding="utf-8")) or {}
+
+    for key, value in req.vars.items():
+        _set_nested(local_data, key, value)
+
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_text(
+        yaml.dump(local_data, allow_unicode=True, default_flow_style=False),
+        encoding="utf-8",
+    )
     config.reload()
     return {"ok": True}
+
+
+def _set_nested(d: dict, key: str, value) -> None:
+    """将点号分隔的 key 写入嵌套 dict 中。"""
+    keys = key.split(".")
+    for k in keys[:-1]:
+        d = d.setdefault(k, {})
+    d[keys[-1]] = value
 
 
 # --- Admin API: Data management ---

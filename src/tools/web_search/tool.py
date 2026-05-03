@@ -28,7 +28,7 @@ class WebSearchTool(BaseTool):
 
     def _run(self, query: str, num_results: int = 3) -> str:
         if not self.api_key:
-            return "搜索功能未配置。请在 .env 中设置 SEARCH_API_KEY。"
+            return "搜索功能未配置。请在 config.yaml 中设置 tools.web_search.api_key。"
 
         try:
             import httpx

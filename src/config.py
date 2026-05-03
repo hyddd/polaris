@@ -93,6 +93,7 @@ class Config:
 
     def __init__(self):
         self._data: dict = {}
+        self._local_path = _LOCAL_CONFIG_FILE
 
     def load(self) -> None:
         """Load (or reload) configuration from YAML files."""
