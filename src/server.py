@@ -122,6 +122,18 @@ async def lifespan(app: FastAPI):
     set_reminder_service(reminder_service)
     set_reminder_store(reminder_store)
 
+    # 数据清理定时任务（每天凌晨 3:00）
+    from apscheduler.triggers.cron import CronTrigger
+    from src.cleanup import DataCleanup
+    cleanup = DataCleanup()
+    reminder_scheduler.scheduler.add_job(
+        cleanup.run,
+        trigger=CronTrigger(hour=3, minute=0),
+        id="data-cleanup",
+        replace_existing=True,
+    )
+    logger.info("数据清理任务已注册: 每天 03:00")
+
     app.state.reminder_scheduler = reminder_scheduler
     app.state.reminder_store = reminder_store
 
