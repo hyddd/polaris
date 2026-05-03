@@ -213,6 +213,7 @@ def tool_node(state: AgentState) -> dict:
                 continue
 
         tool_args["_session_id"] = current_session_id
+        tool_args["_channel"] = channel
 
         start_time = time.time()
         logger.info(f"[tool] {tool_name} start args={_summarize_args(tool_args)}")

@@ -12,7 +12,12 @@ class ReminderHandler:
         """处理提醒触发"""
         message = self._format_message(reminder)
 
-        # 获取渠道并发送消息
+        # admin 渠道特殊处理：写入 session 消息
+        if reminder.channel == "admin":
+            self._push_to_admin_session(reminder, message)
+            return
+
+        # 其他渠道：通过 channel 插件发送
         channel = self._get_channel(reminder.channel)
         if channel:
             success = channel.send_message(
@@ -25,6 +30,25 @@ class ReminderHandler:
                 logger.warning(f"提醒推送失败: {reminder.id}")
         else:
             logger.warning(f"渠道未找到: {reminder.channel}")
+
+        # 一次性提醒触发后标记为完成
+        if reminder.repeat_rule == RepeatRule.NONE:
+            reminder.status = ReminderStatus.CANCELLED
+
+    def _push_to_admin_session(self, reminder: Reminder, message: str):
+        """将提醒推送到 admin session"""
+        try:
+            from src.session.manager import get_session_manager
+            session_mgr = self.session_manager or get_session_manager()
+            session = session_mgr.get(reminder.session_id)
+            if session:
+                from langchain_core.messages import AIMessage
+                session.memory.add_message(AIMessage(content=message))
+                logger.info(f"提醒已推送到 admin session: {reminder.id}")
+            else:
+                logger.warning(f"Session 未找到: {reminder.session_id}")
+        except Exception as e:
+            logger.warning(f"推送到 admin session 失败: {e}")
 
         # 一次性提醒触发后标记为完成
         if reminder.repeat_rule == RepeatRule.NONE:
