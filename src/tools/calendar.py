@@ -5,7 +5,6 @@ from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from pathlib import Path
-from datetime import datetime, timedelta
 
 logger = logging.getLogger("polaris.tools.calendar")
 
@@ -189,16 +188,10 @@ class GoogleCalendarTool(BaseTool):
 
     def _create_event_reminder(self, event: dict, date: str):
         """为日程创建关联提醒（提前15分钟）"""
-        from src.reminders.models import Reminder, RepeatRule
-        from src.reminders.store import ReminderStore
-        from src.config import REMINDERS_FILE
         from src.context import get_channel, get_session_id
+        from src.reminders import get_reminder_service
 
         try:
-            event_datetime = datetime.strptime(f"{date} {event.get('time', '09:00')}", "%Y-%m-%d %H:%M")
-            reminder_time = event_datetime - timedelta(minutes=15)
-
-            # 从 context 获取 channel 和 session_id
             channel = get_channel()
             session_id = get_session_id()
 
@@ -208,46 +201,20 @@ class GoogleCalendarTool(BaseTool):
             if not session_id:
                 session_id = event.get("reminder_session_id", "")
 
-            from src.reminders.models import ReminderStatus
-
-            # 如果提醒时间已过，标记为已取消
-            is_past = reminder_time <= datetime.now()
-            status = ReminderStatus.CANCELLED if is_past else ReminderStatus.ACTIVE
-
-            reminder = Reminder(
-                title=f"{event['title']} 即将开始",
-                description=f"日程「{event['title']}」将在15分钟后开始",
-                trigger_time=reminder_time,
-                repeat_rule=RepeatRule.NONE,
-                event_id=event["id"],
-                channel=channel or "admin",
-                session_id=session_id or "",
-                status=status,
+            service = get_reminder_service()
+            event_time_str = f"{date} {event.get('time', '09:00')}"
+            reminder_id = service.create_event_reminder(
+                event["title"], event_time_str, event["id"], channel, session_id
             )
-            store = ReminderStore(str(REMINDERS_FILE))
-            store.create(reminder)
-
-            # 只有未来的提醒才添加到调度器
-            if not is_past:
-                from src.reminders import get_scheduler
-                scheduler = get_scheduler()
-                if scheduler:
-                    scheduler.add_reminder(reminder)
-
-            # 保存提醒ID和channel到日程
-            event["reminder_id"] = reminder.id
+            if reminder_id:
+                event["reminder_id"] = reminder_id
             event["reminder_channel"] = channel
             event["reminder_session_id"] = session_id
-            logger.info(f"已创建日程关联提醒: {reminder.id} @ {reminder_time} (past={is_past})")
         except Exception as e:
             logger.error(f"创建日程关联提醒失败: {e}")
 
     def _update_event_reminder(self, event: dict, date: str, updates: dict, path=None, data=None):
         """更新日程关联提醒的时间"""
-        from src.reminders.store import ReminderStore
-        from src.reminders.models import ReminderStatus
-        from src.config import REMINDERS_FILE
-
         reminder_id = event.get("reminder_id")
         if not reminder_id:
             # 旧日程没有关联提醒，补创建一个
@@ -258,63 +225,13 @@ class GoogleCalendarTool(BaseTool):
                 save_json(path, data)
             return
 
-        # 只在时间或日期变化时更新
-        if "time" not in updates and "date" not in updates:
-            logger.info(f"时间/日期没有变化，跳过更新提醒")
-            return
-
-        try:
-            store = ReminderStore(str(REMINDERS_FILE))
-            reminder = store.get(reminder_id)
-            if not reminder:
-                logger.warning(f"提醒不存在: {reminder_id}")
-                return
-
-            event_time = event.get('time', '09:00')
-            logger.info(f"更新提醒 - date: {date}, event_time: {event_time}, updates: {updates}")
-            event_datetime = datetime.strptime(f"{date} {event_time}", "%Y-%m-%d %H:%M")
-            new_reminder_time = event_datetime - timedelta(minutes=15)
-
-            # 更新提醒时间和标题
-            new_title = f"{event['title']} 即将开始"
-            store.update(reminder_id, trigger_time=new_reminder_time, title=new_title)
-
-            # 重新获取更新后的 reminder 对象
-            reminder = store.get(reminder_id)
-
-            # 如果新时间在未来，重新激活提醒
-            if new_reminder_time > datetime.now():
-                store.update(reminder_id, status=ReminderStatus.ACTIVE)
-                reminder = store.get(reminder_id)
-
-            # 更新调度器
-            from src.reminders import get_scheduler
-            scheduler = get_scheduler()
-            if scheduler:
-                scheduler.remove_reminder(reminder_id)
-                if new_reminder_time > datetime.now():
-                    scheduler.add_reminder(reminder)
-
-            logger.info(f"已更新日程关联提醒: {reminder_id} @ {new_reminder_time}")
-        except Exception as e:
-            logger.error(f"更新日程关联提醒失败: {e}")
+        # 正常更新逻辑委托给 ReminderService
+        from src.reminders import get_reminder_service
+        service = get_reminder_service()
+        service.update_event_reminder(event, date, updates)
 
     def _delete_event_reminder(self, event: dict):
         """删除日程关联提醒"""
-        from src.reminders.store import ReminderStore
-        from src.config import REMINDERS_FILE
-
-        reminder_id = event.get("reminder_id")
-        if not reminder_id:
-            return
-
-        try:
-            store = ReminderStore(str(REMINDERS_FILE))
-            if store.delete(reminder_id):
-                from src.reminders import get_scheduler
-                scheduler = get_scheduler()
-                if scheduler:
-                    scheduler.remove_reminder(reminder_id)
-                logger.info(f"已删除日程关联提醒: {reminder_id}")
-        except Exception as e:
-            logger.error(f"删除日程关联提醒失败: {e}")
+        from src.reminders import get_reminder_service
+        service = get_reminder_service()
+        service.delete_event_reminder(event)

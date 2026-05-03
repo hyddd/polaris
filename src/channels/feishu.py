@@ -259,7 +259,9 @@ class FeishuChannel(ChannelPlugin):
         try:
             if self._bot:
                 self._bot._send_message(session_id, message)
-            return True
+                return True
+            logger.warning("飞书 bot 未初始化，无法发送消息")
+            return False
         except Exception as e:
             logger.warning(f"飞书发送消息失败: {e}")
             return False

@@ -93,7 +93,8 @@ async def lifespan(app: FastAPI):
     from src.reminders.store import ReminderStore
     from src.reminders.scheduler import ReminderScheduler
     from src.reminders.handlers import ReminderHandler
-    from src.reminders import set_scheduler
+    from src.reminders import set_scheduler, set_reminder_service
+    from src.reminders.service import ReminderService
     from src.config import REMINDERS_FILE
 
     reminder_store = ReminderStore(str(REMINDERS_FILE))
@@ -102,6 +103,9 @@ async def lifespan(app: FastAPI):
     reminder_scheduler = ReminderScheduler(reminder_store, reminder_handler)
     reminder_scheduler.start()
     set_scheduler(reminder_scheduler)
+
+    reminder_service = ReminderService(reminder_store, reminder_scheduler)
+    set_reminder_service(reminder_service)
 
     app.state.reminder_scheduler = reminder_scheduler
     app.state.reminder_store = reminder_store
@@ -228,7 +232,7 @@ def chat(req: ChatRequest):
 
 
 @app.post("/chat/stream")
-async def chat_stream(req: ChatRequest):
+async def chat_stream(req: ChatRequest, request: Request):
     """SSE streaming — node-level progress via LangGraph astream.
 
     Yields events as each graph node completes:
@@ -307,6 +311,10 @@ async def chat_stream(req: ChatRequest):
             _set_ctx(channel=channel, session_id=session.session_id, user_id=user_id)
             async for event in agent.astream_events(state, version="v2"):
                 kind = event.get("event", "")
+
+                # 客户端断连时主动停止，避免锁一直不释放
+                if await request.is_disconnected():
+                    break
 
                 # Token-level streaming from LLM
                 if kind == "on_chat_model_stream":
