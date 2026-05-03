@@ -3,6 +3,7 @@
 import importlib
 import inspect
 import logging
+import threading
 
 logger = logging.getLogger("polaris.channels")
 
@@ -40,9 +41,18 @@ def discover_and_start() -> list:
             for _, obj in inspect.getmembers(mod, inspect.isclass):
                 if issubclass(obj, ChannelPlugin) and obj is not ChannelPlugin:
                     ch = obj()
-                    ch.start()
+                    if not ch.is_configured():
+                        logger.info(f"[{ch_name}] 未配置凭证，跳过启动")
+                        channels.append(ch)
+                        break
+                    # Channel.start() 通常是阻塞调用，在守护线程中运行
+                    t = threading.Thread(
+                        target=ch.start, daemon=True,
+                        name=f"channel-{ch_name}"
+                    )
+                    t.start()
                     channels.append(ch)
-                    logger.info(f"[{ch_name}] 已启动")
+                    logger.info(f"[{ch_name}] 已后台启动")
                     break
         except Exception as e:
             logger.error(f"[{ch_name}] 加载失败: {e}")

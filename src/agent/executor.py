@@ -54,7 +54,7 @@ def _get_llm() -> ChatOpenAI:
         config.get("llm.base_url", "https://api.openai.com/v1"),
     )
     if _llm_cache is None or _llm_cache_key != key:
-        _llm_cache = create_chat_model(temperature=0.3)
+        _llm_cache = create_chat_model(temperature=0.3, streaming=True)
         _llm_cache_key = key
     return _llm_cache
 

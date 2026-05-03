@@ -28,7 +28,7 @@ class PolarisFeishuBot:
         app_id = config.get("channels.feishu.app_id", "")
         app_secret = config.get("channels.feishu.app_secret", "")
         if not app_id or not app_secret:
-            raise ValueError("请在 .env 中配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET")
+            raise ValueError("请在 config.yaml 中配置 channels.feishu.app_id 和 app_secret")
 
         self.app_id = app_id
         self.app_secret = app_secret
