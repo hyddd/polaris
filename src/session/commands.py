@@ -219,18 +219,9 @@ def _reload() -> str:
 
 def _cleanup() -> str:
     try:
-        from src.cleanup import DataCleanup
-        cleanup = DataCleanup()
-        summary = cleanup.run()
-        if not summary.get("enabled", True):
-            return "清理功能已禁用。"
-
-        lines = ["数据清理完成："]
-        lines.append(f"• 提醒: 归档 {summary.get('reminders', 0)} 条")
-        lines.append(f"• 日程: 归档 {summary.get('calendar', 0)} 条")
-        lines.append(f"• 待办: 归档 {summary.get('todos', 0)} 条")
-        lines.append(f"• 过期归档文件: 删除 {summary.get('archive_deleted', 0)} 个")
-        return "\n".join(lines)
+        from src.events import event_bus
+        event_bus.publish("cleanup:now")
+        return "已触发数据清理，各模块正在处理。"
     except Exception as e:
         return f"数据清理失败：{e}"
 

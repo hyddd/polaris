@@ -122,12 +122,15 @@ async def lifespan(app: FastAPI):
     # 注册提醒调度任务
     reminder_setup(cron, reminder_store, reminder_handler)
 
-    # 注册清理定时任务
-    from src.cleanup import DataCleanup
-    cleanup = DataCleanup()
-    cron.add_cron_job(cleanup.run, id="data-cleanup", hour=3, minute=0)
+    # 每日维护事件（各模块自行订阅处理：清理、健康检查等）
+    from src.events import event_bus
+
+    def _daily_tick():
+        event_bus.publish("cleanup:cron")
+
+    cron.add_cron_job(_daily_tick, id="daily-tick", hour=3, minute=0)
     srv_logger = logging.getLogger("polaris.server")
-    srv_logger.info("数据清理任务已注册: 每天 03:00")
+    srv_logger.info("每日维护事件已注册: 每天 03:00")
 
     app.state.reminder_scheduler = cron
     app.state.reminder_store = reminder_store
