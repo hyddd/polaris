@@ -56,6 +56,7 @@ class SessionInfo(BaseModel):
 
 # Enable HTTP request logging for LLM API calls
 import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
 logging.getLogger("httpx").setLevel(logging.INFO)
 logging.getLogger("openai").setLevel(logging.INFO)
 
