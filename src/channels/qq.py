@@ -130,9 +130,43 @@ class QQChannel(ChannelPlugin):
             logger.info("[qq] 已停止")
 
     def send_message(self, session_id: str, message: str) -> bool:
+        """主动发送消息给用户。session_id 格式: qq:{openid}"""
         try:
-            # TODO: 实现 QQ 主动发送消息的逻辑
-            return True
+            if not self._client:
+                logger.warning("QQ Bot 未启动")
+                return False
+
+            # 从 session_id 或 active.json 中获取 openid
+            # session_id 格式可能是 "sess_xxx"，需要从 active.json 反查
+            from src.session.manager import get_session_manager
+            session_mgr = get_session_manager()
+
+            # 尝试从 session_id 找到对应的 channel (qq:{openid})
+            openid = None
+            for ch, sid in session_mgr._active_ids.items():
+                if sid == session_id and ch.startswith("qq:"):
+                    openid = ch.split(":", 1)[1]
+                    break
+
+            if not openid:
+                logger.warning(f"未找到 session {session_id} 对应的 QQ openid")
+                return False
+
+            # 使用 asyncio 发送消息
+            import asyncio
+            loop = asyncio.new_event_loop()
+            try:
+                md = {"content": message}
+                coro = self._client.api.post_c2c_message(
+                    openid=openid,
+                    msg_type=2,
+                    markdown=md,
+                )
+                loop.run_until_complete(coro)
+                logger.info(f"QQ 消息已发送到 {openid}")
+                return True
+            finally:
+                loop.close()
         except Exception as e:
             logger.warning(f"QQ发送消息失败: {e}")
             return False
