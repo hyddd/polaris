@@ -153,9 +153,9 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
     messages = session.memory.get_history()
     compressor = session.compressor
 
-    message_tokens = compressor._count_tokens(messages)
+    used = compressor.estimate_total_tokens(messages)
     model_max = compressor.model_max_context
-    pct = (message_tokens / model_max * 100) if model_max else 0
+    pct = (used / model_max * 100) if model_max else 0
 
     user_msgs = sum(1 for m in messages if m.type == "human")
     ai_msgs = sum(1 for m in messages if m.type == "ai")
@@ -164,7 +164,7 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
         f"📊 「{session.name}」会话状态",
         "",
         f"• 消息: {len(messages)} (用户:{user_msgs} AI:{ai_msgs})",
-        f"• Token: {message_tokens:,} / {model_max:,} ({pct:.1f}%)",
+        f"• Token: {used:,} / {model_max:,} ({pct:.1f}%)",
         f"• 压缩摘要: {'已生成' if compressor.summary else '暂无'}",
         "",
         f"• ID: {session.session_id}",

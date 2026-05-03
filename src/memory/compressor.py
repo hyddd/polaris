@@ -37,6 +37,10 @@ class ConversationCompressor:
         self.summary = ""
         self._summary_tokens = 0
 
+    def estimate_total_tokens(self, messages: list[BaseMessage]) -> int:
+        """估算完整的上下文 token 数：消息 + 摘要 + 系统/工具保留量。"""
+        return self._count_tokens(messages) + self._summary_tokens + RESERVE_TOKENS
+
     def process(self, messages: list[BaseMessage]) -> tuple[str, list[BaseMessage]]:
         """Process messages. Only compresses when total tokens exceed trigger.
 
