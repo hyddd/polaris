@@ -36,10 +36,11 @@ class ConversationCompressor:
         self.compress_trigger = int(model_max_context * compression_threshold)
         self.summary = ""
         self._summary_tokens = 0
+        self._last_total = 0  # actual total from last process() call
 
     def estimate_total_tokens(self, messages: list[BaseMessage]) -> int:
-        """估算完整的上下文 token 数：消息 + 摘要 + 系统/工具保留量。"""
-        return self._count_tokens(messages) + self._summary_tokens + RESERVE_TOKENS
+        """估算完整的上下文 token 数（最近一次 agent 调用时实际使用的值）。"""
+        return self._last_total
 
     def process(self, messages: list[BaseMessage]) -> tuple[str, list[BaseMessage]]:
         """Process messages. Only compresses when total tokens exceed trigger.
@@ -52,6 +53,7 @@ class ConversationCompressor:
         total_tokens = self._count_tokens(messages) + self._summary_tokens + RESERVE_TOKENS
 
         if total_tokens <= self.compress_trigger:
+            self._last_total = total_tokens
             return self.summary, list(messages)
 
         # Need compression: take oldest messages until we're under budget
@@ -72,6 +74,7 @@ class ConversationCompressor:
             self.summary = self._summarize(self.summary, [recent.pop(0)])
             self._summary_tokens = self._count_tokens_str(self.summary)
 
+        self._last_total = self._count_tokens(recent) + self._summary_tokens + RESERVE_TOKENS
         return self.summary, recent
 
     def _find_split_point(self, messages: list[BaseMessage], target_tokens: int) -> int:

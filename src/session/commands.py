@@ -153,7 +153,7 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
     messages = session.memory.get_history()
     compressor = session.compressor
 
-    used = compressor.estimate_total_tokens(messages)
+    used = compressor.estimate_total_tokens(messages) if messages else 0
     model_max = compressor.model_max_context
     pct = (used / model_max * 100) if model_max else 0
 
