@@ -98,8 +98,8 @@ async def lifespan(app: FastAPI):
         pass
 
     # Discover and start channel plugins (YAML-config driven)
-    from src.channels import _discover_and_start, _discovered_channels, _stop_all
-    _discover_and_start()
+    from src.channels import discover_and_start, _discovered_channels, stop_all
+    discover_and_start()
 
     # 初始化提醒模块
     from src.reminders.store import ReminderStore
@@ -127,7 +127,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 停止所有 channel
-    _stop_all()
+    stop_all()
 
     # 清理提醒调度器
     reminder_scheduler.shutdown()
