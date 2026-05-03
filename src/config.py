@@ -11,16 +11,21 @@ NOTES_DIR = DATA_DIR / "notes"
 ARCHIVE_DIR = NOTES_DIR / "archive"
 CALENDAR_FILE = DATA_DIR / "calendar.json"
 TODOS_FILE = DATA_DIR / "todos.json"
+REMINDERS_FILE = DATA_DIR / "reminders.json"
 PROFILE_FILE = DATA_DIR / "user_profile.json"
 
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
-LLM_API_KEY = os.getenv("OPENAI_API_KEY", "sk-placeholder")
+LLM_API_KEY = os.getenv("OPENAI_API_KEY")
 LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 GCAL_CREDENTIALS = os.getenv("GOOGLE_CALENDAR_CREDENTIALS_PATH")
 GCAL_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+CHAT_TOKEN = os.getenv("CHAT_TOKEN", "")
+
+SEARCH_API_KEY = os.getenv("SEARCH_API_KEY", "")
+SEARCH_API_BASE = os.getenv("SEARCH_API_BASE", "https://api.tavily.com")
 
 # --- Config reload event system ---
 
@@ -37,7 +42,7 @@ def reload() -> dict:
 
     Returns a dict of changed values for display.
     """
-    global LLM_MODEL, LLM_API_KEY, LLM_BASE_URL, ADMIN_TOKEN
+    global LLM_MODEL, LLM_API_KEY, LLM_BASE_URL, ADMIN_TOKEN, CHAT_TOKEN
 
     load_dotenv(override=True)
 
@@ -47,9 +52,10 @@ def reload() -> dict:
     }
 
     LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
-    LLM_API_KEY = os.getenv("OPENAI_API_KEY", "sk-placeholder")
+    LLM_API_KEY = os.getenv("OPENAI_API_KEY")
     LLM_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+    CHAT_TOKEN = os.getenv("CHAT_TOKEN", "")
 
     changes = {}
     if old["LLM_MODEL"] != LLM_MODEL:
@@ -67,6 +73,6 @@ def reload() -> dict:
     return {
         "LLM_MODEL": LLM_MODEL,
         "LLM_BASE_URL": LLM_BASE_URL,
-        "API_KEY_SET": bool(LLM_API_KEY and LLM_API_KEY != "sk-placeholder"),
+        "API_KEY_SET": bool(LLM_API_KEY),
         "changes": changes,
     }
