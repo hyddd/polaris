@@ -80,6 +80,11 @@ class ReminderService:
                 new_title = f"{title} 即将开始"
 
                 self._store.update(reminder.id, trigger_time=new_reminder_time, title=new_title)
+
+                if new_reminder_time > datetime.now():
+                    # 日程推迟到未来 → 重新激活已触发的提醒
+                    self._store.update(reminder.id, status=ReminderStatus.ACTIVE)
+
                 reminder = self._store.get(reminder.id)
 
                 if self._scheduler:
