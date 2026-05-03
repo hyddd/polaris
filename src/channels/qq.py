@@ -152,21 +152,28 @@ class QQChannel(ChannelPlugin):
                 logger.warning("openid 为空")
                 return False
 
-            # 使用 asyncio 发送消息
+            # 使用 botpy 的事件循环发送消息
             import asyncio
-            loop = asyncio.new_event_loop()
-            try:
+
+            async def _send():
                 md = {"content": message}
-                coro = self._client.api.post_c2c_message(
+                await self._client.api.post_c2c_message(
                     openid=openid,
                     msg_type=2,
                     markdown=md,
                 )
-                loop.run_until_complete(coro)
-                logger.info(f"QQ 消息已发送到 {openid}")
-                return True
-            finally:
-                loop.close()
+
+            # 获取当前运行的事件循环
+            try:
+                loop = asyncio.get_running_loop()
+                # 如果有运行中的事件循环，创建任务
+                loop.create_task(_send())
+            except RuntimeError:
+                # 没有运行中的事件循环，直接运行
+                asyncio.run(_send())
+
+            logger.info(f"QQ 消息已发送到 {openid}")
+            return True
         except Exception as e:
             logger.warning(f"QQ发送消息失败: {e}")
             return False
