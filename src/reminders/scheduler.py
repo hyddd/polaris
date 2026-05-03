@@ -3,7 +3,7 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from .models import Reminder, RepeatRule
+from .models import Reminder, RepeatRule, ReminderStatus
 
 logger = logging.getLogger("polaris.reminders.scheduler")
 
@@ -44,6 +44,10 @@ class ReminderScheduler:
 
         # 如果时间已过且是一次性提醒，立即触发
         if reminder.trigger_time <= now and reminder.repeat_rule == RepeatRule.NONE:
+            # 检查状态，避免重复触发
+            if reminder.status != ReminderStatus.ACTIVE:
+                logger.info(f"提醒已触发过，跳过: {reminder.id} - {reminder.status}")
+                return
             logger.info(f"提醒时间已过，立即触发: {reminder.id} - {reminder.title}")
             try:
                 self.handler.handle(reminder)
