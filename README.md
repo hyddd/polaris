@@ -99,6 +99,77 @@ QQ Bot ────────┘   │ SessionManager   │────▶│ 
                    └──────────────────┘
 ```
 
+## 开发须知：事件系统与模块开发
+
+### EventBus 发布订阅机制
+
+通过 `src/events.py` 提供的事件总线实现模块间零耦合通信。框架层发布事件，各模块订阅处理。
+
+```python
+from src.events import event_bus
+
+# 订阅
+event_bus.subscribe("cleanup:now", my_cleanup_handler)
+
+# 发布
+event_bus.publish("config:reload")
+```
+
+**订阅在模块的 `__init__.py` 中进行**，模块被 import 时自动完成订阅，无需手动调用初始化函数。
+
+### 支持的事件
+
+| 事件 | 发布者 | 发布时机 | 订阅者 |
+|------|--------|----------|--------|
+| `config:reload` | `src/config.py` | `/reload` 命令后 | executor（清 LLM 缓存） |
+| `cleanup:now` | `src/session/commands.py` | `/cleanup` 命令 | 各 tools 模块清理过期数据 |
+| `cleanup:cron` | `src/server.py` | 每天凌晨 3:00 | 各 tools 模块清理过期数据 |
+
+### 新增事件的约定
+
+1. 事件名格式：`<域>:<动作>`，如 `cleanup:now`、`config:reload`
+2. 发布者不需要知道订阅者是谁
+3. 订阅者在 `__init__.py` 中调用 `event_bus.subscribe(...)`，在模块顶层执行
+4. 处理器函数签名 `def handler(**kwargs)`，便于未来扩展参数
+
+### 新增一个工具的步骤
+
+以新增"天气工具"为例：
+
+1. 创建 `src/tools/weather/tool.py`，实现 `WeatherTool(BaseTool)` + `create_default()`
+2. 创建 `src/tools/weather/__init__.py`：
+   ```python
+   from .tool import WeatherTool, create_default
+   ```
+3. 如需清理旧数据，在 `__init__.py` 中订阅事件：
+   ```python
+   from .tool import WeatherTool, create_default
+   from src.events import event_bus
+
+   def _on_cleanup(**kwargs):
+       # 清理过期天气缓存...
+       pass
+
+   event_bus.subscribe("cleanup:now", _on_cleanup)
+   event_bus.subscribe("cleanup:cron", _on_cleanup)
+   ```
+4. 无需修改 `server.py`、`config.py` 或任何其它文件。`ToolRegistry` 自动发现。
+
+### 新增一个通道的步骤
+
+1. 创建 `src/channels/wechat/client.py`，实现 `WechatChannel(ChannelPlugin)`
+2. 创建 `src/channels/wechat/__init__.py`：`from .client import WechatChannel`
+3. 在 `data/config.yaml` 添加配置：
+   ```yaml
+   channels:
+     wechat:
+       plugin: "src.channels.wechat"
+       enabled: true
+       corp_id: ""
+       corp_secret: ""
+   ```
+4. 无需修改任何 Python 框架代码。YAML 驱动动态加载。
+
 ## 快速开始
 
 ### 环境要求
@@ -118,12 +189,12 @@ source venv/bin/activate
 # 安装依赖
 pip install -e ".[dev]"
 
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env，至少填入：
-#   OPENAI_API_KEY=sk-xxx
-#   OPENAI_BASE_URL=https://api.openai.com/v1
-#   LLM_MODEL=gpt-4o
+# 配置
+cp data/config.local.yaml.example data/config.local.yaml
+# 编辑 config.local.yaml，至少填入：
+#   llm.api_key: sk-xxx
+#   llm.base_url: https://api.openai.com/v1
+#   llm.model: gpt-4o
 ```
 
 ### 启动
@@ -138,22 +209,6 @@ python run.py
 ```
 
 ### 启用通道
-
-```env
-# 飞书
-FEISHU_APP_ID=cli_xxxxxxxx
-FEISHU_APP_SECRET=xxxxxxxx
-
-# QQ
-QQ_BOT_APPID=1903763025
-QQ_BOT_SECRET=xxxxxxxx
-
-# Web 搜索（可选）
-SEARCH_API_KEY=tvly-xxxxxxxx
-
-# Chat API 认证（可选）
-CHAT_TOKEN=your-secret-token
-```
 
 ## 能力矩阵
 
@@ -180,6 +235,7 @@ CHAT_TOKEN=your-secret-token
 | `/compact` | 手动触发上下文压缩 |
 | `/reset` | 重置当前会话记忆 |
 | `/reload` | 热重载配置（无需重启） |
+| `/cleanup` | 手动触发数据清理/归档 |
 | `/help` | 显示帮助 |
 
 ## 技术栈
@@ -190,7 +246,8 @@ CHAT_TOKEN=your-secret-token
 | LLM | ChatOpenAI（可替换，支持 DeepSeek 等兼容 API） |
 | 工具定义 | LangChain BaseTool + Pydantic args_schema |
 | 向量检索 | ChromaDB + Embedding API（OpenAI 兼容） |
-| 定时调度 | APScheduler（BackgroundScheduler） |
+| 定时调度 | APScheduler → CronScheduler（src/cron） |
+| 模块通信 | EventBus 发布订阅 |
 | Web 服务 | FastAPI + SSE |
 | 管理后台 | Vue 3 + Vite + Element Plus + Pinia |
 | Bot 通道 | 飞书 WebSocket（lark-oapi）、QQ（botpy） |
@@ -214,9 +271,16 @@ Polaris/
 │   └── dist/                   # 构建产物
 │
 ├── src/
-│   ├── server.py               # FastAPI Agent Server
-│   ├── config.py               # 配置中心（热重载）
+│   ├── server.py               # FastAPI Agent Server（不依赖具体 tools/channels）
+│   ├── config.py               # YAML 配置中心（热重载），无模块级业务变量
 │   ├── context.py              # contextvars 上下文传播
+│   ├── events.py               # EventBus 发布订阅（框架与模块解耦）
+│   ├── handler.py              # 消息处理入口
+│   ├── lock.py                  # per-session 异步锁
+│   ├── llm/                     # LLM Provider 抽象
+│   ├── cron/                    # 通用定时调度（无关业务）
+│   ├── storage/                 # 存储层抽象（DataStore + 原子写入）
+│   ├── middleware/              # Auth / RateLimit 中间件
 │   │
 │   ├── agent/
 │   │   ├── graph.py            # LangGraph 图组装
@@ -226,38 +290,32 @@ Polaris/
 │   │
 │   ├── session/
 │   │   ├── manager.py          # 多会话管理 + 持久化
-│   │   └── commands.py         # 系统命令
+│   │   └── commands.py         # 系统命令（/cleanup 等发事件）
 │   │
-│   ├── channels/
-│   │   ├── __init__.py         # ChannelPlugin + ChannelManager
-│   │   ├── feishu.py           # 飞书（超长消息自动分段）
-│   │   └── qq.py               # QQ（主动消息推送）
+│   ├── channels/               # YAML 驱动加载，每个 channel 独立子目录
+│   │   ├── base.py             # ChannelPlugin 基类
+│   │   ├── loader.py           # YAML → 动态加载 + is_configured 检查
+│   │   ├── feishu/             # 飞书（WebSocket Bot，超长消息分段）
+│   │   └── qq/                 # QQ（botpy SDK）
 │   │
-│   ├── tools/                  # 工具自动发现
-│   │   ├── registry.py         # ToolRegistry 单例
-│   │   ├── calendar.py         # 日程（关联提醒）
-│   │   ├── todos.py            # 待办
-│   │   ├── notes.py            # 笔记
-│   │   ├── reminder.py         # 定时提醒
-│   │   ├── web_search.py       # 联网搜索
-│   │   ├── persona.py          # 人设配置
-│   │   └── rag.py              # RAG 语义搜索
+│   ├── tools/                  # 每个 tool 独立子目录，自动发现
+│   │   ├── _utils.py           # find_by_id_or_title
+│   │   ├── registry.py         # ToolRegistry 单例（扫描子目录）
+│   │   ├── calendar/           # 日程（关联提醒 + 清理过期）
+│   │   ├── todos/              # 待办
+│   │   ├── notes/              # 笔记
+│   │   ├── reminder/           # 定时提醒（模型/存储/调度/推送/清理）
+│   │   ├── web_search/         # 联网搜索
+│   │   ├── persona/            # 人设配置
+│   │   └── rag/                # RAG 语义搜索
 │   │
-│   ├── reminders/
-│   │   ├── models.py           # Reminder 数据模型
-│   │   ├── store.py            # JSON 持久化存储
-│   │   ├── scheduler.py        # APScheduler 调度器
-│   │   └── handlers.py         # 提醒触发 → 渠道推送
-│   │
-│   ├── memory/
-│   │   ├── store.py            # 对话记忆
-│   │   └── compressor.py       # Token 预算压缩
-│   │
-│   └── data_layer/
-│       ├── loader.py           # JSON/Markdown 读写（原子写入）
-│       └── vector_store.py     # ChromaDB 向量存储
+│   └── memory/
+│       ├── store.py            # 对话记忆
+│       └── compressor.py       # Token 预算压缩
 │
 ├── data/                       # 运行时数据
+│   ├── config.yaml             # 全局默认配置
+│   ├── config.local.yaml       # 本地敏感配置（gitignore）
 │   ├── sessions/               # 会话存储
 │   ├── reminders.json          # 提醒数据
 │   ├── calendar.json

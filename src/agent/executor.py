@@ -41,8 +41,11 @@ def clear_llm_cache() -> None:
     _llm_cache_key = ("", "", "")
 
 
+from src.events import event_bus
+
 # Auto-clear LLM cache when config is reloaded
-config.on_reload(clear_llm_cache)
+config.on_reload(clear_llm_cache)  # 保留，config 模块内部回调
+event_bus.subscribe("config:reload", clear_llm_cache)
 
 
 def _get_llm() -> ChatOpenAI:

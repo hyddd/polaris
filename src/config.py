@@ -127,6 +127,8 @@ class Config:
                 callback()
             except Exception:
                 pass
+        from src.events import event_bus
+        event_bus.publish("config:reload")
         return dict(self._data)
 
     def on_reload(self, callback) -> None:
