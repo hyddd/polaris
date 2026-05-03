@@ -10,7 +10,6 @@ Usage:
     path = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
 """
 
-import warnings
 import yaml
 from pathlib import Path
 
@@ -18,52 +17,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _CONFIG_FILE = PROJECT_ROOT / "data/config.yaml"
 _LOCAL_CONFIG_FILE = PROJECT_ROOT / "data/config.local.yaml"
-
-# ---------------------------------------------------------------------------
-# Backward compatibility migration map: old name -> (config key, default)
-# ---------------------------------------------------------------------------
-_MIGRATION_MAP: dict[str, tuple[str, object]] = {
-    "LLM_MODEL": ("llm.model", "gpt-4o"),
-    "LLM_API_KEY": ("llm.api_key", ""),
-    "LLM_BASE_URL": ("llm.base_url", "https://api.openai.com/v1"),
-    "ADMIN_TOKEN": ("server.admin_token", ""),
-    "CHAT_TOKEN": ("server.chat_token", ""),
-    "RATE_LIMIT_MAX_REQUESTS": ("server.rate_limit_max_requests", 30),
-    "RATE_LIMIT_WINDOW_SECONDS": ("server.rate_limit_window_seconds", 60),
-    "SEARCH_API_KEY": ("tools.web_search.api_key", ""),
-    "SEARCH_API_BASE": ("tools.web_search.api_base", "https://api.tavily.com"),
-    "CALENDAR_USE_MOCK": ("tools.calendar.use_mock", False),
-    "GCAL_CREDENTIALS": ("tools.calendar.google_credentials", ""),
-    "GCAL_ID": ("tools.calendar.google_calendar_id", "primary"),
-    "EMBEDDING_API_KEY": ("embedding.api_key", ""),
-    "EMBEDDING_BASE_URL": ("embedding.base_url", ""),
-    "EMBEDDING_MODEL": ("embedding.model", "netease-youdao/bce-embedding-base_v1"),
-    "FEISHU_APP_ID": ("channels.feishu.app_id", ""),
-    "FEISHU_APP_SECRET": ("channels.feishu.app_secret", ""),
-    "QQ_BOT_APPID": ("channels.qq.bot_appid", ""),
-    "QQ_BOT_SECRET": ("channels.qq.bot_secret", ""),
-    "DATA_DIR": ("storage.sessions_dir", "data"),
-    "CHROMA_PERSIST_DIR": ("storage.vector_db_dir", "data/chroma"),
-    "NOTES_DIR": ("storage.notes_dir", "data/notes"),
-    "ARCHIVE_DIR": ("storage.notes_dir", "data/notes"),
-    "CALENDAR_FILE": ("storage.calendar_file", "data/calendar.json"),
-    "TODOS_FILE": ("storage.todos_file", "data/todos.json"),
-    "REMINDERS_FILE": ("storage.reminders_file", "data/reminders.json"),
-    "PROFILE_FILE": ("storage.profile_file", "data/user_profile.json"),
-}
-
-# Old module-level variables that returned resolved Path objects
-_PATH_VARS: set[str] = {
-    "DATA_DIR",
-    "NOTES_DIR",
-    "ARCHIVE_DIR",
-    "CALENDAR_FILE",
-    "TODOS_FILE",
-    "REMINDERS_FILE",
-    "PROFILE_FILE",
-    "CHROMA_PERSIST_DIR",
-}
-
 
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base dict."""
@@ -159,51 +112,6 @@ config = Config()
 config.load()
 
 
-# ---------------------------------------------------------------------------
-# Module-level convenience wrappers (compatible with old import style)
-# ---------------------------------------------------------------------------
 def reload() -> dict:
     """Reload config (module-level wrapper for config.reload)."""
     return config.reload()
-
-
-# ---------------------------------------------------------------------------
-# Backward compatibility: module-level __getattr__ for old-style imports
-# ---------------------------------------------------------------------------
-def __getattr__(name):
-    """Provide deprecated access to old module-level config variables.
-
-    Triggers DeprecationWarning on first access.
-    """
-    if name == "_MIGRATION_MAP":
-        raise AttributeError(name)
-
-    entry = _MIGRATION_MAP.get(name)
-    if entry is not None:
-        key, default = entry
-        warnings.warn(
-            f"'{name}' is deprecated, use config.get({key!r}) instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        value = config.get(key, default)
-
-        if name == "ARCHIVE_DIR":
-            # ARCHIVE_DIR was NOTES_DIR / "archive"
-            notes_dir = config.resolve_path(
-                config.get("storage.notes_dir", "data/notes")
-            )
-            return notes_dir / "archive"
-
-        if name in _PATH_VARS:
-            return config.resolve_path(value) if isinstance(value, str) else value
-
-        return value
-
-    if name in ("_PATH_VARS", "_CONFIG_FILE", "_LOCAL_CONFIG_FILE", "Config",
-                "_deep_merge", "_load_yaml_config", "config", "reload",
-                "PROJECT_ROOT", "_get", "_resolve_path"):
-        raise AttributeError(name)
-
-    msg = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(msg)
