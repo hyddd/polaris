@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from .models import Reminder, RepeatRule
@@ -10,7 +10,7 @@ logger = logging.getLogger("polaris.reminders.scheduler")
 
 class ReminderScheduler:
     def __init__(self, store, handler):
-        self.scheduler = AsyncIOScheduler()
+        self.scheduler = BackgroundScheduler()
         self.store = store
         self.handler = handler
 
@@ -28,6 +28,7 @@ class ReminderScheduler:
 
     def add_reminder(self, reminder: Reminder):
         """添加提醒到调度器"""
+        logger.info(f"添加提醒到调度器: {reminder.id} - {reminder.title} @ {reminder.trigger_time}")
         self._add_job(reminder)
 
     def remove_reminder(self, reminder_id: str):
@@ -63,6 +64,7 @@ class ReminderScheduler:
             args=[reminder],
             replace_existing=True,
         )
+        logger.info(f"Job 已添加: {reminder.id}, 下次触发: {trigger.get_next_fire_time(None, datetime.now())}")
 
     def _to_cron(self, trigger_time: datetime, repeat_rule: RepeatRule) -> str:
         """将重复规则转换为 Cron 表达式"""
