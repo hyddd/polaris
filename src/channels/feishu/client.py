@@ -137,12 +137,33 @@ class PolarisFeishuBot:
 
     def _process_message(self, user_id: str, text: str) -> str:
         import asyncio
+        import threading
         from src.session.manager import get_session_manager
         from src.handler import process_message
 
         session_mgr = get_session_manager()
-        response_text, _ = asyncio.run(process_message(text, session_mgr, channel=f"feishu:{user_id}"))
-        return response_text
+
+        result = None
+        error = None
+
+        def _run():
+            nonlocal result, error
+            try:
+                result = asyncio.run(process_message(text, session_mgr, channel=f"feishu:{user_id}"))
+            except Exception as e:
+                error = e
+
+        # 飞书 SDK 的 WebSocket 回调运行在自有事件循环中，asyncio.run()
+        # 不能从已运行的事件循环中调用。用独立线程获取全新事件循环。
+        t = threading.Thread(target=_run, name=f"feishu-msg-{user_id[:8]}")
+        t.start()
+        t.join(timeout=120)
+
+        if error:
+            raise error
+        if result is None:
+            return "抱歉，处理超时。"
+        return result[0]
 
     def _send_typing(self, message_id: str) -> str | None:
         from lark_oapi.api.im.v1 import CreateMessageReactionRequest, CreateMessageReactionRequestBody, Emoji
