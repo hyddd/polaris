@@ -29,6 +29,7 @@ def create_chat_model(
         model=model,
         temperature=temperature,
         streaming=streaming,
+        model_kwargs={"tool_choice": "auto"},
     )
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
