@@ -132,7 +132,8 @@ async def lifespan(app: FastAPI):
         id="data-cleanup",
         replace_existing=True,
     )
-    logger.info("数据清理任务已注册: 每天 03:00")
+    srv_logger = logging.getLogger("polaris.server")
+    srv_logger.info("数据清理任务已注册: 每天 03:00")
 
     app.state.reminder_scheduler = reminder_scheduler
     app.state.reminder_store = reminder_store

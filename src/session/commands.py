@@ -5,7 +5,8 @@ Commands:
   /sessions       — List all sessions
   /session <id>   — Switch session (ID prefix or name match)
   /rename <name>  — Rename current session
-  /reload         — Hot-reload config from .env (API keys, model, etc.)
+  /reload         — Hot-reload config (API keys, model, etc.)
+  /cleanup        — 手动触发数据清理/归档
   /reset          — Reset conversation memory
   /compact        — Manually trigger context compression
   /status         — Show session + token stats
@@ -51,6 +52,9 @@ def handle_command(text: str, session_mgr: SessionManager, channel: str = "") ->
 
     if cmd == "/reload":
         return _reload()
+
+    if cmd == "/cleanup":
+        return _cleanup()
 
     return None
 
@@ -211,6 +215,24 @@ def _reload() -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"配置重载失败：{e}"
+
+
+def _cleanup() -> str:
+    try:
+        from src.cleanup import DataCleanup
+        cleanup = DataCleanup()
+        summary = cleanup.run()
+        if not summary.get("enabled", True):
+            return "清理功能已禁用。"
+
+        lines = ["数据清理完成："]
+        lines.append(f"• 提醒: 归档 {summary.get('reminders', 0)} 条")
+        lines.append(f"• 日程: 归档 {summary.get('calendar', 0)} 条")
+        lines.append(f"• 待办: 归档 {summary.get('todos', 0)} 条")
+        lines.append(f"• 过期归档文件: 删除 {summary.get('archive_deleted', 0)} 个")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"数据清理失败：{e}"
 
 
 def _help() -> str:
