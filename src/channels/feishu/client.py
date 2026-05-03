@@ -268,7 +268,12 @@ class FeishuChannel(ChannelPlugin):
     def send_message(self, session_id: str, message: str, channel: str = "") -> bool:
         try:
             if self._bot:
-                self._bot._send_message(session_id, message)
+                # channel 格式 "feishu:ou_xxx"，提取用户 ID 发私聊
+                if channel and ":" in channel:
+                    user_id = channel.split(":", 1)[1]
+                    self._bot._send_message_by_user(user_id, message)
+                else:
+                    self._bot._send_message(session_id, message)
                 return True
             logger.warning("飞书 bot 未初始化，无法发送消息")
             return False
