@@ -199,20 +199,21 @@ class GoogleCalendarTool(BaseTool):
             event_datetime = datetime.strptime(f"{date} {event.get('time', '09:00')}", "%Y-%m-%d %H:%M")
             reminder_time = event_datetime - timedelta(minutes=15)
 
-            # 只创建未来的提醒
-            if reminder_time <= datetime.now():
-                return
-
             # 从 context 获取 channel 和 session_id
             channel = get_channel()
             session_id = get_session_id()
-            logger.info(f"创建提醒 - context channel: {channel}, session_id: {session_id}")
 
             # 从日程数据中获取 channel（如果保存了的话）
             if not channel:
                 channel = event.get("reminder_channel", "admin")
             if not session_id:
                 session_id = event.get("reminder_session_id", "")
+
+            from src.reminders.models import ReminderStatus
+
+            # 如果提醒时间已过，标记为已取消
+            is_past = reminder_time <= datetime.now()
+            status = ReminderStatus.CANCELLED if is_past else ReminderStatus.ACTIVE
 
             reminder = Reminder(
                 title=f"{event['title']} 即将开始",
@@ -222,21 +223,23 @@ class GoogleCalendarTool(BaseTool):
                 event_id=event["id"],
                 channel=channel or "admin",
                 session_id=session_id or "",
+                status=status,
             )
             store = ReminderStore(str(REMINDERS_FILE))
             store.create(reminder)
 
-            # 添加到调度器
-            from src.reminders import get_scheduler
-            scheduler = get_scheduler()
-            if scheduler:
-                scheduler.add_reminder(reminder)
+            # 只有未来的提醒才添加到调度器
+            if not is_past:
+                from src.reminders import get_scheduler
+                scheduler = get_scheduler()
+                if scheduler:
+                    scheduler.add_reminder(reminder)
 
             # 保存提醒ID和channel到日程
             event["reminder_id"] = reminder.id
             event["reminder_channel"] = channel
             event["reminder_session_id"] = session_id
-            logger.info(f"已创建日程关联提醒: {reminder.id} @ {reminder_time}")
+            logger.info(f"已创建日程关联提醒: {reminder.id} @ {reminder_time} (past={is_past})")
         except Exception as e:
             logger.error(f"创建日程关联提醒失败: {e}")
 
@@ -275,12 +278,17 @@ class GoogleCalendarTool(BaseTool):
             # 重新获取更新后的 reminder 对象
             reminder = store.get(reminder_id)
 
+            # 如果新时间在未来，重新激活提醒
+            if new_reminder_time > datetime.now():
+                store.update(reminder_id, status=ReminderStatus.ACTIVE)
+                reminder = store.get(reminder_id)
+
             # 更新调度器
             from src.reminders import get_scheduler
             scheduler = get_scheduler()
             if scheduler:
                 scheduler.remove_reminder(reminder_id)
-                if new_reminder_time > datetime.now() and reminder.status == ReminderStatus.ACTIVE:
+                if new_reminder_time > datetime.now():
                     scheduler.add_reminder(reminder)
 
             logger.info(f"已更新日程关联提醒: {reminder_id} @ {new_reminder_time}")
