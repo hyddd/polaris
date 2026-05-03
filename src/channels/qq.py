@@ -86,6 +86,7 @@ class _PolarisQQClient(botpy.Client):
 class QQChannel(ChannelPlugin):
     def __init__(self):
         self._client: _PolarisQQClient | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def name(self) -> str:
@@ -109,6 +110,7 @@ class QQChannel(ChannelPlugin):
         # botpy.Client.__init__ calls asyncio.get_event_loop(); ensure one exists
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        self._loop = loop
 
         intents = botpy.Intents(
             public_guild_messages=True,
@@ -152,9 +154,11 @@ class QQChannel(ChannelPlugin):
                 logger.warning("openid 为空")
                 return False
 
-            # 使用 botpy 的事件循环发送消息
-            import asyncio
+            if not self._loop:
+                logger.warning("QQ 事件循环未初始化")
+                return False
 
+            # 使用保存的事件循环发送消息
             async def _send():
                 md = {"content": message}
                 await self._client.api.post_c2c_message(
@@ -163,14 +167,10 @@ class QQChannel(ChannelPlugin):
                     markdown=md,
                 )
 
-            # 获取当前运行的事件循环
-            try:
-                loop = asyncio.get_running_loop()
-                # 如果有运行中的事件循环，创建任务
-                loop.create_task(_send())
-            except RuntimeError:
-                # 没有运行中的事件循环，直接运行
-                asyncio.run(_send())
+            # 在事件循环中执行异步任务
+            future = asyncio.run_coroutine_threadsafe(_send(), self._loop)
+            # 等待完成，超时 10 秒
+            future.result(timeout=10)
 
             logger.info(f"QQ 消息已发送到 {openid}")
             return True
