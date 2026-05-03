@@ -4,20 +4,37 @@ LLM always gets ALL tools and decides autonomously whether to call them.
 Supports token-level streaming via LangGraph get_stream_writer().
 """
 
+import logging
+import time
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage, SystemMessage
 from src.agent.state import AgentState
+from src.agent.interceptors import get_interceptors, init_default_interceptors
 import src.config as _cfg  # Read at call time for hot-reload support
+from src.config import on_reload
 from src.tools.registry import ToolRegistry
 from src.session.manager import get_session_manager
+
+logger = logging.getLogger("polaris.tools")
 
 
 # --- Cached LLM instance (rebuilds when config changes) ---
 
 _llm_cache: ChatOpenAI | None = None
 _llm_cache_key: tuple[str, str, str] = ("", "", "")  # (model, api_key, base_url)
+
+
+def clear_llm_cache() -> None:
+    """Clear cached LLM instance so next call rebuilds from current config."""
+    global _llm_cache, _llm_cache_key
+    _llm_cache = None
+    _llm_cache_key = ("", "", "")
+
+
+# Auto-clear LLM cache when config is reloaded
+on_reload(clear_llm_cache)
 
 
 def _get_llm() -> ChatOpenAI:
@@ -116,6 +133,46 @@ def agent_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 
+def _parse_tool_call(tc, index: int) -> tuple[str, dict, str]:
+    """Extract tool_name, tool_args, call_id from a tool call (dict or object)."""
+    if isinstance(tc, dict):
+        tool_name = tc.get("name", "")
+        tool_args = tc.get("args") or {}
+        raw_id = tc.get("id")
+    else:
+        tool_name = getattr(tc, "name", "")
+        tool_args = getattr(tc, "args", None) or {}
+        raw_id = getattr(tc, "id", None)
+    call_id = raw_id or f"call_{tool_name}_{index}"
+    return tool_name, tool_args, call_id
+
+
+def _find_interception(tool_name: str, tool_args: dict, call_id: str):
+    """Run registered interceptors; return InterceptResult or None."""
+    for interceptor in get_interceptors():
+        if interceptor.should_intercept(tool_name, tool_args):
+            return interceptor.intercept(tool_name, tool_args, call_id)
+    return None
+
+
+def _summarize_args(args: dict) -> str:
+    """摘要工具参数，避免日志过长"""
+    items = []
+    for k, v in args.items():
+        v_str = str(v)
+        if len(v_str) > 50:
+            v_str = v_str[:50] + "..."
+        items.append(f"{k}={v_str}")
+    return " ".join(items)
+
+
+def _summarize_result(result: str) -> str:
+    """摘要工具结果"""
+    if len(result) > 100:
+        return result[:100] + "..."
+    return result
+
+
 def tool_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     last_message = messages[-1]
@@ -123,67 +180,59 @@ def tool_node(state: AgentState) -> dict:
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         return {}
 
+    init_default_interceptors()
     registry = ToolRegistry.get_instance()
     results = []
     pending_action = None
 
-    # Get current session_id to pass to tools
     session_mgr = get_session_manager()
     channel = state.get("channel", "default")
     current_session_id = session_mgr.active_session(channel).session_id
 
-    # Check if this batch contains non-delete tool calls (indicating an update operation)
-    has_non_delete = False
-    for tc in last_message.tool_calls:
-        if tc is None:
-            continue
-        args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {}) or {}
-        if args.get("action") != "delete":
-            has_non_delete = True
-            break
-
+    parsed = []
     for i, tc in enumerate(last_message.tool_calls):
         if tc is None:
             continue
-        if isinstance(tc, dict):
-            tool_name = tc.get("name", "")
-            tool_args = tc.get("args") or {}
-        else:
-            tool_name = getattr(tc, "name", "")
-            tool_args = getattr(tc, "args", None) or {}
+        parsed.append(_parse_tool_call(tc, i))
 
-        raw_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-        fallback_id = f"call_{tool_name}_{i}"
-        call_id = raw_id or fallback_id
+    # Skip interception if batch has non-interceptable calls (e.g., update with sub-deletes)
+    has_non_interceptable = any(
+        _find_interception(name, args, cid) is None
+        for name, args, cid in parsed
+    )
 
-        # Intercept delete operations — but skip if part of a batch with non-delete calls (update)
-        if tool_args.get("action") == "delete" and not has_non_delete:
-            target_id = tool_args.get("event_id") or tool_args.get("todo_id") or tool_args.get("filename", "")
-            pending_action = {
-                "action_type": "delete",
-                "target_tool": tool_name,
-                "target_id": target_id,
-                "description": f"删除 {tool_name} {target_id}",
-                "params": tool_args,
-                "tool_call_id": call_id,
-            }
-            results.append(ToolMessage(
-                content=f"操作需要确认：删除 {tool_name}「{target_id}」。回复「确认」执行，「取消」放弃。",
-                tool_call_id=call_id,
-            ))
-            continue
+    for tool_name, tool_args, call_id in parsed:
+        if not has_non_interceptable:
+            result = _find_interception(tool_name, tool_args, call_id)
+            if result:
+                pending_action = result.pending_action
+                results.append(ToolMessage(
+                    content=result.tool_message_content,
+                    tool_call_id=call_id,
+                ))
+                continue
 
-        # Inject session_id for tools that need it (e.g., persona)
         tool_args["_session_id"] = current_session_id
+
+        start_time = time.time()
+        logger.info(f"[tool] {tool_name} start args={_summarize_args(tool_args)}")
 
         tool = registry.get(tool_name)
         if tool:
             try:
                 result = tool.invoke(tool_args)
                 result_str = str(result) if not isinstance(result, str) else result
+                duration_ms = (time.time() - start_time) * 1000
+                logger.info(f"[tool] {tool_name} done duration={duration_ms:.0f}ms result={_summarize_result(result_str)}")
+                if duration_ms > 5000:
+                    logger.warning(f"[tool] {tool_name} slow query: {duration_ms:.0f}ms")
             except Exception as e:
+                duration_ms = (time.time() - start_time) * 1000
+                logger.error(f"[tool] {tool_name} failed duration={duration_ms:.0f}ms error={e}")
                 result_str = f"工具执行出错：{e}"
         else:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.warning(f"[tool] {tool_name} not_found duration={duration_ms:.0f}ms")
             result_str = f"未找到工具：{tool_name}"
 
         results.append(ToolMessage(content=result_str, tool_call_id=call_id))
