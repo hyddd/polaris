@@ -98,6 +98,10 @@ class Config:
         """Load (or reload) configuration from YAML files."""
         self._data = _load_yaml_config()
 
+    def as_dict(self) -> dict:
+        """Return the full config as a dict (read-only snapshot)."""
+        return dict(self._data)
+
     def get(self, key: str, default=None):
         """Get a value from config using dot-separated key path."""
         keys = key.split(".")
@@ -114,6 +118,28 @@ class Config:
         if p.is_absolute():
             return p
         return PROJECT_ROOT / p
+
+    def set(self, key: str, value: str) -> None:
+        """Persist a config value to config.local.yaml (overrides default)."""
+        import yaml
+
+        local_data = {}
+        if _LOCAL_CONFIG_FILE.exists():
+            local_data = yaml.safe_load(
+                _LOCAL_CONFIG_FILE.read_text(encoding="utf-8")
+            ) or {}
+
+        keys = key.split(".")
+        d = local_data
+        for k in keys[:-1]:
+            d = d.setdefault(k, {})
+        d[keys[-1]] = value
+
+        _LOCAL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _LOCAL_CONFIG_FILE.write_text(
+            yaml.dump(local_data, allow_unicode=True, default_flow_style=False),
+            encoding="utf-8",
+        )
 
     def reload(self) -> dict:
         """Re-read YAML config files, publish config:reload event.

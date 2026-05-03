@@ -476,7 +476,7 @@ def _mask_value(key: str, value: str) -> str:
 @app.get("/api/config")
 def get_config():
     from src.config import config
-    cfg = config._data
+    cfg = config.as_dict()
     lines = []
     _flatten_config(cfg, "", lines)
     masked = {}
@@ -501,35 +501,12 @@ class ConfigUpdate(BaseModel):
 
 @app.post("/api/config")
 def update_config(req: ConfigUpdate):
-    import yaml
     from src.config import config
 
-    from src.config import _LOCAL_CONFIG_FILE
-
-    # Write to config.local.yaml to override defaults
-    local_path = _LOCAL_CONFIG_FILE
-    local_data = {}
-    if local_path.exists():
-        local_data = yaml.safe_load(local_path.read_text(encoding="utf-8")) or {}
-
     for key, value in req.vars.items():
-        _set_nested(local_data, key, value)
-
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    local_path.write_text(
-        yaml.dump(local_data, allow_unicode=True, default_flow_style=False),
-        encoding="utf-8",
-    )
+        config.set(key, value)
     config.reload()
     return {"ok": True}
-
-
-def _set_nested(d: dict, key: str, value) -> None:
-    """将点号分隔的 key 写入嵌套 dict 中。"""
-    keys = key.split(".")
-    for k in keys[:-1]:
-        d = d.setdefault(k, {})
-    d[keys[-1]] = value
 
 
 # --- Admin API: Data management ---
