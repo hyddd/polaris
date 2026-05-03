@@ -7,11 +7,12 @@ from pathlib import Path
 
 def create_default() -> "NoteTool":
     """Factory for auto-discovery. Creates a NoteTool with default config."""
-    from src.config import NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
+    from src.config import config
+    notes_dir = config.resolve_path(config.get("storage.notes_dir", "data/notes"))
     return NoteTool(
-        notes_dir=str(NOTES_DIR),
-        archive_dir=str(ARCHIVE_DIR),
-        persist_dir=str(CHROMA_PERSIST_DIR),
+        notes_dir=str(notes_dir),
+        archive_dir=str(notes_dir / "archive"),
+        persist_dir=str(config.resolve_path(config.get("storage.vector_db_dir", "data/chroma"))),
         collection_name="notes",
     )
 

@@ -16,13 +16,13 @@ def get_embedding_function():
     if _embedding_function is not None:
         return _embedding_function
 
-    from src.config import EMBEDDING_API_KEY, EMBEDDING_BASE_URL, EMBEDDING_MODEL
+    from src.config import config
 
-    api_key = EMBEDDING_API_KEY
+    api_key = config.get("embedding.api_key", "")
     if not api_key:
         raise RuntimeError("未配置 EMBEDDING_API_KEY，向量检索不可用。请在 .env 中配置硅基流动 API。")
-    base_url = EMBEDDING_BASE_URL
-    model = EMBEDDING_MODEL
+    base_url = config.get("embedding.base_url", "")
+    model = config.get("embedding.model", "netease-youdao/bce-embedding-base_v1")
     kwargs = {"api_key": api_key, "model_name": model}
     if base_url:
         kwargs["api_base"] = base_url
@@ -32,12 +32,14 @@ def get_embedding_function():
 
 def check_embedding_config() -> None:
     """检查 Embedding 配置是否可用，打印配置信息。"""
-    from src.config import EMBEDDING_API_KEY, EMBEDDING_MODEL
+    from src.config import config
 
-    if not EMBEDDING_API_KEY:
+    api_key = config.get("embedding.api_key", "")
+    model = config.get("embedding.model", "netease-youdao/bce-embedding-base_v1")
+    if not api_key:
         print("⚠ 未配置 EMBEDDING_API_KEY，向量检索功能不可用")
         return
-    print(f"使用云端 Embedding: {EMBEDDING_MODEL}")
+    print(f"使用云端 Embedding: {model}")
     if _client_cache or _embedding_function is not None:
         logger.warning("已有缓存的向量存储客户端，若 Embedding 配置发生变更请调用 reset_vector_store_cache() 清空缓存")
 

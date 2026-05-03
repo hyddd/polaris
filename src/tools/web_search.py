@@ -22,9 +22,9 @@ class WebSearchTool(BaseTool):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from src.config import SEARCH_API_KEY, SEARCH_API_BASE
-        self.api_key = SEARCH_API_KEY
-        self.api_base = SEARCH_API_BASE
+        from src.config import config
+        self.api_key = config.get("tools.web_search.api_key", "")
+        self.api_base = config.get("tools.web_search.api_base", "https://api.tavily.com")
 
     def _run(self, query: str, num_results: int = 3) -> str:
         if not self.api_key:

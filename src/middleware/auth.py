@@ -1,7 +1,7 @@
 """Admin API authentication middleware."""
 from fastapi import Request
 from fastapi.responses import JSONResponse
-import src.config as _cfg
+from src.config import config
 
 
 async def admin_auth_middleware(request: Request, call_next):
@@ -10,7 +10,7 @@ async def admin_auth_middleware(request: Request, call_next):
 
     # /api/* — admin token
     if path.startswith("/api/"):
-        token = _cfg.ADMIN_TOKEN
+        token = config.get("server.admin_token", "")
         if token:
             auth_header = request.headers.get("authorization", "")
             if auth_header != f"Bearer {token}":
@@ -21,7 +21,7 @@ async def admin_auth_middleware(request: Request, call_next):
 
     # /chat, /chat/* — chat token
     if path == "/chat" or path.startswith("/chat/"):
-        token = _cfg.CHAT_TOKEN
+        token = config.get("server.chat_token", "")
         if token:
             auth_header = request.headers.get("authorization", "")
             if auth_header != f"Bearer {token}":

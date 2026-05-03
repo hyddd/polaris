@@ -30,7 +30,10 @@ from src.agent.state import AgentState
 from src.session.manager import get_session_manager, SessionManager
 from src.tools.registry import ToolRegistry
 from src.context import set_context as _set_ctx
-from src.config import CALENDAR_FILE, TODOS_FILE
+from src.config import config
+
+CALENDAR_FILE = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
+TODOS_FILE = config.resolve_path(config.get("storage.todos_file", "data/todos.json"))
 
 from src.handler import process_message
 from src.lock import _get_session_lock, _cleanup_session_locks
@@ -75,8 +78,8 @@ _tools_registered = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from src.config import LLM_API_KEY
-    if not LLM_API_KEY:
+    from src.config import config
+    if not config.get("llm.api_key", ""):
         raise RuntimeError(
             "LLM_API_KEY 未配置。请在环境变量或 .env 文件中设置 OPENAI_API_KEY。"
         )
@@ -105,9 +108,11 @@ async def lifespan(app: FastAPI):
     from src.reminders.handlers import ReminderHandler
     from src.reminders import set_scheduler, set_reminder_service
     from src.reminders.service import ReminderService
-    from src.config import REMINDERS_FILE
+    from src.config import config
 
-    reminder_store = ReminderStore(str(REMINDERS_FILE))
+    reminder_store = ReminderStore(
+        str(config.resolve_path(config.get("storage.reminders_file", "data/reminders.json")))
+    )
     reminder_handler = ReminderHandler(mgr)
     reminder_handler.set_store(reminder_store)
     reminder_scheduler = ReminderScheduler(reminder_store, reminder_handler)
@@ -508,8 +513,8 @@ def update_config(req: ConfigUpdate):
     lines = [f"{k}={v}" for k, v in existing.items()]
     _atomic_write(env_path, "\n".join(lines) + "\n")
     # Reload config module so changes take effect immediately
-    from src.config import reload
-    reload()
+    from src.config import config
+    config.reload()
     return {"ok": True}
 
 

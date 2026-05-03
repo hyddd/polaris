@@ -8,10 +8,8 @@ Compression triggers when total context tokens exceed model_max_context * thresh
 NOT based on message count. Large-context models (200k) rarely compress.
 """
 
-import os
 from langchain_core.messages import BaseMessage, HumanMessage
 from src.llm.openai import create_chat_model
-import src.config as _cfg  # Read at call time for hot-reload support
 
 SUMMARIZE_PROMPT = """请将以下新对话内容合并到已有摘要中，生成更新后的摘要。
 

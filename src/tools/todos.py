@@ -9,8 +9,10 @@ from src.tools._utils import find_by_id_or_title
 
 def create_default() -> "TodoTool":
     """Factory for auto-discovery. Creates a TodoTool with default config."""
-    from src.config import TODOS_FILE
-    return TodoTool(data_file=str(TODOS_FILE))
+    from src.config import config
+    return TodoTool(
+        data_file=str(config.resolve_path(config.get("storage.todos_file", "data/todos.json")))
+    )
 
 
 class TodoInput(BaseModel):

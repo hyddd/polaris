@@ -23,10 +23,10 @@ class PolarisFeishuBot:
     """Feishu WebSocket bot that relays messages to the Polaris Agent Server."""
 
     def __init__(self):
-        from src.config import FEISHU_APP_ID, FEISHU_APP_SECRET
+        from src.config import config
 
-        app_id = FEISHU_APP_ID
-        app_secret = FEISHU_APP_SECRET
+        app_id = config.get("channels.feishu.app_id", "")
+        app_secret = config.get("channels.feishu.app_secret", "")
         if not app_id or not app_secret:
             raise ValueError("请在 .env 中配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET")
 
@@ -223,16 +223,16 @@ class FeishuChannel(ChannelPlugin):
         return "feishu"
 
     def is_configured(self) -> bool:
-        from src.config import FEISHU_APP_ID, FEISHU_APP_SECRET
+        from src.config import config
 
-        return bool(FEISHU_APP_ID and FEISHU_APP_SECRET)
+        return bool(config.get("channels.feishu.app_id") and config.get("channels.feishu.app_secret"))
 
     def get_credentials(self) -> dict:
-        from src.config import FEISHU_APP_ID, FEISHU_APP_SECRET
+        from src.config import config
 
         return {
-            "app_id": FEISHU_APP_ID,
-            "app_secret": FEISHU_APP_SECRET,
+            "app_id": config.get("channels.feishu.app_id", ""),
+            "app_secret": config.get("channels.feishu.app_secret", ""),
         }
 
     def start(self) -> None:

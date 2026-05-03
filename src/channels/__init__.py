@@ -135,8 +135,8 @@ class ChannelManager:
                 logger.info(f"[{channel.name}] 未配置，跳过")
 
         # Register for config reload events
-        from src.config import on_reload
-        on_reload(self._on_config_reload)
+        from src.config import config
+        config.on_reload(self._on_config_reload)
 
     def _on_config_reload(self) -> None:
         """Check if channel credentials changed, restart affected channels."""

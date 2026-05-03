@@ -11,7 +11,7 @@ from collections import defaultdict
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-import src.config as _cfg
+from src.config import config
 
 # Singleton limiter instance (lazily initialized)
 _limiter: "SlidingWindowRateLimiter | None" = None
@@ -82,8 +82,8 @@ def get_limiter() -> SlidingWindowRateLimiter:
     global _limiter
     if _limiter is None:
         _limiter = SlidingWindowRateLimiter(
-            max_requests=_cfg.RATE_LIMIT_MAX_REQUESTS,
-            window_seconds=_cfg.RATE_LIMIT_WINDOW_SECONDS,
+            max_requests=config.get("server.rate_limit_max_requests", 30),
+            window_seconds=config.get("server.rate_limit_window_seconds", 60),
         )
     return _limiter
 

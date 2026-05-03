@@ -197,17 +197,16 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
 def _reload() -> str:
     """Re-read .env and trigger config reload event."""
     try:
-        import src.config as cfg
-        result = cfg.reload()
+        from src.config import config
+        config.reload()
 
         lines = ["配置已重载。"]
-        if result["changes"]:
-            for key, change in result["changes"].items():
-                lines.append(f"• {key}: {change}")
-        else:
-            lines.append(f"• LLM_MODEL: {result['LLM_MODEL']}")
-            lines.append(f"• LLM_BASE_URL: {result['LLM_BASE_URL']}")
-        lines.append(f"• API_KEY: {'已设置' if result['API_KEY_SET'] else '未设置'}")
+        llm_model = config.get("llm.model", "gpt-4o")
+        llm_base_url = config.get("llm.base_url", "https://api.openai.com/v1")
+        api_key = config.get("llm.api_key", "")
+        lines.append(f"• LLM_MODEL: {llm_model}")
+        lines.append(f"• LLM_BASE_URL: {llm_base_url}")
+        lines.append(f"• API_KEY: {'已设置' if api_key else '未设置'}")
 
         return "\n".join(lines)
     except Exception as e:

@@ -3,7 +3,7 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
-from src.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
+from src.config import config
 
 
 def create_chat_model(
@@ -21,15 +21,19 @@ def create_chat_model(
     Returns:
         ChatOpenAI 实例。
     """
+    model = config.get("llm.model", "gpt-4o")
+    api_key = config.get("llm.api_key", "")
+    base_url = config.get("llm.base_url", "https://api.openai.com/v1")
+
     kwargs: dict = dict(
-        model=LLM_MODEL,
+        model=model,
         temperature=temperature,
         streaming=streaming,
     )
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
-    if LLM_API_KEY:
-        kwargs["api_key"] = LLM_API_KEY
-    if LLM_BASE_URL:
-        kwargs["base_url"] = LLM_BASE_URL
+    if api_key:
+        kwargs["api_key"] = api_key
+    if base_url:
+        kwargs["base_url"] = base_url
     return ChatOpenAI(**kwargs)

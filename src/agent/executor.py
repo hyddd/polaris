@@ -20,8 +20,7 @@ if TYPE_CHECKING:
 
 from src.agent.state import AgentState
 from src.agent.interceptors import get_interceptors, init_default_interceptors
-import src.config as _cfg  # Read at call time for hot-reload support
-from src.config import on_reload
+from src.config import config
 from src.tools.registry import ToolRegistry
 from src.session.manager import get_session_manager
 
@@ -43,13 +42,17 @@ def clear_llm_cache() -> None:
 
 
 # Auto-clear LLM cache when config is reloaded
-on_reload(clear_llm_cache)
+config.on_reload(clear_llm_cache)
 
 
 def _get_llm() -> ChatOpenAI:
     """Return a cached ChatOpenAI instance, rebuilding if config changed."""
     global _llm_cache, _llm_cache_key
-    key = (_cfg.LLM_MODEL, _cfg.LLM_API_KEY, _cfg.LLM_BASE_URL)
+    key = (
+        config.get("llm.model", "gpt-4o"),
+        config.get("llm.api_key", ""),
+        config.get("llm.base_url", "https://api.openai.com/v1"),
+    )
     if _llm_cache is None or _llm_cache_key != key:
         _llm_cache = create_chat_model(temperature=0.3)
         _llm_cache_key = key

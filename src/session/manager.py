@@ -10,7 +10,12 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, AIMessage
 from src.memory.store import MemoryManager
 from src.memory.compressor import ConversationCompressor
-from src.config import DATA_DIR
+from src.config import config
+
+# sessions_dir from config is the sessions storage directory (e.g. "data/sessions")
+SESSIONS_DIR = config.resolve_path(config.get("storage.sessions_dir", "data/sessions"))
+ACTIVE_FILE = SESSIONS_DIR / "active.json"
+DATA_DIR = SESSIONS_DIR.parent  # data root for old-format migration
 
 
 @dataclass
@@ -137,8 +142,6 @@ class Session:
 
 
 class SessionManager:
-    SESSIONS_DIR = DATA_DIR / "sessions"
-    ACTIVE_FILE = SESSIONS_DIR / "active.json"
 
     def __init__(self):
         self._sessions: dict[str, Session] = {}
@@ -218,7 +221,7 @@ class SessionManager:
             return False
         del self._sessions[session_id]
         # Delete session file
-        path = self.SESSIONS_DIR / f"{session_id}.json"
+        path = SESSIONS_DIR / f"{session_id}.json"
         path.unlink(missing_ok=True)
         # Update active IDs if deleted session was active
         for ch, sid in list(self._active_ids.items()):
@@ -243,20 +246,20 @@ class SessionManager:
         self.save()
 
     def save(self):
-        self.SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         # Save each session individually
         for session in self._sessions.values():
-            path = self.SESSIONS_DIR / f"{session.session_id}.json"
+            path = SESSIONS_DIR / f"{session.session_id}.json"
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(session.to_dict(), f, ensure_ascii=False, indent=2)
         # Save active session IDs per channel
-        self.ACTIVE_FILE.write_text(
+        ACTIVE_FILE.write_text(
             json.dumps(self._active_ids, ensure_ascii=False, indent=2),
             encoding="utf-8"
         )
 
     def _load(self):
-        if not self.SESSIONS_DIR.exists():
+        if not SESSIONS_DIR.exists():
             # Migrate from old format or create default
             old_file = DATA_DIR / "sessions.json"
             if old_file.exists():
@@ -266,9 +269,9 @@ class SessionManager:
             return
 
         # Load active session IDs (per-channel or legacy single)
-        if self.ACTIVE_FILE.exists():
+        if ACTIVE_FILE.exists():
             try:
-                content = self.ACTIVE_FILE.read_text(encoding="utf-8").strip()
+                content = ACTIVE_FILE.read_text(encoding="utf-8").strip()
                 if content.startswith("{"):
                     self._active_ids = json.loads(content)
                 else:
@@ -278,7 +281,7 @@ class SessionManager:
                 self._active_ids = {}
 
         # Load all session files
-        for path in self.SESSIONS_DIR.glob("sess_*.json"):
+        for path in SESSIONS_DIR.glob("sess_*.json"):
             try:
                 with open(path, encoding="utf-8") as f:
                     data = json.load(f)
@@ -305,11 +308,11 @@ class SessionManager:
             self.create(name="默认", source_channel="system")
             return
 
-        self.SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         for sdata in data.get("sessions", []):
             session = Session.from_dict(sdata)
             self._sessions[session.session_id] = session
-            path = self.SESSIONS_DIR / f"{session.session_id}.json"
+            path = SESSIONS_DIR / f"{session.session_id}.json"
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(sdata, f, ensure_ascii=False, indent=2)
 
@@ -320,7 +323,7 @@ class SessionManager:
             self._active_ids["default"] = next(iter(self._sessions))
 
         if self._active_ids:
-            self.ACTIVE_FILE.write_text(
+            ACTIVE_FILE.write_text(
                 json.dumps(self._active_ids, ensure_ascii=False, indent=2),
                 encoding="utf-8"
             )

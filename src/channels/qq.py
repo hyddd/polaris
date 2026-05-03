@@ -93,23 +93,23 @@ class QQChannel(ChannelPlugin):
         return "qq"
 
     def is_configured(self) -> bool:
-        from src.config import QQ_BOT_APPID, QQ_BOT_SECRET
+        from src.config import config
 
-        return bool(QQ_BOT_APPID and QQ_BOT_SECRET)
+        return bool(config.get("channels.qq.bot_appid") and config.get("channels.qq.bot_secret"))
 
     def get_credentials(self) -> dict:
-        from src.config import QQ_BOT_APPID, QQ_BOT_SECRET
+        from src.config import config
 
         return {
-            "appid": QQ_BOT_APPID,
-            "secret": QQ_BOT_SECRET,
+            "appid": config.get("channels.qq.bot_appid", ""),
+            "secret": config.get("channels.qq.bot_secret", ""),
         }
 
     def start(self) -> None:
-        from src.config import QQ_BOT_APPID, QQ_BOT_SECRET
+        from src.config import config
 
-        appid = QQ_BOT_APPID
-        secret = QQ_BOT_SECRET
+        appid = config.get("channels.qq.bot_appid", "")
+        secret = config.get("channels.qq.bot_secret", "")
 
         # botpy.Client.__init__ calls asyncio.get_event_loop(); ensure one exists
         loop = asyncio.new_event_loop()
