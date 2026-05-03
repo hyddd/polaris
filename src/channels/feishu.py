@@ -15,6 +15,8 @@ from src.channels import ChannelPlugin
 logger = logging.getLogger("polaris.channels.feishu")
 
 MAX_MESSAGE_LENGTH = 28 * 1024  # 28KB — 飞书限制 30KB，留 2KB 余量
+# 保守字符限制：按最坏情况 4 字节/字符（如 emoji）计算
+_CHAR_LIMIT = MAX_MESSAGE_LENGTH // 4
 
 
 class PolarisFeishuBot:
@@ -134,11 +136,12 @@ class PolarisFeishuBot:
             logger.error(f"[feishu] 处理消息失败: {e}", exc_info=True)
 
     def _process_message(self, user_id: str, text: str) -> str:
+        import asyncio
         from src.session.manager import get_session_manager
         from src.handler import process_message
 
         session_mgr = get_session_manager()
-        response_text, _ = process_message(text, session_mgr, channel=f"feishu:{user_id}")
+        response_text, _ = asyncio.run(process_message(text, session_mgr, channel=f"feishu:{user_id}"))
         return response_text
 
     def _send_typing(self, message_id: str) -> str | None:
@@ -182,29 +185,12 @@ class PolarisFeishuBot:
             .build()
         self.client.im.v1.message.create(request)
 
-    @staticmethod
-    def _split_message(content: str) -> list[str]:
-        """Split a long message into chunks respecting paragraph boundaries."""
-        chunks: list[str] = []
-        current = ""
-        for line in content.split('\n'):
-            candidate = current + line + '\n'
-            if len(candidate.encode('utf-8')) > MAX_MESSAGE_LENGTH:
-                if current:
-                    chunks.append(current)
-                current = line + '\n'
-            else:
-                current = candidate
-        if current:
-            chunks.append(current)
-        return chunks
-
     def _send_message(self, chat_id: str, content: str) -> None:
         try:
             if len(content.encode('utf-8')) <= MAX_MESSAGE_LENGTH:
                 self._do_send(chat_id, "chat_id", content)
             else:
-                chunks = self._split_message(content)
+                chunks = ChannelPlugin._split_message(content, _CHAR_LIMIT)
                 logger.info(f"[feishu] 消息过长，分 {len(chunks)} 段发送")
                 for i, chunk in enumerate(chunks):
                     if i > 0:
@@ -218,7 +204,7 @@ class PolarisFeishuBot:
             if len(content.encode('utf-8')) <= MAX_MESSAGE_LENGTH:
                 self._do_send(user_id, "open_id", content)
             else:
-                chunks = self._split_message(content)
+                chunks = ChannelPlugin._split_message(content, _CHAR_LIMIT)
                 logger.info(f"[feishu] 消息过长，分 {len(chunks)} 段发送")
                 for i, chunk in enumerate(chunks):
                     if i > 0:

@@ -10,17 +10,17 @@ from src.context import set_context as _set_ctx
 from src.lock import _get_session_lock
 
 
-def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
+async def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
     session_id = session_mgr.active_session(channel).session_id
-    with _get_session_lock(channel, session_id):
+    async with _get_session_lock(channel, session_id):
         # 在锁内设置 context，防止并发覆盖
         user_id = channel.split(":", 1)[-1] if ":" in channel else ""
         _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
-        return _process_message_impl(text, session_mgr, channel)
+        return await _process_message_impl(text, session_mgr, channel)
 
 
-def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
+async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。
 
     系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。

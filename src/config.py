@@ -83,6 +83,10 @@ GCAL_ID = _get("tools.calendar.google_calendar_id", "primary")
 ADMIN_TOKEN = _get("server.admin_token", "")
 CHAT_TOKEN = _get("server.chat_token", "")
 
+# --- Rate Limiting ---
+RATE_LIMIT_MAX_REQUESTS = _get("server.rate_limit_max_requests", 30)
+RATE_LIMIT_WINDOW_SECONDS = _get("server.rate_limit_window_seconds", 60)
+
 # --- Web Search ---
 SEARCH_API_KEY = _get("tools.web_search.api_key", "")
 SEARCH_API_BASE = _get("tools.web_search.api_base", "https://api.tavily.com")
@@ -118,6 +122,7 @@ def reload() -> dict:
     """
     global _config
     global LLM_MODEL, LLM_API_KEY, LLM_BASE_URL, ADMIN_TOKEN, CHAT_TOKEN
+    global RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_SECONDS
     global SEARCH_API_KEY, SEARCH_API_BASE, CALENDAR_USE_MOCK
     global EMBEDDING_API_KEY, EMBEDDING_BASE_URL, EMBEDDING_MODEL
     global FEISHU_APP_ID, FEISHU_APP_SECRET
@@ -127,10 +132,20 @@ def reload() -> dict:
 
     old = {
         "LLM_MODEL": LLM_MODEL,
+        "LLM_API_KEY": LLM_API_KEY,
         "LLM_BASE_URL": LLM_BASE_URL,
+        "ADMIN_TOKEN": ADMIN_TOKEN,
+        "CHAT_TOKEN": CHAT_TOKEN,
         "SEARCH_API_KEY": SEARCH_API_KEY,
+        "SEARCH_API_BASE": SEARCH_API_BASE,
+        "CALENDAR_USE_MOCK": CALENDAR_USE_MOCK,
+        "EMBEDDING_API_KEY": EMBEDDING_API_KEY,
+        "EMBEDDING_BASE_URL": EMBEDDING_BASE_URL,
+        "EMBEDDING_MODEL": EMBEDDING_MODEL,
         "FEISHU_APP_ID": FEISHU_APP_ID,
+        "FEISHU_APP_SECRET": FEISHU_APP_SECRET,
         "QQ_BOT_APPID": QQ_BOT_APPID,
+        "QQ_BOT_SECRET": QQ_BOT_SECRET,
     }
 
     LLM_MODEL = _get("llm.model", "gpt-4o")
@@ -138,6 +153,8 @@ def reload() -> dict:
     LLM_BASE_URL = _get("llm.base_url", "https://api.openai.com/v1")
     ADMIN_TOKEN = _get("server.admin_token", "")
     CHAT_TOKEN = _get("server.chat_token", "")
+    RATE_LIMIT_MAX_REQUESTS = _get("server.rate_limit_max_requests", 30)
+    RATE_LIMIT_WINDOW_SECONDS = _get("server.rate_limit_window_seconds", 60)
     SEARCH_API_KEY = _get("tools.web_search.api_key", "")
     SEARCH_API_BASE = _get("tools.web_search.api_base", "https://api.tavily.com")
     CALENDAR_USE_MOCK = _get("tools.calendar.use_mock", False)
@@ -152,14 +169,34 @@ def reload() -> dict:
     changes = {}
     if old["LLM_MODEL"] != LLM_MODEL:
         changes["LLM_MODEL"] = f"{old['LLM_MODEL']} → {LLM_MODEL}"
+    if old["LLM_API_KEY"] != LLM_API_KEY:
+        changes["LLM_API_KEY"] = "已更新"
     if old["LLM_BASE_URL"] != LLM_BASE_URL:
         changes["LLM_BASE_URL"] = f"{old['LLM_BASE_URL']} → {LLM_BASE_URL}"
+    if old["ADMIN_TOKEN"] != ADMIN_TOKEN:
+        changes["ADMIN_TOKEN"] = "已更新"
+    if old["CHAT_TOKEN"] != CHAT_TOKEN:
+        changes["CHAT_TOKEN"] = "已更新"
     if old["SEARCH_API_KEY"] != SEARCH_API_KEY:
         changes["SEARCH_API_KEY"] = "已更新"
+    if old["SEARCH_API_BASE"] != SEARCH_API_BASE:
+        changes["SEARCH_API_BASE"] = f"{old['SEARCH_API_BASE']} → {SEARCH_API_BASE}"
+    if old["CALENDAR_USE_MOCK"] != CALENDAR_USE_MOCK:
+        changes["CALENDAR_USE_MOCK"] = f"{old['CALENDAR_USE_MOCK']} → {CALENDAR_USE_MOCK}"
+    if old["EMBEDDING_API_KEY"] != EMBEDDING_API_KEY:
+        changes["EMBEDDING_API_KEY"] = "已更新"
+    if old["EMBEDDING_BASE_URL"] != EMBEDDING_BASE_URL:
+        changes["EMBEDDING_BASE_URL"] = f"{old['EMBEDDING_BASE_URL']} → {EMBEDDING_BASE_URL}"
+    if old["EMBEDDING_MODEL"] != EMBEDDING_MODEL:
+        changes["EMBEDDING_MODEL"] = f"{old['EMBEDDING_MODEL']} → {EMBEDDING_MODEL}"
     if old["FEISHU_APP_ID"] != FEISHU_APP_ID:
         changes["FEISHU_APP_ID"] = "已更新"
+    if old["FEISHU_APP_SECRET"] != FEISHU_APP_SECRET:
+        changes["FEISHU_APP_SECRET"] = "已更新"
     if old["QQ_BOT_APPID"] != QQ_BOT_APPID:
         changes["QQ_BOT_APPID"] = "已更新"
+    if old["QQ_BOT_SECRET"] != QQ_BOT_SECRET:
+        changes["QQ_BOT_SECRET"] = "已更新"
 
     for callback in _listeners:
         try:

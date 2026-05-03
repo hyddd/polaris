@@ -3,9 +3,9 @@ import logging
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 from src.config import CALENDAR_USE_MOCK
+from src.storage import JsonFileStore
 from src.tools._utils import find_by_id_or_title
 
 logger = logging.getLogger("polaris.tools.calendar")
@@ -46,14 +46,16 @@ class GoogleCalendarTool(BaseTool):
     args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
     use_mock: bool = CALENDAR_USE_MOCK
+    _store: JsonFileStore | None = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._store = JsonFileStore(self.data_file)
 
     def _run(self, action: str, date: str | None = None, keyword: str | None = None,
              title: str | None = None, time: str | None = None, attendees: list[str] | None = None,
              duration: int = 60, event_id: str | None = None, updates: dict | None = None) -> str:
-        from src.data_layer.loader import load_json, save_json
-
-        path = Path(self.data_file)
-        raw = load_json(path)
+        raw = self._store.load()
         data = raw if isinstance(raw, list) else []
 
         if action == "list":
@@ -99,10 +101,10 @@ class GoogleCalendarTool(BaseTool):
             for day in data:
                 if day.get("date") == date:
                     day.setdefault("events", []).append(new_event)
-                    save_json(path, data)
+                    self._store.save(data)
                     return f"已添加日程：{date} {new_event['time']} {title}"
             data.append({"date": date, "events": [new_event]})
-            save_json(path, data)
+            self._store.save(data)
             return f"已添加日程：{date} {new_event['time']} {title}"
 
         elif action == "update":
@@ -151,9 +153,9 @@ class GoogleCalendarTool(BaseTool):
                     else:
                         # Same date update — filter out "date" key to avoid corrupting event
                         ev.update({k: v for k, v in updates.items() if k != "date"})
-                    save_json(path, data)
+                    self._store.save(data)
                     # 更新关联提醒
-                    self._update_event_reminder(ev, new_date or day.get("date"), updates, path, data)
+                    self._update_event_reminder(ev, new_date or day.get("date"), updates, data)
                     return f"已更新日程：{ev.get('title', event_id)}"
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
@@ -169,7 +171,7 @@ class GoogleCalendarTool(BaseTool):
                     # 删除关联提醒
                     self._delete_event_reminder(ev)
                     events.remove(ev)
-                    save_json(path, data)
+                    self._store.save(data)
                     return f"已删除日程：{matched_title}"
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
@@ -205,16 +207,15 @@ class GoogleCalendarTool(BaseTool):
         except Exception as e:
             logger.error(f"创建日程关联提醒失败: {e}")
 
-    def _update_event_reminder(self, event: dict, date: str, updates: dict, path=None, data=None):
+    def _update_event_reminder(self, event: dict, date: str, updates: dict, data=None):
         """更新日程关联提醒的时间"""
         reminder_id = event.get("reminder_id")
         if not reminder_id:
             # 旧日程没有关联提醒，补创建一个
             self._create_event_reminder(event, date)
             # 重新保存日程数据（包含新 reminder_id）
-            if path and data:
-                from src.data_layer.loader import save_json
-                save_json(path, data)
+            if data:
+                self._store.save(data)
             return
 
         # 正常更新逻辑委托给 ReminderService

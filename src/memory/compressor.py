@@ -10,7 +10,7 @@ NOT based on message count. Large-context models (200k) rarely compress.
 
 import os
 from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_openai import ChatOpenAI
+from src.llm.openai import create_chat_model
 import src.config as _cfg  # Read at call time for hot-reload support
 
 SUMMARIZE_PROMPT = """请将以下新对话内容合并到已有摘要中，生成更新后的摘要。
@@ -86,7 +86,7 @@ class ConversationCompressor:
         new_text = self._messages_to_text(new_messages)
 
         try:
-            llm = ChatOpenAI(model=_cfg.LLM_MODEL, api_key=_cfg.LLM_API_KEY, base_url=_cfg.LLM_BASE_URL, temperature=0)
+            llm = create_chat_model(temperature=0)
             prompt = SUMMARIZE_PROMPT.format(existing=existing or "无", new_messages=new_text)
             result = llm.invoke([HumanMessage(content=prompt)])
             return result.content.strip()

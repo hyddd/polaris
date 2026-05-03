@@ -11,6 +11,60 @@ logger = logging.getLogger("polaris.channels")
 class ChannelPlugin(abc.ABC):
     """Base class for chat channel integrations (Feishu, QQ, WeChat, etc.)."""
 
+    @staticmethod
+    def _split_message(text: str, max_length: int) -> list[str]:
+        """按段落/句子边界智能分段，fallback 到硬截断。
+
+        优先按段落（\\n\\n）边界拆分，其次按句子（。！？）边界拆分，
+        若无可用的自然边界则按字符数硬截断。
+
+        Args:
+            text: 消息原文
+            max_length: 单条消息最大字符数
+
+        Returns:
+            分段后的消息列表，每段不超过 max_length 字符
+        """
+        if not text:
+            return []
+        if len(text) <= max_length:
+            return [text]
+
+        chunks: list[str] = []
+        remaining = text
+
+        while remaining:
+            if len(remaining) <= max_length:
+                chunks.append(remaining)
+                break
+
+            # 候选块：取前 max_length 个字符
+            chunk = remaining[:max_length]
+
+            # 1. 尝试按段落边界（\\n\\n）拆分
+            split_pos = chunk.rfind('\n\n')
+            if split_pos > 0:
+                chunks.append(remaining[:split_pos])
+                remaining = remaining[split_pos:].lstrip('\n')
+                continue
+
+            # 2. 尝试按句子边界（。！？）拆分
+            split_pos = -1
+            for p in ('。', '！', '？'):
+                pos = chunk.rfind(p)
+                if pos > split_pos:
+                    split_pos = pos
+            if split_pos > 0:
+                chunks.append(remaining[:split_pos + 1])
+                remaining = remaining[split_pos + 1:]
+                continue
+
+            # 3. 硬截断
+            chunks.append(chunk)
+            remaining = remaining[max_length:]
+
+        return chunks
+
     @property
     @abc.abstractmethod
     def name(self) -> str:

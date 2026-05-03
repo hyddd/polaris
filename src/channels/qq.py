@@ -46,13 +46,14 @@ class _PolarisQQClient(botpy.Client):
         )
 
         session_mgr = get_session_manager()
-        loop = asyncio.get_running_loop()
-        response_text, _ = await loop.run_in_executor(
-            None, lambda: process_message(text, session_mgr, channel=f"qq:{user_id}")
-        )
+        response_text, _ = await process_message(text, session_mgr, channel=f"qq:{user_id}")
 
         if response_text:
-            await self._reply(message, response_text[:2000])
+            chunks = ChannelPlugin._split_message(response_text, 2000)
+            for i, chunk in enumerate(chunks):
+                if i > 0:
+                    await asyncio.sleep(0.5)
+                await self._reply(message, chunk)
 
     async def _reply(self, message, content: str) -> None:
         """Send markdown-rendered reply. msg_type=2 enables rich rendering on mobile."""
@@ -161,19 +162,24 @@ class QQChannel(ChannelPlugin):
                 logger.warning("QQ 事件循环未初始化")
                 return False
 
-            # 使用保存的事件循环发送消息
-            async def _send():
-                md = {"content": message}
-                await self._client.api.post_c2c_message(
-                    openid=openid,
-                    msg_type=2,
-                    markdown=md,
-                )
+            # 分段发送长消息
+            chunks = ChannelPlugin._split_message(message, 2000)
+
+            async def _send_all():
+                for i, chunk in enumerate(chunks):
+                    if i > 0:
+                        await asyncio.sleep(0.5)
+                    md = {"content": chunk}
+                    await self._client.api.post_c2c_message(
+                        openid=openid,
+                        msg_type=2,
+                        markdown=md,
+                    )
 
             # 在事件循环中执行异步任务
-            future = asyncio.run_coroutine_threadsafe(_send(), self._loop)
-            # 等待完成，超时 10 秒
-            future.result(timeout=10)
+            future = asyncio.run_coroutine_threadsafe(_send_all(), self._loop)
+            # 等待完成，超时 10 秒每段
+            future.result(timeout=max(10, 10 * len(chunks)))
 
             logger.info(f"QQ 消息已发送到 {openid}")
             return True

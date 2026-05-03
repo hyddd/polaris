@@ -2,8 +2,8 @@ import uuid
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from pathlib import Path
 
+from src.storage import JsonFileStore
 from src.tools._utils import find_by_id_or_title
 
 
@@ -44,14 +44,18 @@ class TodoTool(BaseTool):
 - "把明天的截止日期改到后天" → search(keyword="xxx") → update(todo_id="xxx", due="后天日期")"""
     args_schema: type[BaseModel] = TodoInput
     data_file: str = ""
+    _store: JsonFileStore | None = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._store = JsonFileStore(self.data_file)
 
     def _run(self, action: str, status: str | None = None, keyword: str | None = None,
              title: str | None = None, priority: str | None = None, due: str | None = None,
              todo_id: str | None = None, updates: dict | None = None) -> str:
-        from src.data_layer.loader import load_todos, save_json
-
-        path = Path(self.data_file)
-        todos = load_todos(path)
+        todos = self._store.load()
+        if not isinstance(todos, list):
+            todos = []
         status_map = {"pending": "待完成", "in_progress": "进行中", "done": "已完成"}
         priority_map = {"high": "高", "medium": "中", "low": "低"}
 
@@ -99,7 +103,7 @@ class TodoTool(BaseTool):
                 "tags": [],
             }
             todos.append(new_todo)
-            save_json(path, todos)
+            self._store.save(todos)
             pr = priority_map.get(new_todo["priority"], "-")
             return f"已添加待办（优先级{pr}）：{title}，截止 {due or '未设'}"
 
@@ -116,7 +120,7 @@ class TodoTool(BaseTool):
             t = find_by_id_or_title(todos, "id", todo_id, "title", title)
             if t:
                 t.update(updates)
-                save_json(path, todos)
+                self._store.save(todos)
                 return f"已更新待办：{t.get('title', todo_id)}"
             return f"未找到待办：{todo_id or title}"
 
@@ -125,7 +129,7 @@ class TodoTool(BaseTool):
             t = find_by_id_or_title(todos, "id", todo_id, "title", title)
             if t:
                 t["status"] = "done"
-                save_json(path, todos)
+                self._store.save(todos)
                 return f"已将「{t['title']}」标记为已完成。"
             return f"未找到待办：{todo_id or title}"
 
@@ -135,7 +139,7 @@ class TodoTool(BaseTool):
             if t:
                 matched_title = t["title"]
                 todos.remove(t)
-                save_json(path, todos)
+                self._store.save(todos)
                 return f"已删除待办：{matched_title}"
             return f"未找到待办：{todo_id or title}"
 

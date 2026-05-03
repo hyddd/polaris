@@ -4,12 +4,20 @@ LLM always gets ALL tools and decides autonomously whether to call them.
 Supports token-level streaming via LangGraph get_stream_writer().
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime
-from langchain_openai import ChatOpenAI
+from typing import TYPE_CHECKING
+
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage, SystemMessage
+from src.llm.openai import create_chat_model
+
+if TYPE_CHECKING:
+    from langchain_openai import ChatOpenAI
+
 from src.agent.state import AgentState
 from src.agent.interceptors import get_interceptors, init_default_interceptors
 import src.config as _cfg  # Read at call time for hot-reload support
@@ -43,9 +51,7 @@ def _get_llm() -> ChatOpenAI:
     global _llm_cache, _llm_cache_key
     key = (_cfg.LLM_MODEL, _cfg.LLM_API_KEY, _cfg.LLM_BASE_URL)
     if _llm_cache is None or _llm_cache_key != key:
-        _llm_cache = ChatOpenAI(
-            model=key[0], api_key=key[1], base_url=key[2], temperature=0.3
-        )
+        _llm_cache = create_chat_model(temperature=0.3)
         _llm_cache_key = key
     return _llm_cache
 

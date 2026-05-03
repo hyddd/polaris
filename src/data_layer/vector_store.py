@@ -1,9 +1,21 @@
+import logging
 from pathlib import Path
 from chromadb import PersistentClient
 from chromadb.utils import embedding_functions
 
+logger = logging.getLogger(__name__)
+
+# 缓存 PersistentClient 实例，避免重复创建
+_client_cache: dict[str, PersistentClient] = {}
+# 缓存 embedding function 实例
+_embedding_function = None
+
 
 def get_embedding_function():
+    global _embedding_function
+    if _embedding_function is not None:
+        return _embedding_function
+
     from src.config import EMBEDDING_API_KEY, EMBEDDING_BASE_URL, EMBEDDING_MODEL
 
     api_key = EMBEDDING_API_KEY
@@ -14,7 +26,8 @@ def get_embedding_function():
     kwargs = {"api_key": api_key, "model_name": model}
     if base_url:
         kwargs["api_base"] = base_url
-    return embedding_functions.OpenAIEmbeddingFunction(**kwargs)
+    _embedding_function = embedding_functions.OpenAIEmbeddingFunction(**kwargs)
+    return _embedding_function
 
 
 def check_embedding_config() -> None:
@@ -25,10 +38,23 @@ def check_embedding_config() -> None:
         print("⚠ 未配置 EMBEDDING_API_KEY，向量检索功能不可用")
         return
     print(f"使用云端 Embedding: {EMBEDDING_MODEL}")
+    if _client_cache or _embedding_function is not None:
+        logger.warning("已有缓存的向量存储客户端，若 Embedding 配置发生变更请调用 reset_vector_store_cache() 清空缓存")
+
+
+def reset_vector_store_cache() -> None:
+    """清空客户端和 embedding 缓存，配置变更后调用以强制重建。"""
+    global _client_cache, _embedding_function
+    _client_cache.clear()
+    _embedding_function = None
+    logger.warning("向量存储缓存已清空，下次调用将重新创建客户端和 Embedding 函数")
 
 
 def get_vector_store(persist_dir: str, collection_name: str = "notes"):
-    client = PersistentClient(path=persist_dir)
+    global _client_cache
+    if persist_dir not in _client_cache:
+        _client_cache[persist_dir] = PersistentClient(path=persist_dir)
+    client = _client_cache[persist_dir]
     embedding = get_embedding_function()
     return client.get_or_create_collection(name=collection_name, embedding_function=embedding)
 

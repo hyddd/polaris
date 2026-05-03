@@ -35,6 +35,7 @@ from src.config import CALENDAR_FILE, TODOS_FILE
 from src.handler import process_message
 from src.lock import _get_session_lock, _cleanup_session_locks
 from src.middleware.auth import admin_auth_middleware
+from src.middleware.ratelimit import rate_limit_middleware
 from src.storage.atomic import _atomic_write
 
 
@@ -131,6 +132,7 @@ app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
 # --- Admin API auth middleware ---
 
 app.middleware("http")(admin_auth_middleware)
+app.middleware("http")(rate_limit_middleware)
 
 
 # Admin frontend static files
@@ -178,7 +180,7 @@ def _edit_message(session_id: str, message_id: str, new_content: str, session_mg
 # In-process channels (Feishu, QQ) call agent directly, not via HTTP.
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+async def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
     session = _get_active_session(req.session_id, session_mgr, channel)
@@ -186,7 +188,7 @@ def chat(req: ChatRequest):
     # 重试逻辑
     if req.retry_message_id:
         original_content = _retry_message(session.session_id, req.retry_message_id, session_mgr, channel)
-        response_text, tool_calls = process_message(original_content, session_mgr, channel)
+        response_text, tool_calls = await process_message(original_content, session_mgr, channel)
         return ChatResponse(
             session_id=session.session_id,
             response=response_text,
@@ -196,7 +198,7 @@ def chat(req: ChatRequest):
     # 编辑逻辑
     if req.edit_message_id and req.edit_content:
         new_content = _edit_message(session.session_id, req.edit_message_id, req.edit_content, session_mgr, channel)
-        response_text, tool_calls = process_message(new_content, session_mgr, channel)
+        response_text, tool_calls = await process_message(new_content, session_mgr, channel)
         return ChatResponse(
             session_id=session.session_id,
             response=response_text,
@@ -204,7 +206,7 @@ def chat(req: ChatRequest):
         )
 
     # 正常聊天
-    response_text, tool_calls = process_message(req.message, session_mgr, channel)
+    response_text, tool_calls = await process_message(req.message, session_mgr, channel)
     return ChatResponse(
         session_id=session.session_id,
         response=response_text,
@@ -242,7 +244,7 @@ async def chat_stream(req: ChatRequest, request: Request):
 
     # System commands: wrap in SSE
     if message_content.strip().startswith("/"):
-        response_text, _ = process_message(message_content, session_mgr, channel)
+        response_text, _ = await process_message(message_content, session_mgr, channel)
 
         async def cmd_gen() -> AsyncGenerator[str, None]:
             import json as _j
@@ -281,11 +283,12 @@ async def chat_stream(req: ChatRequest, request: Request):
 
         # Non-blocking try_lock: if another request is already processing
         # for this session, return an error instead of blocking the SSE stream.
-        if not session_lock.acquire(blocking=False):
+        if session_lock.locked():
             yield f"event: error\ndata: {json.dumps({'error': '该会话正在处理中，请稍后再试'}, ensure_ascii=False)}\n\n"
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
             return
 
+        await session_lock.acquire()
         try:
             # 在锁内设置 context，防止并发覆盖
             user_id = channel.split(":", 1)[-1] if ":" in channel else ""
