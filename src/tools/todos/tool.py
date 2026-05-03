@@ -112,6 +112,12 @@ class TodoTool(BaseTool):
         elif action == "update":
             if not updates and not priority and not due:
                 return "修改待办需要提供要修改的字段。"
+            if isinstance(updates, str):
+                import json as _json
+                try:
+                    updates = _json.loads(updates)
+                except _json.JSONDecodeError:
+                    return "updates 需要是 JSON 对象，收到的却是无法解析的字符串。"
             updates = updates or {}
             # title param is for matching only, new title must go through updates["title"]
             if priority and "priority" not in updates:
