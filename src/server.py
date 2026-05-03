@@ -241,8 +241,6 @@ async def chat_stream(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
     session = _get_active_session(req.session_id, session_mgr, channel)
-    user_id = channel.split(":", 1)[-1] if ":" in channel else ""
-    _set_ctx(channel=channel, session_id=session.session_id, user_id=user_id)
 
     # Determine the message content (retry/edit/normal)
     message_content = req.message
@@ -302,6 +300,9 @@ async def chat_stream(req: ChatRequest):
             return
 
         try:
+            # 在锁内设置 context，防止并发覆盖
+            user_id = channel.split(":", 1)[-1] if ":" in channel else ""
+            _set_ctx(channel=channel, session_id=session.session_id, user_id=user_id)
             async for event in agent.astream_events(state, version="v2"):
                 kind = event.get("event", "")
 
@@ -683,11 +684,11 @@ def _cleanup_session_locks(session_id: str) -> None:
 
 def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
-    # Extract user_id from channel string (e.g., "qq:user123" -> "user123")
-    user_id = channel.split(":", 1)[-1] if ":" in channel else ""
     session_id = session_mgr.active_session(channel).session_id
-    _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
     with _get_session_lock(channel, session_id):
+        # 在锁内设置 context，防止并发覆盖
+        user_id = channel.split(":", 1)[-1] if ":" in channel else ""
+        _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
         return _process_message_impl(text, session_mgr, channel)
 
 
