@@ -92,17 +92,16 @@ class GoogleCalendarTool(BaseTool):
                 "attendees": attendees or [],
                 "reminder_id": None,
             }
+            # 先创建关联提醒（会设置 reminder_id）
+            self._create_event_reminder(new_event, date)
+            # 再保存日程数据（包含 reminder_id）
             for day in data:
                 if day.get("date") == date:
                     day.setdefault("events", []).append(new_event)
                     save_json(path, data)
-                    # 创建关联提醒
-                    self._create_event_reminder(new_event, date)
                     return f"已添加日程：{date} {new_event['time']} {title}"
             data.append({"date": date, "events": [new_event]})
             save_json(path, data)
-            # 创建关联提醒
-            self._create_event_reminder(new_event, date)
             return f"已添加日程：{date} {new_event['time']} {title}"
 
         elif action == "update":
