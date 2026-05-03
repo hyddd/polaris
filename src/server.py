@@ -97,6 +97,7 @@ async def lifespan(app: FastAPI):
 
     reminder_store = ReminderStore(str(REMINDERS_FILE))
     reminder_handler = ReminderHandler(mgr)
+    reminder_handler.set_store(reminder_store)
     reminder_scheduler = ReminderScheduler(reminder_store, reminder_handler)
     reminder_scheduler.start()
     set_scheduler(reminder_scheduler)

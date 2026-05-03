@@ -7,9 +7,15 @@ logger = logging.getLogger("polaris.reminders.handlers")
 class ReminderHandler:
     def __init__(self, channel_manager):
         self.channel_manager = channel_manager
+        self._store = None
 
-    async def handle(self, reminder: Reminder):
-        """处理提醒触发"""
+    def set_store(self, store):
+        """设置 store 以便触发时更新状态"""
+        self._store = store
+
+    def handle(self, reminder: Reminder):
+        """处理提醒触发（同步函数，APScheduler 直接调用）"""
+        logger.info(f"提醒触发: {reminder.id} - {reminder.title}")
         message = self._format_message(reminder)
 
         # 提取渠道名（qq:user123 -> qq）
@@ -18,25 +24,27 @@ class ReminderHandler:
         # admin 渠道特殊处理：写入 session 消息
         if channel_name == "admin":
             self._push_to_admin_session(reminder, message)
-            return
-
-        # 其他渠道：通过 channel 插件发送
-        channel = self._get_channel(channel_name)
-        if channel:
-            success = channel.send_message(
-                session_id=reminder.session_id,
-                message=message,
-            )
-            if success:
-                logger.info(f"提醒已推送: {reminder.id} -> {reminder.channel}")
-            else:
-                logger.warning(f"提醒推送失败: {reminder.id}")
         else:
-            logger.warning(f"渠道未找到: {channel_name}")
+            # 其他渠道：通过 channel 插件发送
+            channel = self._get_channel(channel_name)
+            if channel:
+                success = channel.send_message(
+                    session_id=reminder.session_id,
+                    message=message,
+                )
+                if success:
+                    logger.info(f"提醒已推送: {reminder.id} -> {reminder.channel}")
+                else:
+                    logger.warning(f"提醒推送失败: {reminder.id}")
+            else:
+                logger.warning(f"渠道未找到: {channel_name}")
 
-        # 一次性提醒触发后标记为完成
+        # 一次性提醒触发后标记为完成并保存
         if reminder.repeat_rule == RepeatRule.NONE:
             reminder.status = ReminderStatus.CANCELLED
+            if self._store:
+                self._store.update(reminder.id, status=ReminderStatus.CANCELLED)
+                logger.info(f"提醒已标记为完成: {reminder.id}")
 
     def _push_to_admin_session(self, reminder: Reminder, message: str):
         """将提醒推送到 admin session"""
@@ -52,10 +60,6 @@ class ReminderHandler:
                 logger.warning(f"Session 未找到: {reminder.session_id}")
         except Exception as e:
             logger.warning(f"推送到 admin session 失败: {e}")
-
-        # 一次性提醒触发后标记为完成
-        if reminder.repeat_rule == RepeatRule.NONE:
-            reminder.status = ReminderStatus.CANCELLED
 
     def _get_channel(self, channel_name: str):
         """获取渠道插件"""
