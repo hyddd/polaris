@@ -139,7 +139,7 @@ class PolarisFeishuBot:
         import asyncio
         import threading
         from src.session.manager import get_session_manager
-        from src.handler import process_message
+        from src.message import process_message
 
         session_mgr = get_session_manager()
 

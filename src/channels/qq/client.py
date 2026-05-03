@@ -30,7 +30,7 @@ class _PolarisQQClient(botpy.Client):
         await self._handle(message.content, message)
 
     async def _handle(self, content: str, message) -> None:
-        from src.handler import process_message
+        from src.message import process_message
         from src.session.manager import get_session_manager
 
         text = content.strip()

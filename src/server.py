@@ -34,7 +34,7 @@ from src.config import config
 CALENDAR_FILE = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
 TODOS_FILE = config.resolve_path(config.get("storage.todos_file", "data/todos.json"))
 
-from src.handler import process_message
+from src.message import process_message
 from src.lock import _get_session_lock, _cleanup_session_locks
 from src.middleware.auth import admin_auth_middleware
 from src.middleware.ratelimit import rate_limit_middleware
