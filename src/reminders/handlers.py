@@ -42,7 +42,7 @@ class ReminderHandler:
         """将提醒推送到 admin session"""
         try:
             from src.session.manager import get_session_manager
-            session_mgr = self.session_manager or get_session_manager()
+            session_mgr = get_session_manager()
             session = session_mgr.get(reminder.session_id)
             if session:
                 from langchain_core.messages import AIMessage

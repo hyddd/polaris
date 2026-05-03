@@ -74,6 +74,8 @@ class ReminderTool(BaseTool):
                 session_id=_session_id or "",
             )
             store.create(r)
+            # 添加到调度器
+            self._get_scheduler().add_reminder(r)
             return f"已创建提醒：{r.title} @ {dt.strftime('%Y-%m-%d %H:%M')} [{r.id}]"
 
         elif action == "update":
@@ -100,6 +102,7 @@ class ReminderTool(BaseTool):
             if not reminder_id:
                 return "删除提醒需要提供提醒 ID。"
             if store.delete(reminder_id):
+                self._get_scheduler().remove_reminder(reminder_id)
                 return f"已删除提醒：{reminder_id}"
             return f"未找到提醒：{reminder_id}"
 
@@ -109,6 +112,7 @@ class ReminderTool(BaseTool):
             r = store.update(reminder_id, status=ReminderStatus.PAUSED)
             if not r:
                 return f"未找到提醒：{reminder_id}"
+            self._get_scheduler().remove_reminder(reminder_id)
             return f"已暂停提醒：{r.title}"
 
         elif action == "resume":
@@ -117,9 +121,18 @@ class ReminderTool(BaseTool):
             r = store.update(reminder_id, status=ReminderStatus.ACTIVE)
             if not r:
                 return f"未找到提醒：{reminder_id}"
+            self._get_scheduler().add_reminder(r)
             return f"已恢复提醒：{r.title}"
 
         return "未知操作。"
 
     async def _arun(self, **kwargs) -> str:
         return self._run(**kwargs)
+
+    def _get_scheduler(self):
+        """获取调度器实例"""
+        from src.reminders import get_scheduler
+        scheduler = get_scheduler()
+        if not scheduler:
+            raise RuntimeError("提醒调度器未初始化")
+        return scheduler
