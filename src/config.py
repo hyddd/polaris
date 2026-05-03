@@ -93,7 +93,6 @@ class Config:
 
     def __init__(self):
         self._data: dict = {}
-        self._listeners: list = []
 
     def load(self) -> None:
         """Load (or reload) configuration from YAML files."""
@@ -117,23 +116,14 @@ class Config:
         return PROJECT_ROOT / p
 
     def reload(self) -> dict:
-        """Re-read YAML config files and notify listeners.
+        """Re-read YAML config files, publish config:reload event.
 
         Returns the full config snapshot dict.
         """
         self.load()
-        for callback in self._listeners:
-            try:
-                callback()
-            except Exception:
-                pass
         from src.events import event_bus
         event_bus.publish("config:reload")
         return dict(self._data)
-
-    def on_reload(self, callback) -> None:
-        """Register a callback to be called when config is reloaded."""
-        self._listeners.append(callback)
 
 
 # ---------------------------------------------------------------------------
@@ -146,11 +136,6 @@ config.load()
 # ---------------------------------------------------------------------------
 # Module-level convenience wrappers (compatible with old import style)
 # ---------------------------------------------------------------------------
-def on_reload(callback) -> None:
-    """Register a reload callback (module-level wrapper for config.on_reload)."""
-    config.on_reload(callback)
-
-
 def reload() -> dict:
     """Reload config (module-level wrapper for config.reload)."""
     return config.reload()
@@ -190,7 +175,7 @@ def __getattr__(name):
         return value
 
     if name in ("_PATH_VARS", "_CONFIG_FILE", "_LOCAL_CONFIG_FILE", "Config",
-                "_deep_merge", "_load_yaml_config", "config", "on_reload", "reload",
+                "_deep_merge", "_load_yaml_config", "config", "reload",
                 "PROJECT_ROOT", "_get", "_resolve_path"):
         raise AttributeError(name)
 
