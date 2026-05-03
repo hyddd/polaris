@@ -33,16 +33,13 @@ class ReminderTool(BaseTool):
              description: str | None = None, trigger_time: str | None = None,
              repeat_rule: str | None = None, event_id: str | None = None) -> str:
         from src.reminders.models import Reminder, RepeatRule, ReminderStatus
-        from src.reminders.store import ReminderStore
-        from src.config import config
+        from src.reminders import get_reminder_store
         from src.context import get_channel, get_session_id
 
         _channel = get_channel()
         _session_id = get_session_id()
 
-        store = ReminderStore(
-            str(config.resolve_path(config.get("storage.reminders_file", "data/reminders.json")))
-        )
+        store = get_reminder_store()
 
         if action == "list":
             reminders = store.list_active()

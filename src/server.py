@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI):
     from src.reminders.store import ReminderStore
     from src.reminders.scheduler import ReminderScheduler
     from src.reminders.handlers import ReminderHandler
-    from src.reminders import set_scheduler, set_reminder_service
+    from src.reminders import set_scheduler, set_reminder_service, set_reminder_store
     from src.reminders.service import ReminderService
     from src.config import config
 
@@ -120,6 +120,7 @@ async def lifespan(app: FastAPI):
 
     reminder_service = ReminderService(reminder_store, reminder_scheduler)
     set_reminder_service(reminder_service)
+    set_reminder_store(reminder_store)
 
     app.state.reminder_scheduler = reminder_scheduler
     app.state.reminder_store = reminder_store
