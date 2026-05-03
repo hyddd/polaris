@@ -248,19 +248,24 @@ class GoogleCalendarTool(BaseTool):
 
         reminder_id = event.get("reminder_id")
         if not reminder_id:
+            logger.info(f"日程没有关联提醒，跳过更新")
             return
 
         # 只在时间或日期变化时更新
         if "time" not in updates and "date" not in updates:
+            logger.info(f"时间/日期没有变化，跳过更新提醒")
             return
 
         try:
             store = ReminderStore(str(REMINDERS_FILE))
             reminder = store.get(reminder_id)
             if not reminder:
+                logger.warning(f"提醒不存在: {reminder_id}")
                 return
 
-            event_datetime = datetime.strptime(f"{date} {event.get('time', '09:00')}", "%Y-%m-%d %H:%M")
+            event_time = event.get('time', '09:00')
+            logger.info(f"更新提醒 - date: {date}, event_time: {event_time}, updates: {updates}")
+            event_datetime = datetime.strptime(f"{date} {event_time}", "%Y-%m-%d %H:%M")
             new_reminder_time = event_datetime - timedelta(minutes=15)
 
             # 更新提醒时间和标题
