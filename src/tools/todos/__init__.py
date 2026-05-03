@@ -1,12 +1,12 @@
 from .tool import TodoTool, create_default
 
-from src.events import event_bus
+from src.core.events import event_bus
 
 
 def _on_cleanup(**kwargs):
     import json
     import logging
-    from src.config import config
+    from src.core.config import config
 
     logger = logging.getLogger("polaris.tools.todos")
     path = config.resolve_path(config.get("storage.todos_file", "data/todos.json"))

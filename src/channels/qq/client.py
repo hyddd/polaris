@@ -93,12 +93,12 @@ class QQChannel(ChannelPlugin):
         return "qq"
 
     def is_configured(self) -> bool:
-        from src.config import config
+        from src.core.config import config
 
         return bool(config.get("channels.qq.bot_appid") and config.get("channels.qq.bot_secret"))
 
     def get_credentials(self) -> dict:
-        from src.config import config
+        from src.core.config import config
 
         return {
             "appid": config.get("channels.qq.bot_appid", ""),
@@ -106,7 +106,7 @@ class QQChannel(ChannelPlugin):
         }
 
     def start(self) -> None:
-        from src.config import config
+        from src.core.config import config
 
         appid = config.get("channels.qq.bot_appid", "")
         secret = config.get("channels.qq.bot_secret", "")

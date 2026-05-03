@@ -62,7 +62,7 @@ class PersonaTool(BaseTool):
         _session_id: str | None = None,
     ) -> str:
         from src.session.manager import get_session_manager
-        from src.context import get_session_id as _ctx_session_id
+        from src.core.context import get_session_id as _ctx_session_id
 
         session_mgr = get_session_manager()
         # Priority: explicit _session_id param > context > default

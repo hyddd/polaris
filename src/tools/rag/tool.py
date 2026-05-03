@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 def create_default() -> "RAGSearchTool":
     """Factory for auto-discovery. Creates a RAGSearchTool with default config."""
-    from src.config import config
+    from src.core.config import config
     return RAGSearchTool(
         persist_dir=str(config.resolve_path(config.get("storage.vector_db_dir", "data/chroma"))),
         collection_name="notes",
@@ -23,7 +23,7 @@ class RAGSearchTool(BaseTool):
     collection_name: str = "notes"
 
     def _run(self, query: str) -> str:
-        from src.data_layer.vector_store import search_notes
+        from src.storage.vector import search_notes
 
         query = query.strip()
         if not query:

@@ -22,7 +22,7 @@ class WebSearchTool(BaseTool):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from src.config import config
+        from src.core.config import config
         self.api_key = config.get("tools.web_search.api_key", "")
         self.api_base = config.get("tools.web_search.api_base", "https://api.tavily.com")
 

@@ -36,7 +36,7 @@ class ReminderTool(BaseTool):
     def _run(self, action: str, reminder_id: str | None = None, title: str | None = None,
              description: str | None = None, trigger_time: str | None = None,
              repeat_rule: str | None = None, event_id: str | None = None) -> str:
-        from src.context import get_channel, get_session_id
+        from src.core.context import get_channel, get_session_id
 
         _channel = get_channel()
         _session_id = get_session_id()

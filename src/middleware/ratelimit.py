@@ -11,7 +11,7 @@ from collections import defaultdict
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from src.config import config
+from src.core.config import config
 
 # Singleton limiter instance (lazily initialized)
 _limiter: "SlidingWindowRateLimiter | None" = None

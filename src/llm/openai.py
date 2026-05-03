@@ -3,7 +3,7 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
-from src.config import config
+from src.core.config import config
 
 
 def create_chat_model(

@@ -1,7 +1,7 @@
 """Admin API authentication middleware."""
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from src.config import config
+from src.core.config import config
 
 
 async def admin_auth_middleware(request: Request, call_next):

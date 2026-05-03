@@ -4,7 +4,7 @@ Default: data/config.yaml (tracked in git)
 Override: data/config.local.yaml (gitignored, for local secrets)
 
 Usage:
-    from src.config import config
+    from src.core.config import config
 
     model = config.get("llm.model", "gpt-4o")
     path = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
@@ -13,7 +13,7 @@ Usage:
 import yaml
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _CONFIG_FILE = PROJECT_ROOT / "data/config.yaml"
 _LOCAL_CONFIG_FILE = PROJECT_ROOT / "data/config.local.yaml"
@@ -100,7 +100,7 @@ class Config:
         Returns the full config snapshot dict.
         """
         self.load()
-        from src.events import event_bus
+        from src.core.events import event_bus
         event_bus.publish("config:reload")
         return dict(self._data)
 

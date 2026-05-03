@@ -28,14 +28,14 @@ from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import get_session_manager, SessionManager
 from src.tools.registry import ToolRegistry
-from src.context import set_context as _set_ctx
-from src.config import config
+from src.core.context import set_context as _set_ctx
+from src.core.config import config
 
 CALENDAR_FILE = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
 TODOS_FILE = config.resolve_path(config.get("storage.todos_file", "data/todos.json"))
 
 from src.message import process_message
-from src.lock import _get_session_lock, _cleanup_session_locks
+from src.core.lock import get_session_lock, cleanup_session_locks
 from src.middleware.auth import admin_auth_middleware
 from src.middleware.ratelimit import rate_limit_middleware
 from src.storage.atomic import _atomic_write
@@ -77,7 +77,7 @@ _tools_registered = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from src.config import config
+    from src.core.config import config
     if not config.get("llm.api_key", ""):
         raise RuntimeError(
             "LLM API Key 未配置。请在 data/config.local.yaml 中设置 llm.api_key。"
@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
 
     # Check embedding config (cloud API, no local model to pre-warm)
     try:
-        from src.data_layer.vector_store import check_embedding_config
+        from src.storage.vector import check_embedding_config
         check_embedding_config()
     except Exception:
         pass
@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI):
     set_cron_scheduler(cron)
 
     # 通知各模块：框架已就绪（各 tools/channels 可自初始化）
-    from src.events import event_bus
+    from src.core.events import event_bus
     event_bus.publish("app:startup", cron=cron, channels=channels)
 
     def _daily_tick():
@@ -277,7 +277,7 @@ async def chat_stream(req: ChatRequest, request: Request):
     )
 
     # Acquire per-session lock before streaming starts
-    session_lock = _get_session_lock(channel, session.session_id)
+    session_lock = get_session_lock(channel, session.session_id)
 
     async def generate() -> AsyncGenerator[str, None]:
         full_response = ""
@@ -439,7 +439,7 @@ def delete_session(session_id: str):
     session_mgr = get_session_manager()
     if not session_mgr.delete(session_id):
         raise HTTPException(status_code=400, detail=f"Cannot delete session: {session_id}")
-    _cleanup_session_locks(session_id)
+    cleanup_session_locks(session_id)
     return {"ok": True}
 
 
@@ -460,7 +460,7 @@ def _mask_value(key: str, value: str) -> str:
 
 @app.get("/api/config")
 def get_config():
-    from src.config import config
+    from src.core.config import config
     cfg = config.as_dict()
     lines = []
     _flatten_config(cfg, "", lines)
@@ -486,7 +486,7 @@ class ConfigUpdate(BaseModel):
 
 @app.post("/api/config")
 def update_config(req: ConfigUpdate):
-    from src.config import config
+    from src.core.config import config
 
     for key, value in req.vars.items():
         config.set(key, value)

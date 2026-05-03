@@ -1,13 +1,13 @@
 from .tool import GoogleCalendarTool, create_default
 
-from src.events import event_bus
+from src.core.events import event_bus
 
 
 def _on_cleanup(**kwargs):
     import json
     import logging
     from datetime import datetime, timedelta
-    from src.config import config
+    from src.core.config import config
 
     logger = logging.getLogger("polaris.tools.calendar")
     path = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))

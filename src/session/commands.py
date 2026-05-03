@@ -18,7 +18,7 @@ from src.session.manager import SessionManager
 
 def handle_command(text: str, session_mgr: SessionManager, channel: str = "") -> str | None:
     """Try to handle a system command. Returns response string, or None if not a command."""
-    from src.context import get_channel as _ctx_channel
+    from src.core.context import get_channel as _ctx_channel
     channel = channel or _ctx_channel() or "default"
 
     text = text.strip()
@@ -177,7 +177,7 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
 def _reload() -> str:
     """Re-read YAML config files and publish config:reload event."""
     try:
-        from src.config import config
+        from src.core.config import config
         config.reload()
 
         lines = ["配置已重载。"]
@@ -195,7 +195,7 @@ def _reload() -> str:
 
 def _cleanup() -> str:
     try:
-        from src.events import event_bus
+        from src.core.events import event_bus
         event_bus.publish("cleanup:now")
         return "已触发数据清理，各模块正在处理。"
     except Exception as e:

@@ -10,7 +10,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, AIMessage
 from src.memory.store import MemoryManager
 from src.memory.compressor import ConversationCompressor
-from src.config import config
+from src.core.config import config
 
 # sessions_dir from config is the sessions storage directory (e.g. "data/sessions")
 SESSIONS_DIR = config.resolve_path(config.get("storage.sessions_dir", "data/sessions"))

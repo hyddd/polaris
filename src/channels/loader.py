@@ -14,7 +14,7 @@ _threads: dict[str, threading.Thread] = {}
 
 def discover_and_start() -> list:
     """从 YAML 配置加载并启动所有 enabled 的 channel 插件。"""
-    from src.config import config
+    from src.core.config import config
     from src.channels.base import ChannelPlugin
 
     global _discovered_channels, _credentials
@@ -95,5 +95,5 @@ def _start_one(ch_name: str, ch) -> None:
 
 # ── Event subscription ────────────────────────────────────────
 
-from src.events import event_bus
+from src.core.events import event_bus
 event_bus.subscribe("config:reload", _on_config_reload)

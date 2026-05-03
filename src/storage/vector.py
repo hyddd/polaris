@@ -16,7 +16,7 @@ def get_embedding_function():
     if _embedding_function is not None:
         return _embedding_function
 
-    from src.config import config
+    from src.core.config import config
 
     api_key = config.get("embedding.api_key", "")
     if not api_key:
@@ -32,7 +32,7 @@ def get_embedding_function():
 
 def check_embedding_config() -> None:
     """检查 Embedding 配置是否可用，打印配置信息。"""
-    from src.config import config
+    from src.core.config import config
 
     api_key = config.get("embedding.api_key", "")
     model = config.get("embedding.model", "netease-youdao/bce-embedding-base_v1")
@@ -62,7 +62,7 @@ def get_vector_store(persist_dir: str, collection_name: str = "notes"):
 
 
 def index_notes(notes_dir: str, persist_dir: str, collection_name: str = "notes") -> None:
-    from src.data_layer.loader import load_notes
+    from src.storage.loaders import load_notes
 
     collection = get_vector_store(persist_dir, collection_name)
     notes = load_notes(Path(notes_dir))

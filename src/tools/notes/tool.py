@@ -7,7 +7,7 @@ from pathlib import Path
 
 def create_default() -> "NoteTool":
     """Factory for auto-discovery. Creates a NoteTool with default config."""
-    from src.config import config
+    from src.core.config import config
     notes_dir = config.resolve_path(config.get("storage.notes_dir", "data/notes"))
     return NoteTool(
         notes_dir=str(notes_dir),
@@ -38,7 +38,7 @@ class NoteTool(BaseTool):
 
     def _run(self, action: str, filename: str | None = None, title: str | None = None,
              content: str | None = None, tags: list[str] | None = None) -> str:
-        from src.data_layer.loader import load_notes, save_note, archive_note
+        from src.storage.loaders import load_notes, save_note, archive_note
 
         notes_path = Path(self.notes_dir)
         archive_path = Path(self.archive_dir)
@@ -101,7 +101,7 @@ def _index_note(filename: str, title: str, content: str, tags: list[str],
     import logging
     logger = logging.getLogger("polaris.tools.notes")
     try:
-        from src.data_layer.vector_store import add_note_to_index
+        from src.storage.vector import add_note_to_index
         add_note_to_index(filename, title, content, tags, persist_dir, collection_name)
         logger.debug(f"笔记已索引: {filename}")
     except Exception as e:
@@ -113,7 +113,7 @@ def _deindex_note(filename: str, persist_dir: str, collection_name: str) -> None
     import logging
     logger = logging.getLogger("polaris.tools.notes")
     try:
-        from src.data_layer.vector_store import remove_note_from_index
+        from src.storage.vector import remove_note_from_index
         remove_note_from_index(filename, persist_dir, collection_name)
         logger.debug(f"笔记已从索引移除: {filename}")
     except Exception as e:

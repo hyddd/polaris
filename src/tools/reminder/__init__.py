@@ -69,7 +69,7 @@ def repeat_rule_to_cron_kwargs(trigger_time, repeat_rule):
 def _on_startup(cron=None, channels=None, **kwargs):
     """框架就绪后自初始化：加载活跃提醒并注册到 cron。"""
     import logging
-    from src.config import config
+    from src.core.config import config
     from .store import ReminderStore
     from .handler import ReminderHandler
 
@@ -89,7 +89,7 @@ def _on_startup(cron=None, channels=None, **kwargs):
 def _on_cleanup(**kwargs):
     import logging
     from datetime import datetime, timedelta
-    from src.config import config
+    from src.core.config import config
 
     logger = logging.getLogger("polaris.tools.reminder")
     store = get_reminder_store()
@@ -200,7 +200,7 @@ def _on_calendar_deleted(event_id=None, **kwargs):
 
 # ── Subscriptions ──
 
-from src.events import event_bus
+from src.core.events import event_bus
 event_bus.subscribe("app:startup", _on_startup)
 event_bus.subscribe("cleanup:now", _on_cleanup)
 event_bus.subscribe("cleanup:cron", _on_cleanup)

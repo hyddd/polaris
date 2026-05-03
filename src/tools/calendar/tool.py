@@ -4,7 +4,7 @@ from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from src.config import config
+from src.core.config import config
 from src.storage import JsonFileStore
 from src.tools._utils import find_by_id_or_title
 
@@ -13,7 +13,7 @@ logger = logging.getLogger("polaris.tools.calendar")
 
 def create_default() -> "GoogleCalendarTool":
     """Factory for auto-discovery. Creates a GoogleCalendarTool with default config."""
-    from src.config import config
+    from src.core.config import config
     return GoogleCalendarTool(
         data_file=str(config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))),
         use_mock=True,
@@ -183,8 +183,8 @@ class GoogleCalendarTool(BaseTool):
 
     def _create_event_reminder(self, event: dict, date: str):
         """通知提醒模块：新日程已创建。"""
-        from src.events import event_bus
-        from src.context import get_channel, get_session_id
+        from src.core.events import event_bus
+        from src.core.context import get_channel, get_session_id
 
         event_time_str = f"{date} {event.get('time', '09:00')}"
         event_bus.publish("calendar:event_created",
@@ -195,7 +195,7 @@ class GoogleCalendarTool(BaseTool):
 
     def _update_event_reminder(self, event: dict, date: str, updates: dict, data=None):
         """通知提醒模块：日程已更新。"""
-        from src.events import event_bus
+        from src.core.events import event_bus
 
         event_time_str = f"{date} {event.get('time', '09:00')}"
         event_bus.publish("calendar:event_updated",
@@ -204,6 +204,6 @@ class GoogleCalendarTool(BaseTool):
 
     def _delete_event_reminder(self, event: dict):
         """通知提醒模块：日程已删除。"""
-        from src.events import event_bus
+        from src.core.events import event_bus
 
         event_bus.publish("calendar:event_deleted", event_id=event["id"])

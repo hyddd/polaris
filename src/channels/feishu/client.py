@@ -23,7 +23,7 @@ class PolarisFeishuBot:
     """Feishu WebSocket bot that relays messages to the Polaris Agent Server."""
 
     def __init__(self):
-        from src.config import config
+        from src.core.config import config
 
         app_id = config.get("channels.feishu.app_id", "")
         app_secret = config.get("channels.feishu.app_secret", "")
@@ -244,12 +244,12 @@ class FeishuChannel(ChannelPlugin):
         return "feishu"
 
     def is_configured(self) -> bool:
-        from src.config import config
+        from src.core.config import config
 
         return bool(config.get("channels.feishu.app_id") and config.get("channels.feishu.app_secret"))
 
     def get_credentials(self) -> dict:
-        from src.config import config
+        from src.core.config import config
 
         return {
             "app_id": config.get("channels.feishu.app_id", ""),
