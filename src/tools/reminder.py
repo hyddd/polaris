@@ -31,11 +31,15 @@ class ReminderTool(BaseTool):
 
     def _run(self, action: str, reminder_id: str | None = None, title: str | None = None,
              description: str | None = None, trigger_time: str | None = None,
-             repeat_rule: str | None = None, event_id: str | None = None,
-             _session_id: str | None = None, _channel: str | None = None) -> str:
+             repeat_rule: str | None = None, event_id: str | None = None) -> str:
         from src.reminders.models import Reminder, RepeatRule, ReminderStatus
         from src.reminders.store import ReminderStore
         from src.config import REMINDERS_FILE
+        from src.agent.executor import get_tool_context
+
+        ctx = get_tool_context()
+        _channel = ctx.get("channel", "")
+        _session_id = ctx.get("session_id", "")
 
         store = ReminderStore(str(REMINDERS_FILE))
 
