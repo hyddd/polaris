@@ -19,6 +19,7 @@ dependencies = [
     "uvicorn",
     "httpx",
     "qq-botpy",
+    "apscheduler>=3.10,<4",
 ]
 
 [project.optional-dependencies]

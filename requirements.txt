@@ -15,5 +15,6 @@ fastapi
 uvicorn
 httpx
 qq-botpy
+apscheduler>=3.10,<4
 pytest
 pytest-asyncio
