@@ -1,7 +1,8 @@
 import uuid
+import json as _json
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.storage import JsonFileStore
 from src.tools._utils import find_by_id_or_title
@@ -29,7 +30,14 @@ class TodoInput(BaseModel):
     )
     due: Optional[str] = Field(default=None, description="create/update 时的截止日期，格式 YYYY-MM-DD")
     todo_id: Optional[str] = Field(default=None, description="update/done/delete 时的待办 ID（优先级高于 title）")
-    updates: Optional[dict] = Field(default=None, description="update 时要修改的字段，如 {\"title\":\"新标题\", \"due\":\"2026-05-03\"}")
+    updates: Optional[dict | str] = Field(default=None, description="update 时要修改的字段")
+
+    @field_validator("updates", mode="before")
+    @classmethod
+    def _parse_updates(cls, v):
+        if isinstance(v, str):
+            return _json.loads(v)
+        return v
 
 
 class TodoTool(BaseTool):

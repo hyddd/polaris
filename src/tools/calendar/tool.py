@@ -1,8 +1,9 @@
 import uuid
+import json as _json
 import logging
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.core.config import config
 from src.storage import JsonFileStore
@@ -31,7 +32,14 @@ class CalendarInput(BaseModel):
     attendees: Optional[list[str]] = Field(default=None, description="create 时的参与者列表")
     duration: Optional[int] = Field(default=60, description="create 时的事件时长（分钟），默认 60")
     event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID（优先级高于 title+date）")
-    updates: Optional[dict] = Field(default=None, description='update 时要修改的字段，key 可选: time(格式HH:MM), date(格式YYYY-MM-DD), title, duration. 示例: {"time":"15:00"}')
+    updates: Optional[dict | str] = Field(default=None, description='update 时要修改的字段')
+
+    @field_validator("updates", mode="before")
+    @classmethod
+    def _parse_updates(cls, v):
+        if isinstance(v, str):
+            return _json.loads(v)
+        return v
 
 
 class GoogleCalendarTool(BaseTool):
