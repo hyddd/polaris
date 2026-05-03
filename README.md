@@ -121,7 +121,8 @@ event_bus.publish("config:reload")
 
 | 事件 | 发布者 | 发布时机 | 订阅者 |
 |------|--------|----------|--------|
-| `config:reload` | `src/config.py` | `/reload` 命令后 | executor（清 LLM 缓存） |
+| `app:startup` | `src/server.py` | 框架就绪后（cron+channels 已启动） | tools/reminder 自初始化 |
+| `config:reload` | `src/config.py` | `/reload` 命令后 | executor（清 LLM 缓存）、channels（重启） |
 | `cleanup:now` | `src/session/commands.py` | `/cleanup` 命令 | 各 tools 模块清理过期数据 |
 | `cleanup:cron` | `src/server.py` | 每天凌晨 3:00 | 各 tools 模块清理过期数据 |
 
