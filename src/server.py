@@ -97,8 +97,8 @@ async def lifespan(app: FastAPI):
         pass
 
     # Discover and start channel plugins (YAML-config driven)
-    from src.channels import discover_and_start, _discovered_channels, stop_all
-    discover_and_start()
+    from src.channels import discover_and_start, stop_all
+    channels = discover_and_start()
 
     # 启动 cron 框架
     from src.cron import CronScheduler, set_cron_scheduler
@@ -106,23 +106,9 @@ async def lifespan(app: FastAPI):
     cron.start()
     set_cron_scheduler(cron)
 
-    # 初始化提醒模块
-    from src.tools.reminder.store import ReminderStore
-    from src.tools.reminder.handler import ReminderHandler
-    from src.tools.reminder.setup import reminder_setup
-    from src.config import config
-
-    reminder_store = ReminderStore(
-        str(config.resolve_path(config.get("storage.reminders_file", "data/reminders.json")))
-    )
-    reminder_handler = ReminderHandler(_discovered_channels)
-    reminder_handler.set_store(reminder_store)
-
-    # 注册提醒调度任务
-    reminder_setup(cron, reminder_store, reminder_handler)
-
-    # 每日维护事件（各模块自行订阅处理：清理、健康检查等）
+    # 通知各模块：框架已就绪（各 tools/channels 可自初始化）
     from src.events import event_bus
+    event_bus.publish("app:startup", cron=cron, channels=channels)
 
     def _daily_tick():
         event_bus.publish("cleanup:cron")
@@ -131,8 +117,7 @@ async def lifespan(app: FastAPI):
     srv_logger = logging.getLogger("polaris.server")
     srv_logger.info("每日维护事件已注册: 每天 03:00")
 
-    app.state.reminder_scheduler = cron
-    app.state.reminder_store = reminder_store
+    app.state.cron = cron
 
     yield
 
