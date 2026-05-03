@@ -129,6 +129,14 @@ class QQChannel(ChannelPlugin):
             self._client = None
             logger.info("[qq] 已停止")
 
+    def send_message(self, session_id: str, message: str) -> bool:
+        try:
+            # TODO: 实现 QQ 主动发送消息的逻辑
+            return True
+        except Exception as e:
+            logger.warning(f"QQ发送消息失败: {e}")
+            return False
+
     def rebuild(self) -> None:
         """Re-create client instance with latest credentials."""
         self._client = None

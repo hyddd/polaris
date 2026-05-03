@@ -15,6 +15,8 @@ from src.channels import ChannelPlugin
 
 logger = logging.getLogger("polaris.channels.feishu")
 
+MAX_MESSAGE_LENGTH = 28 * 1024  # 28KB — 飞书限制 30KB，留 2KB 余量
+
 
 class PolarisFeishuBot:
     """Feishu WebSocket bot that relays messages to the Polaris Agent Server."""
@@ -165,35 +167,62 @@ class PolarisFeishuBot:
         except Exception:
             pass
 
-    def _send_message(self, chat_id: str, content: str) -> None:
+    def _do_send(self, receive_id: str, receive_id_type: str, content: str) -> None:
+        """Send a single message via Feishu API."""
         from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
         content_json = json.dumps({"text": content}, ensure_ascii=False)
+        request = CreateMessageRequest.builder() \
+            .receive_id_type(receive_id_type) \
+            .request_body(CreateMessageRequestBody.builder()
+                .receive_id(receive_id)
+                .msg_type("text")
+                .content(content_json)
+                .build()) \
+            .build()
+        self.client.im.v1.message.create(request)
+
+    @staticmethod
+    def _split_message(content: str) -> list[str]:
+        """Split a long message into chunks respecting paragraph boundaries."""
+        chunks: list[str] = []
+        current = ""
+        for line in content.split('\n'):
+            candidate = current + line + '\n'
+            if len(candidate.encode('utf-8')) > MAX_MESSAGE_LENGTH:
+                if current:
+                    chunks.append(current)
+                current = line + '\n'
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+        return chunks
+
+    def _send_message(self, chat_id: str, content: str) -> None:
         try:
-            request = CreateMessageRequest.builder() \
-                .receive_id_type("chat_id") \
-                .request_body(CreateMessageRequestBody.builder()
-                    .receive_id(chat_id)
-                    .msg_type("text")
-                    .content(content_json)
-                    .build()) \
-                .build()
-            self.client.im.v1.message.create(request)
+            if len(content.encode('utf-8')) <= MAX_MESSAGE_LENGTH:
+                self._do_send(chat_id, "chat_id", content)
+            else:
+                chunks = self._split_message(content)
+                logger.info(f"[feishu] 消息过长，分 {len(chunks)} 段发送")
+                for i, chunk in enumerate(chunks):
+                    if i > 0:
+                        time.sleep(0.5)
+                    self._do_send(chat_id, "chat_id", chunk)
         except Exception as e:
             logger.error(f"[feishu] 发送消息异常: {e}")
 
     def _send_message_by_user(self, user_id: str, content: str) -> None:
-        from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
-        content_json = json.dumps({"text": content}, ensure_ascii=False)
         try:
-            request = CreateMessageRequest.builder() \
-                .receive_id_type("open_id") \
-                .request_body(CreateMessageRequestBody.builder()
-                    .receive_id(user_id)
-                    .msg_type("text")
-                    .content(content_json)
-                    .build()) \
-                .build()
-            self.client.im.v1.message.create(request)
+            if len(content.encode('utf-8')) <= MAX_MESSAGE_LENGTH:
+                self._do_send(user_id, "open_id", content)
+            else:
+                chunks = self._split_message(content)
+                logger.info(f"[feishu] 消息过长，分 {len(chunks)} 段发送")
+                for i, chunk in enumerate(chunks):
+                    if i > 0:
+                        time.sleep(0.5)
+                    self._do_send(user_id, "open_id", chunk)
         except Exception as e:
             logger.error(f"[feishu] 发送消息异常: {e}")
 
@@ -225,6 +254,15 @@ class FeishuChannel(ChannelPlugin):
         if self._bot:
             self._bot.stop()
             self._bot = None
+
+    def send_message(self, session_id: str, message: str) -> bool:
+        try:
+            if self._bot:
+                self._bot._send_message(session_id, message)
+            return True
+        except Exception as e:
+            logger.warning(f"飞书发送消息失败: {e}")
+            return False
 
     def rebuild(self) -> None:
         """Re-create bot instance with latest credentials."""
