@@ -5,8 +5,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from .models import Reminder, RepeatRule, ReminderStatus
-from .setup import get_reminder_store, get_reminder_handler
-from .service import schedule_reminder
+from . import get_reminder_store, schedule_reminder
 from src.cron import get_cron_scheduler
 
 logger = logging.getLogger("polaris.tools.reminder")
@@ -75,10 +74,7 @@ class ReminderTool(BaseTool):
                 session_id=_session_id or "",
             )
             store.create(r)
-            # 添加到 cron 调度器
-            handler = get_reminder_handler()
-            scheduler = self._get_scheduler()
-            schedule_reminder(scheduler, handler, r)
+            schedule_reminder(r)
             return f"已创建提醒：{r.title} @ {dt.strftime('%Y-%m-%d %H:%M')} [{r.id}]"
 
         elif action == "update":
@@ -124,9 +120,7 @@ class ReminderTool(BaseTool):
             r = store.update(reminder_id, status=ReminderStatus.ACTIVE)
             if not r:
                 return f"未找到提醒：{reminder_id}"
-            handler = get_reminder_handler()
-            scheduler = self._get_scheduler()
-            schedule_reminder(scheduler, handler, r)
+            schedule_reminder(r)
             return f"已恢复提醒：{r.title}"
 
         return "未知操作。"

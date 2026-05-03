@@ -5,12 +5,8 @@ logger = logging.getLogger("polaris.reminders.handlers")
 
 
 class ReminderHandler:
-    def __init__(self, channels: list):
+    def __init__(self, channels: list, store=None):
         self._channels = channels
-        self._store = None
-
-    def set_store(self, store):
-        """设置 store 以便触发时更新状态"""
         self._store = store
 
     def handle(self, reminder: Reminder):
