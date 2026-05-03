@@ -206,12 +206,13 @@ class GoogleCalendarTool(BaseTool):
             # 从 context 获取 channel 和 session_id
             channel = get_channel()
             session_id = get_session_id()
+            logger.info(f"创建提醒 - context channel: {channel}, session_id: {session_id}")
 
             # 从日程数据中获取 channel（如果保存了的话）
             if not channel:
-                channel = event.get("channel", "admin")
+                channel = event.get("reminder_channel", "admin")
             if not session_id:
-                session_id = event.get("session_id", "")
+                session_id = event.get("reminder_session_id", "")
 
             reminder = Reminder(
                 title=f"{event['title']} 即将开始",
