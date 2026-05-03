@@ -11,14 +11,18 @@ Endpoints:
   POST /sessions/{id}/activate — switch active session
 """
 
-import os
-import threading
+import logging
+import re as _re
+import json as _json
 from contextlib import asynccontextmanager
+from pathlib import Path
+from dotenv import dotenv_values
+
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from pathlib import Path
+
 from langchain_core.messages import HumanMessage, AIMessage
 
 from src.agent.graph import get_agent
@@ -26,6 +30,12 @@ from src.agent.state import AgentState
 from src.session.manager import get_session_manager, SessionManager
 from src.tools.registry import ToolRegistry
 from src.context import set_context as _set_ctx
+from src.config import CALENDAR_FILE, TODOS_FILE
+
+from src.handler import process_message
+from src.lock import _get_session_lock, _cleanup_session_locks
+from src.middleware.auth import admin_auth_middleware
+from src.storage.atomic import _atomic_write
 
 
 class ChatRequest(BaseModel):
@@ -55,7 +65,6 @@ class SessionInfo(BaseModel):
 # --- App lifecycle ---
 
 # Enable HTTP request logging for LLM API calls
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
 logging.getLogger("httpx").setLevel(logging.INFO)
 logging.getLogger("openai").setLevel(logging.INFO)
@@ -121,35 +130,7 @@ app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
 
 # --- Admin API auth middleware ---
 
-@app.middleware("http")
-async def admin_auth_middleware(request: Request, call_next):
-    """Require Bearer token for /api/* (ADMIN_TOKEN) and /chat* (CHAT_TOKEN)."""
-    import src.config as _cfg
-    path = request.url.path
-
-    # /api/* — admin token
-    if path.startswith("/api/"):
-        token = _cfg.ADMIN_TOKEN
-        if token:
-            auth_header = request.headers.get("authorization", "")
-            if auth_header != f"Bearer {token}":
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Missing or invalid admin token"},
-                )
-
-    # /chat, /chat/* — chat token
-    if path == "/chat" or path.startswith("/chat/"):
-        token = _cfg.CHAT_TOKEN
-        if token:
-            auth_header = request.headers.get("authorization", "")
-            if auth_header != f"Bearer {token}":
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Missing or invalid chat token"},
-                )
-
-    return await call_next(request)
+app.middleware("http")(admin_auth_middleware)
 
 
 # Admin frontend static files
@@ -459,69 +440,6 @@ def delete_session(session_id: str):
 
 # --- Admin API: Config management ---
 
-import re as _re
-import tempfile
-from dotenv import dotenv_values
-
-
-def _atomic_write(path: Path, content: str, encoding: str = "utf-8") -> None:
-    """Atomic file write with backup.
-
-    Strategy:
-      1. Write new content to a temp file in the same directory.
-      2. If original exists, create .bak backup.
-      3. os.replace() temp -> original (atomic on POSIX).
-      4. On any failure, attempt to restore from backup.
-
-    Raises the original exception after restore attempt.
-    """
-    path = Path(path)
-    dir_fd = path.parent
-    backup = path.with_suffix(path.suffix + ".bak")
-    tmp_fd = None
-    tmp_path = None
-
-    try:
-        # Step 1: write to temp file in same directory (same filesystem for rename)
-        tmp_fd = tempfile.NamedTemporaryFile(
-            mode="w", encoding=encoding, dir=dir_fd,
-            suffix=".tmp", delete=False,
-        )
-        tmp_path = Path(tmp_fd.name)
-        tmp_fd.write(content)
-        tmp_fd.flush()
-        os.fsync(tmp_fd.fileno())  # ensure data hits disk
-        tmp_fd.close()
-        tmp_fd = None
-
-        # Step 2: backup existing file
-        if path.exists():
-            import shutil
-            shutil.copy2(path, backup)
-
-        # Step 3: atomic rename
-        os.replace(str(tmp_path), str(path))
-        tmp_path = None  # rename succeeded, don't clean up
-
-    except Exception:
-        # Attempt restore from backup if original was overwritten or corrupted
-        if backup.exists() and (not path.exists() or path.read_text(encoding=encoding) != content):
-            try:
-                import shutil
-                shutil.copy2(backup, path)
-            except Exception:
-                pass  # best-effort restore
-        raise
-    finally:
-        # Clean up temp file if rename didn't happen
-        if tmp_fd is not None:
-            tmp_fd.close()
-        if tmp_path is not None and tmp_path.exists():
-            try:
-                tmp_path.unlink()
-            except OSError:
-                pass
-
 # Whitelist of config keys that can be written via the admin API.
 # Unknown keys are rejected to prevent environment variable injection.
 ALLOWED_CONFIG_KEYS: set[str] = {
@@ -594,9 +512,6 @@ def update_config(req: ConfigUpdate):
 
 # --- Admin API: Data management ---
 
-import json as _json
-
-
 @app.get("/api/data/{data_type}")
 def list_data(data_type: str):
     if data_type == "calendar":
@@ -662,145 +577,7 @@ def delete_data(data_type: str, item_id: str):
     return {"ok": True}
 
 
-# --- Shared message processing (used by HTTP endpoints & in-process channels) ---
-
-# Per-session locks: each session/channel pair gets its own lock so independent
-# sessions can be processed concurrently.  A separate dict-level lock protects
-# creation of new per-session locks.
-_message_locks: dict[str, threading.Lock] = {}
-_message_locks_guard = threading.Lock()
-
-
-def _get_session_lock(channel: str, session_id: str) -> threading.Lock:
-    """Return (and lazily create) the lock for a given session+channel."""
-    key = f"{channel}:{session_id}"
-    lock = _message_locks.get(key)
-    if lock is None:
-        with _message_locks_guard:
-            lock = _message_locks.get(key)
-            if lock is None:
-                lock = threading.Lock()
-                _message_locks[key] = lock
-    return lock
-
-
-def _cleanup_session_locks(session_id: str) -> None:
-    """Remove all per-session locks for the given session ID (all channels)."""
-    with _message_locks_guard:
-        keys_to_remove = [k for k in _message_locks if k.endswith(f":{session_id}")]
-        for key in keys_to_remove:
-            del _message_locks[key]
-
-
-def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
-    """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
-    session_id = session_mgr.active_session(channel).session_id
-    with _get_session_lock(channel, session_id):
-        # 在锁内设置 context，防止并发覆盖
-        user_id = channel.split(":", 1)[-1] if ":" in channel else ""
-        _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
-        return _process_message_impl(text, session_mgr, channel)
-
-
-def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
-    """统一消息处理入口。
-
-    系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。
-    """
-    from langchain_core.messages import HumanMessage, AIMessage
-    from src.agent.graph import get_agent
-
-    session = session_mgr.active_session(channel)
-    memory = session.memory
-    agent = get_agent()
-
-    # Save pre-invoke state for rollback on error
-    previous_messages = memory.get_messages()
-
-    # Create HumanMessage with ID for retry/edit support
-    human_msg = HumanMessage(content=text)
-    memory.add_message(human_msg)
-    human_msg_id = memory.get_message_id(human_msg)
-
-    state_messages = previous_messages + [human_msg]
-
-    state = AgentState(
-        messages=state_messages,
-        intent="",
-        user_profile=memory.get_profile(),
-        tool_results={},
-        final_response="",
-        needs_clarification=False,
-        pending_action=session.pending_action,
-        channel=channel,
-    )
-
-    try:
-        result = agent.invoke(state)
-        response_text = _extract_response(result)
-        tool_calls = _extract_tool_calls(result)
-    except Exception as e:
-        # Roll back memory and return error
-        memory.set_messages(previous_messages)
-        import logging
-        logging.getLogger("polaris.agent").error(f"Agent 调用失败: {e}", exc_info=True)
-        return (f"抱歉，处理请求时出错：{e}", [])
-
-    # Save pending_action from result
-    session.pending_action = result.get("pending_action")
-
-    if result.get("final_response"):
-        return (response_text, tool_calls)
-
-    # Persist only user msg + final AI reply. Strip intermediate tool messages.
-    # Keep the original human message with its ID
-    memory.set_messages(previous_messages + [
-        human_msg,
-        AIMessage(content=response_text),
-    ])
-    session_mgr.record_message(text, response_text, channel)
-
-    return (response_text, tool_calls)
-
-
-# --- Helpers ---
-
-def _extract_response(result: dict) -> str:
-    """Extract the final text response from agent result."""
-    response = result.get("final_response", "")
-    if response:
-        return response
-    messages = result.get("messages", [])
-    for m in reversed(messages):
-        if (hasattr(m, "content") and m.content
-            and m.type == "ai"
-            and not (hasattr(m, "tool_calls") and m.tool_calls)):
-            return m.content
-    return "抱歉，处理出错了。"
-
-
-def _extract_tool_calls(result: dict) -> list[dict]:
-    """Extract tool call summaries from agent result."""
-    calls = []
-    messages = result.get("messages", [])
-    for m in messages:
-        if hasattr(m, "tool_calls") and m.tool_calls:
-            for tc in m.tool_calls:
-                if isinstance(tc, dict):
-                    calls.append({
-                        "tool": tc.get("name", "unknown"),
-                        "args": tc.get("args") or {},
-                    })
-                else:
-                    calls.append({
-                        "tool": getattr(tc, "name", "unknown"),
-                        "args": getattr(tc, "args", {}) or {},
-                    })
-    return calls
-
-
 # --- Admin frontend catch-all (must be LAST) ---
-from fastapi.responses import FileResponse
 
 @app.get("/{full_path:path}")
 async def serve_admin(full_path: str):

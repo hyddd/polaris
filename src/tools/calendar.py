@@ -1,10 +1,12 @@
-import os
 import uuid
 import logging
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from pathlib import Path
+
+from src.config import CALENDAR_USE_MOCK
+from src.tools._utils import find_by_id_or_title
 
 logger = logging.getLogger("polaris.tools.calendar")
 
@@ -43,7 +45,7 @@ class GoogleCalendarTool(BaseTool):
 - "推迟会议1小时" → search(keyword="会议") → update(event_id="xxx", updates={"time":"原时间+1h"})"""
     args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
-    use_mock: bool = os.getenv("CALENDAR_USE_MOCK", "false").lower() == "true"
+    use_mock: bool = CALENDAR_USE_MOCK
 
     def _run(self, action: str, date: str | None = None, keyword: str | None = None,
              title: str | None = None, time: str | None = None, attendees: list[str] | None = None,
@@ -132,32 +134,27 @@ class GoogleCalendarTool(BaseTool):
                 if date and day.get("date") != date:
                     continue
                 events = day.get("events", [])
-                for i, ev in enumerate(events):
-                    matched = False
-                    if event_id and ev["id"] == event_id:
-                        matched = True
-                    elif title and title.lower() in ev.get("title", "").lower():
-                        matched = True
-                    if matched:
-                        if new_date and new_date != day.get("date"):
-                            # Date changed: move event to new date
-                            events.pop(i)
-                            ev.update({k: v for k, v in updates.items() if k != "date"})
-                            moved = False
-                            for d in data:
-                                if d.get("date") == new_date:
-                                    d.setdefault("events", []).append(ev)
-                                    moved = True
-                                    break
-                            if not moved:
-                                data.append({"date": new_date, "events": [ev]})
-                        else:
-                            # Same date update — filter out "date" key to avoid corrupting event
-                            ev.update({k: v for k, v in updates.items() if k != "date"})
-                        save_json(path, data)
-                        # 更新关联提醒
-                        self._update_event_reminder(ev, new_date or day.get("date"), updates, path, data)
-                        return f"已更新日程：{ev.get('title', event_id)}"
+                ev = find_by_id_or_title(events, "id", event_id, "title", title)
+                if ev:
+                    if new_date and new_date != day.get("date"):
+                        # Date changed: move event to new date
+                        events.remove(ev)
+                        ev.update({k: v for k, v in updates.items() if k != "date"})
+                        moved = False
+                        for d in data:
+                            if d.get("date") == new_date:
+                                d.setdefault("events", []).append(ev)
+                                moved = True
+                                break
+                        if not moved:
+                            data.append({"date": new_date, "events": [ev]})
+                    else:
+                        # Same date update — filter out "date" key to avoid corrupting event
+                        ev.update({k: v for k, v in updates.items() if k != "date"})
+                    save_json(path, data)
+                    # 更新关联提醒
+                    self._update_event_reminder(ev, new_date or day.get("date"), updates, path, data)
+                    return f"已更新日程：{ev.get('title', event_id)}"
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
         elif action == "delete":
@@ -166,19 +163,14 @@ class GoogleCalendarTool(BaseTool):
                 if date and day.get("date") != date:
                     continue
                 events = day.get("events", [])
-                for i, ev in enumerate(events):
-                    matched = False
-                    if event_id and ev["id"] == event_id:
-                        matched = True
-                    elif title and title.lower() in ev.get("title", "").lower():
-                        matched = True
-                    if matched:
-                        matched_title = ev["title"]
-                        # 删除关联提醒
-                        self._delete_event_reminder(ev)
-                        events.pop(i)
-                        save_json(path, data)
-                        return f"已删除日程：{matched_title}"
+                ev = find_by_id_or_title(events, "id", event_id, "title", title)
+                if ev:
+                    matched_title = ev["title"]
+                    # 删除关联提醒
+                    self._delete_event_reminder(ev)
+                    events.remove(ev)
+                    save_json(path, data)
+                    return f"已删除日程：{matched_title}"
             return f"未找到日程：{event_id or f'{date} {title}'}"
 
         return "未知操作。"

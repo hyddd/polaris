@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -23,8 +22,9 @@ class WebSearchTool(BaseTool):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.api_key = os.getenv("SEARCH_API_KEY", "")
-        self.api_base = os.getenv("SEARCH_API_BASE", "https://api.tavily.com")
+        from src.config import SEARCH_API_KEY, SEARCH_API_BASE
+        self.api_key = SEARCH_API_KEY
+        self.api_base = SEARCH_API_BASE
 
     def _run(self, query: str, num_results: int = 3) -> str:
         if not self.api_key:

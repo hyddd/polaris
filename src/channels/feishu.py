@@ -7,7 +7,6 @@ to function scope so they execute in the daemon thread, not the main thread.
 import json
 import hashlib
 import time
-import os
 import logging
 from collections import OrderedDict
 
@@ -22,8 +21,10 @@ class PolarisFeishuBot:
     """Feishu WebSocket bot that relays messages to the Polaris Agent Server."""
 
     def __init__(self):
-        app_id = os.getenv("FEISHU_APP_ID")
-        app_secret = os.getenv("FEISHU_APP_SECRET")
+        from src.config import FEISHU_APP_ID, FEISHU_APP_SECRET
+
+        app_id = FEISHU_APP_ID
+        app_secret = FEISHU_APP_SECRET
         if not app_id or not app_secret:
             raise ValueError("请在 .env 中配置 FEISHU_APP_ID 和 FEISHU_APP_SECRET")
 
@@ -134,7 +135,7 @@ class PolarisFeishuBot:
 
     def _process_message(self, user_id: str, text: str) -> str:
         from src.session.manager import get_session_manager
-        from src.server import process_message
+        from src.handler import process_message
 
         session_mgr = get_session_manager()
         response_text, _ = process_message(text, session_mgr, channel=f"feishu:{user_id}")
@@ -236,14 +237,16 @@ class FeishuChannel(ChannelPlugin):
         return "feishu"
 
     def is_configured(self) -> bool:
-        app_id = os.getenv("FEISHU_APP_ID", "")
-        app_secret = os.getenv("FEISHU_APP_SECRET", "")
-        return bool(app_id and app_secret)
+        from src.config import FEISHU_APP_ID, FEISHU_APP_SECRET
+
+        return bool(FEISHU_APP_ID and FEISHU_APP_SECRET)
 
     def get_credentials(self) -> dict:
+        from src.config import FEISHU_APP_ID, FEISHU_APP_SECRET
+
         return {
-            "app_id": os.getenv("FEISHU_APP_ID", ""),
-            "app_secret": os.getenv("FEISHU_APP_SECRET", ""),
+            "app_id": FEISHU_APP_ID,
+            "app_secret": FEISHU_APP_SECRET,
         }
 
     def start(self) -> None:

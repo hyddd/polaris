@@ -1,15 +1,16 @@
-import os
 from pathlib import Path
 from chromadb import PersistentClient
 from chromadb.utils import embedding_functions
 
 
 def get_embedding_function():
-    api_key = os.getenv("EMBEDDING_API_KEY", "")
+    from src.config import EMBEDDING_API_KEY, EMBEDDING_BASE_URL, EMBEDDING_MODEL
+
+    api_key = EMBEDDING_API_KEY
     if not api_key:
         raise RuntimeError("未配置 EMBEDDING_API_KEY，向量检索不可用。请在 .env 中配置硅基流动 API。")
-    base_url = os.getenv("EMBEDDING_BASE_URL", "")
-    model = os.getenv("EMBEDDING_MODEL", "netease-youdao/bce-embedding-base_v1")
+    base_url = EMBEDDING_BASE_URL
+    model = EMBEDDING_MODEL
     kwargs = {"api_key": api_key, "model_name": model}
     if base_url:
         kwargs["api_base"] = base_url
@@ -18,11 +19,12 @@ def get_embedding_function():
 
 def check_embedding_config() -> None:
     """检查 Embedding 配置是否可用，打印配置信息。"""
-    api_key = os.getenv("EMBEDDING_API_KEY", "")
-    if not api_key:
+    from src.config import EMBEDDING_API_KEY, EMBEDDING_MODEL
+
+    if not EMBEDDING_API_KEY:
         print("⚠ 未配置 EMBEDDING_API_KEY，向量检索功能不可用")
         return
-    print(f"使用云端 Embedding: {os.getenv('EMBEDDING_MODEL', 'netease-youdao/bce-embedding-base_v1')}")
+    print(f"使用云端 Embedding: {EMBEDDING_MODEL}")
 
 
 def get_vector_store(persist_dir: str, collection_name: str = "notes"):

@@ -4,6 +4,8 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from pathlib import Path
 
+from src.tools._utils import find_by_id_or_title
+
 
 def create_default() -> "TodoTool":
     """Factory for auto-discovery. Creates a TodoTool with default config."""
@@ -111,45 +113,30 @@ class TodoTool(BaseTool):
             if due and "due" not in updates:
                 updates["due"] = due
             # Find by todo_id or title
-            for t in todos:
-                matched = False
-                if todo_id and t["id"] == todo_id:
-                    matched = True
-                elif title and not todo_id and title.lower() in t.get("title", "").lower():
-                    matched = True
-                if matched:
-                    t.update(updates)
-                    save_json(path, todos)
-                    return f"已更新待办：{t.get('title', todo_id)}"
+            t = find_by_id_or_title(todos, "id", todo_id, "title", title)
+            if t:
+                t.update(updates)
+                save_json(path, todos)
+                return f"已更新待办：{t.get('title', todo_id)}"
             return f"未找到待办：{todo_id or title}"
 
         elif action == "done":
             # Find by todo_id or title
-            for t in todos:
-                matched = False
-                if todo_id and t["id"] == todo_id:
-                    matched = True
-                elif title and not todo_id and title.lower() in t.get("title", "").lower():
-                    matched = True
-                if matched:
-                    t["status"] = "done"
-                    save_json(path, todos)
-                    return f"已将「{t['title']}」标记为已完成。"
+            t = find_by_id_or_title(todos, "id", todo_id, "title", title)
+            if t:
+                t["status"] = "done"
+                save_json(path, todos)
+                return f"已将「{t['title']}」标记为已完成。"
             return f"未找到待办：{todo_id or title}"
 
         elif action == "delete":
             # Find by todo_id or title
-            for i, t in enumerate(todos):
-                matched = False
-                if todo_id and t["id"] == todo_id:
-                    matched = True
-                elif title and not todo_id and title.lower() in t.get("title", "").lower():
-                    matched = True
-                if matched:
-                    matched_title = t["title"]
-                    todos.pop(i)
-                    save_json(path, todos)
-                    return f"已删除待办：{matched_title}"
+            t = find_by_id_or_title(todos, "id", todo_id, "title", title)
+            if t:
+                matched_title = t["title"]
+                todos.remove(t)
+                save_json(path, todos)
+                return f"已删除待办：{matched_title}"
             return f"未找到待办：{todo_id or title}"
 
         return "未知操作。"

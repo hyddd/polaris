@@ -1,7 +1,6 @@
 """QQ (Tencent Bot) channel plugin — botpy SDK integration."""
 
 import asyncio
-import os
 import logging
 
 import botpy
@@ -31,7 +30,7 @@ class _PolarisQQClient(botpy.Client):
         await self._handle(message.content, message)
 
     async def _handle(self, content: str, message) -> None:
-        from src.server import process_message
+        from src.handler import process_message
         from src.session.manager import get_session_manager
 
         text = content.strip()
@@ -93,19 +92,23 @@ class QQChannel(ChannelPlugin):
         return "qq"
 
     def is_configured(self) -> bool:
-        appid = os.getenv("QQ_BOT_APPID", "")
-        secret = os.getenv("QQ_BOT_SECRET", "")
-        return bool(appid and secret)
+        from src.config import QQ_BOT_APPID, QQ_BOT_SECRET
+
+        return bool(QQ_BOT_APPID and QQ_BOT_SECRET)
 
     def get_credentials(self) -> dict:
+        from src.config import QQ_BOT_APPID, QQ_BOT_SECRET
+
         return {
-            "appid": os.getenv("QQ_BOT_APPID", ""),
-            "secret": os.getenv("QQ_BOT_SECRET", ""),
+            "appid": QQ_BOT_APPID,
+            "secret": QQ_BOT_SECRET,
         }
 
     def start(self) -> None:
-        appid = os.getenv("QQ_BOT_APPID", "")
-        secret = os.getenv("QQ_BOT_SECRET", "")
+        from src.config import QQ_BOT_APPID, QQ_BOT_SECRET
+
+        appid = QQ_BOT_APPID
+        secret = QQ_BOT_SECRET
 
         # botpy.Client.__init__ calls asyncio.get_event_loop(); ensure one exists
         loop = asyncio.new_event_loop()
