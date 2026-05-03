@@ -110,8 +110,3 @@ class Config:
 # ---------------------------------------------------------------------------
 config = Config()
 config.load()
-
-
-def reload() -> dict:
-    """Reload config (module-level wrapper for config.reload)."""
-    return config.reload()
