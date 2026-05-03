@@ -96,11 +96,9 @@ class GoogleCalendarTool(BaseTool):
                 "time": time or "09:00",
                 "duration": duration,
                 "attendees": attendees or [],
-                "reminder_id": None,
-            }
-            # 先创建关联提醒（会设置 reminder_id）
+                        }
+            # 通知提醒模块
             self._create_event_reminder(new_event, date)
-            # 再保存日程数据（包含 reminder_id）
             for day in data:
                 if day.get("date") == date:
                     day.setdefault("events", []).append(new_event)
@@ -184,50 +182,28 @@ class GoogleCalendarTool(BaseTool):
         return self._run(**kwargs)
 
     def _create_event_reminder(self, event: dict, date: str):
-        """为日程创建关联提醒（提前15分钟）"""
+        """通知提醒模块：新日程已创建。"""
+        from src.events import event_bus
         from src.context import get_channel, get_session_id
-        from src.tools.reminder import get_reminder_service
 
-        try:
-            channel = get_channel()
-            session_id = get_session_id()
-
-            # 从日程数据中获取 channel（如果保存了的话）
-            if not channel:
-                channel = event.get("reminder_channel", "admin")
-            if not session_id:
-                session_id = event.get("reminder_session_id", "")
-
-            service = get_reminder_service()
-            event_time_str = f"{date} {event.get('time', '09:00')}"
-            reminder_id = service.create_event_reminder(
-                event["title"], event_time_str, event["id"], channel, session_id
-            )
-            if reminder_id:
-                event["reminder_id"] = reminder_id
-            event["reminder_channel"] = channel
-            event["reminder_session_id"] = session_id
-        except Exception as e:
-            logger.error(f"创建日程关联提醒失败: {e}")
+        event_time_str = f"{date} {event.get('time', '09:00')}"
+        event_bus.publish("calendar:event_created",
+            event_id=event["id"], title=event["title"],
+            event_time_str=event_time_str,
+            channel=get_channel() or "admin",
+            session_id=get_session_id() or "")
 
     def _update_event_reminder(self, event: dict, date: str, updates: dict, data=None):
-        """更新日程关联提醒的时间"""
-        reminder_id = event.get("reminder_id")
-        if not reminder_id:
-            # 旧日程没有关联提醒，补创建一个
-            self._create_event_reminder(event, date)
-            # 重新保存日程数据（包含新 reminder_id）
-            if data:
-                self._store.save(data)
-            return
+        """通知提醒模块：日程已更新。"""
+        from src.events import event_bus
 
-        # 正常更新逻辑委托给 ReminderService
-        from src.tools.reminder import get_reminder_service
-        service = get_reminder_service()
-        service.update_event_reminder(event, date, updates)
+        event_time_str = f"{date} {event.get('time', '09:00')}"
+        event_bus.publish("calendar:event_updated",
+            event_id=event["id"], title=event["title"],
+            event_time_str=event_time_str)
 
     def _delete_event_reminder(self, event: dict):
-        """删除日程关联提醒"""
-        from src.tools.reminder import get_reminder_service
-        service = get_reminder_service()
-        service.delete_event_reminder(event)
+        """通知提醒模块：日程已删除。"""
+        from src.events import event_bus
+
+        event_bus.publish("calendar:event_deleted", event_id=event["id"])

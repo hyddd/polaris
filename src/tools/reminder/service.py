@@ -71,67 +71,38 @@ class ReminderService:
             logger.error(f"创建日程关联提醒失败: {e}")
             return None
 
-    def update_event_reminder(self, event: dict, date: str, updates: dict) -> None:
-        """Update the trigger time of an event's reminder.
+    def update_event_reminder(self, event_id: str, title: str, event_time_str: str) -> None:
+        """Update the trigger time of an event's reminder after calendar change."""
+        for reminder in self._store.find_by_event_id(event_id):
+            try:
+                event_datetime = datetime.strptime(event_time_str, "%Y-%m-%d %H:%M")
+                new_reminder_time = event_datetime - timedelta(minutes=15)
+                new_title = f"{title} 即将开始"
 
-        Only takes effect when ``time`` or ``date`` is in *updates*.
-        If the new trigger time is in the future the reminder is re-activated.
-        """
-        reminder_id = event.get("reminder_id")
-        if not reminder_id:
-            return
+                self._store.update(reminder.id, trigger_time=new_reminder_time, title=new_title)
+                reminder = self._store.get(reminder.id)
 
-        if "time" not in updates and "date" not in updates:
-            logger.info("时间/日期没有变化，跳过更新提醒")
-            return
-
-        try:
-            reminder = self._store.get(reminder_id)
-            if not reminder:
-                logger.warning(f"提醒不存在: {reminder_id}")
-                return
-
-            event_time = event.get("time", "09:00")
-            event_datetime = datetime.strptime(f"{date} {event_time}", "%Y-%m-%d %H:%M")
-            new_reminder_time = event_datetime - timedelta(minutes=15)
-
-            new_title = f"{event['title']} 即将开始"
-            self._store.update(
-                reminder_id, trigger_time=new_reminder_time, title=new_title
-            )
-
-            # Re-read after update to get fresh state
-            reminder = self._store.get(reminder_id)
-
-            if new_reminder_time > datetime.now():
-                self._store.update(reminder_id, status=ReminderStatus.ACTIVE)
-                reminder = self._store.get(reminder_id)
-
-            # Reschedule in scheduler
-            if self._scheduler:
-                self._scheduler.remove_job(reminder_id)
-                if new_reminder_time > datetime.now():
-                    self._scheduler.add_date_job(
-                        self._handler.handle, new_reminder_time, reminder_id, args=[reminder]
-                    )
-
-            logger.info(f"已更新日程关联提醒: {reminder_id} @ {new_reminder_time}")
-        except Exception as e:
-            logger.error(f"更新日程关联提醒失败: {e}")
-
-    def delete_event_reminder(self, event: dict) -> None:
-        """Delete the reminder associated with an event."""
-        reminder_id = event.get("reminder_id")
-        if not reminder_id:
-            return
-
-        try:
-            if self._store.delete(reminder_id):
                 if self._scheduler:
-                    self._scheduler.remove_job(reminder_id)
-                logger.info(f"已删除日程关联提醒: {reminder_id}")
-        except Exception as e:
-            logger.error(f"删除日程关联提醒失败: {e}")
+                    self._scheduler.remove_job(reminder.id)
+                    if new_reminder_time > datetime.now():
+                        self._scheduler.add_date_job(
+                            self._handler.handle, new_reminder_time, reminder.id, args=[reminder]
+                        )
+
+                logger.info(f"已更新日程关联提醒: {reminder.id} @ {new_reminder_time}")
+            except Exception as e:
+                logger.error(f"更新日程关联提醒失败: {e}")
+
+    def delete_event_reminder(self, event_id: str) -> None:
+        """Delete the reminder associated with an event."""
+        for reminder in self._store.find_by_event_id(event_id):
+            try:
+                if self._store.delete(reminder.id):
+                    if self._scheduler:
+                        self._scheduler.remove_job(reminder.id)
+                    logger.info(f"已删除日程关联提醒: {reminder.id}")
+            except Exception as e:
+                logger.error(f"删除日程关联提醒失败: {e}")
 
 # ── Scheduling helpers used by tool.py and setup.py ──────────────
 

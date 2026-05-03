@@ -44,6 +44,30 @@ def _on_cleanup(**kwargs):
         logger.info(f"清理 {count} 条过期提醒（保留 {retention} 天）")
 
 
+def _on_calendar_created(event_id=None, title=None, event_time_str=None, channel="admin", session_id="", **kwargs):
+    """日程创建 → 自动创建关联提醒。"""
+    service = get_reminder_service()
+    if service:
+        service.create_event_reminder(title, event_time_str, event_id, channel, session_id)
+
+
+def _on_calendar_updated(event_id=None, title=None, event_time_str=None, **kwargs):
+    """日程更新 → 更新关联提醒时间。"""
+    service = get_reminder_service()
+    if service and event_id:
+        service.update_event_reminder(event_id, title, event_time_str)
+
+
+def _on_calendar_deleted(event_id=None, **kwargs):
+    """日程删除 → 删除关联提醒。"""
+    service = get_reminder_service()
+    if service and event_id:
+        service.delete_event_reminder(event_id)
+
+
 event_bus.subscribe("app:startup", _on_startup)
 event_bus.subscribe("cleanup:now", _on_cleanup)
 event_bus.subscribe("cleanup:cron", _on_cleanup)
+event_bus.subscribe("calendar:event_created", _on_calendar_created)
+event_bus.subscribe("calendar:event_updated", _on_calendar_updated)
+event_bus.subscribe("calendar:event_deleted", _on_calendar_deleted)

@@ -39,6 +39,9 @@ class ReminderStore:
     def list_all(self) -> list[Reminder]:
         return list(self._reminders.values())
 
+    def find_by_event_id(self, event_id: str) -> list[Reminder]:
+        return [r for r in self._reminders.values() if r.event_id == event_id]
+
     def update(self, reminder_id: str, **kwargs) -> Reminder | None:
         with self._lock:
             r = self._reminders.get(reminder_id)

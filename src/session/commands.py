@@ -149,38 +149,13 @@ def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
 
 
 def _status(session_mgr: SessionManager, channel: str = "default") -> str:
-    import json
-    from datetime import date
-    from src.agent.executor import UNIFIED_SYSTEM_PROMPT, _format_persona
-    from src.tools.registry import ToolRegistry
-
     session = session_mgr.active_session(channel)
     messages = session.memory.get_history()
     compressor = session.compressor
-    summary = compressor.summary
 
-    # system prompt = 日期 + 人设 + 摘要 + 行为准则
-    today = date.today().isoformat()
-    persona_text = _format_persona(session.persona)
-    system_parts = [f"今天是 {today}。"]
-    if persona_text:
-        system_parts.append(persona_text)
-    if summary:
-        system_parts.append(summary)
-    system_parts.append(UNIFIED_SYSTEM_PROMPT)
-    system_tokens = compressor._count_tokens_str("\n\n".join(system_parts))
-
-    # 工具定义 token
-    tools = ToolRegistry.get_instance().list_tools()
-    tool_schemas = [t.args_schema.model_json_schema() if hasattr(t, 'args_schema') and t.args_schema else {} for t in tools]
-    tool_text = json.dumps(tool_schemas, ensure_ascii=False)
-    tool_tokens = compressor._count_tokens_str(tool_text)
-
-    # 消息 + system prompt + 工具 = LLM 实际上下文
     message_tokens = compressor._count_tokens(messages)
-    used = system_tokens + message_tokens + tool_tokens
     model_max = compressor.model_max_context
-    pct = (used / model_max * 100) if model_max else 0
+    pct = (message_tokens / model_max * 100) if model_max else 0
 
     user_msgs = sum(1 for m in messages if m.type == "human")
     ai_msgs = sum(1 for m in messages if m.type == "ai")
@@ -189,7 +164,8 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
         f"📊 「{session.name}」会话状态",
         "",
         f"• 消息: {len(messages)} (用户:{user_msgs} AI:{ai_msgs})",
-        f"• Token: {used:,} / {model_max:,} ({pct:.1f}%)",
+        f"• Token: {message_tokens:,} / {model_max:,} ({pct:.1f}%)",
+        f"• 压缩摘要: {'已生成' if compressor.summary else '暂无'}",
         "",
         f"• ID: {session.session_id}",
         f"• 总会话数: {len(session_mgr._sessions)}",
