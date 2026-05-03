@@ -39,6 +39,17 @@ class ReminderScheduler:
 
     def _add_job(self, reminder: Reminder):
         """添加提醒任务"""
+        now = datetime.now()
+
+        # 如果时间已过且是一次性提醒，立即触发
+        if reminder.trigger_time <= now and reminder.repeat_rule == RepeatRule.NONE:
+            logger.info(f"提醒时间已过，立即触发: {reminder.id} - {reminder.title}")
+            try:
+                self.handler.handle(reminder)
+            except Exception as e:
+                logger.error(f"立即触发提醒失败: {e}")
+            return
+
         if reminder.repeat_rule == RepeatRule.NONE:
             trigger = DateTrigger(run_date=reminder.trigger_time)
         else:
