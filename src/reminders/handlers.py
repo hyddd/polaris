@@ -5,8 +5,8 @@ logger = logging.getLogger("polaris.reminders.handlers")
 
 
 class ReminderHandler:
-    def __init__(self, channel_manager):
-        self.channel_manager = channel_manager
+    def __init__(self, channels: list):
+        self._channels = channels
         self._store = None
 
     def set_store(self, store):
@@ -64,7 +64,7 @@ class ReminderHandler:
 
     def _get_channel(self, channel_name: str):
         """获取渠道插件"""
-        for ch in self.channel_manager._channels:
+        for ch in self._channels:
             if ch.name == channel_name:
                 return ch
         return None

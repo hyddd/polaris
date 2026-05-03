@@ -1,11 +1,21 @@
-"""Channel plugin system — each channel is an independent, auto-discovered module."""
+"""Channel plugin system — each channel is an independent, auto-discovered module.
+
+Channels are loaded from YAML configuration at startup.  Each enabled channel
+must specify a ``plugin`` module path (e.g. ``"src.channels.feishu"``)
+that exports a ``ChannelPlugin`` subclass.
+"""
 
 import abc
+import importlib
+import inspect
 import logging
-import threading
 from typing import Optional
 
 logger = logging.getLogger("polaris.channels")
+
+# Module-level list of started channel instances, populated by _discover_and_start().
+# Imported by other modules (e.g., reminders/handlers) to enumerate active channels.
+_discovered_channels: list["ChannelPlugin"] = []
 
 
 class ChannelPlugin(abc.ABC):
@@ -94,94 +104,53 @@ class ChannelPlugin(abc.ABC):
         return {}
 
 
-class ChannelManager:
-    """Discovers, validates, and starts channel plugins."""
+def _discover_and_start() -> list[ChannelPlugin]:
+    """从 YAML 配置加载并启动所有 enabled 的 channel 插件。
 
-    def __init__(self):
-        self._channels: list[ChannelPlugin] = []
-        self._threads: list[threading.Thread] = []
-        self._credentials: dict[str, dict] = {}  # channel name -> credentials snapshot
+    遍历 config.get("channels", {})，对每个 enabled 且有 plugin 路径的：
+    1. importlib.import_module(plugin) 动态加载
+    2. 查找模块中的 ChannelPlugin 子类，实例化
+    3. 调用 instance.start()
+    """
+    from src.config import config
 
-    def register(self, channel: ChannelPlugin) -> None:
-        self._channels.append(channel)
+    global _discovered_channels
+    channels: list[ChannelPlugin] = []
 
-    def discover_and_start(self) -> None:
-        """Auto-discover channel plugins by scanning channels/ directory."""
-        import importlib
-        import pkgutil
-        import src.channels as channels_pkg
+    for ch_name, ch_cfg in config.get("channels", {}).items():
+        if not isinstance(ch_cfg, dict):
+            continue
+        if not ch_cfg.get("enabled", False):
+            logger.info(f"[{ch_name}] 未启用，跳过")
+            continue
 
-        for _, module_name, _ in pkgutil.iter_modules(channels_pkg.__path__):
-            if module_name.startswith("_"):
-                continue
-            try:
-                module = importlib.import_module(f"src.channels.{module_name}")
-                for attr_name in dir(module):
-                    attr = getattr(module, attr_name)
-                    if isinstance(attr, type) and issubclass(attr, ChannelPlugin) and attr is not ChannelPlugin:
-                        self.register(attr())
-            except Exception as e:
-                logger.warning(f"Failed to load channel {module_name}: {e}")
+        plugin_path = ch_cfg.get("plugin")
+        if not plugin_path:
+            logger.warning(f"[{ch_name}] 缺少 plugin 配置，跳过")
+            continue
 
-        for channel in self._channels:
-            if channel.is_configured():
-                logger.info(f"[{channel.name}] 已配置，启动中...")
-                self._credentials[channel.name] = channel.get_credentials()
-                t = threading.Thread(target=channel.start, daemon=True, name=f"channel-{channel.name}")
-                t.start()
-                self._threads.append(t)
-                logger.info(f"[{channel.name}] 已后台启动")
-            else:
-                logger.info(f"[{channel.name}] 未配置，跳过")
-
-        # Register for config reload events
-        from src.config import config
-        config.on_reload(self._on_config_reload)
-
-    def _on_config_reload(self) -> None:
-        """Check if channel credentials changed, restart affected channels."""
-        for channel in self._channels:
-            if not channel.is_configured():
-                continue
-
-            old_creds = self._credentials.get(channel.name, {})
-            new_creds = channel.get_credentials()
-
-            if old_creds == new_creds:
-                continue
-
-            logger.info(f"[{channel.name}] 凭证已变更，重启通道...")
-            self._restart_channel(channel, new_creds)
-
-    def _restart_channel(self, channel: ChannelPlugin, new_creds: dict) -> None:
-        """Stop and restart a single channel."""
-        # Stop old connection
         try:
-            channel.stop()
+            mod = importlib.import_module(plugin_path)
+            # 在模块中查找 ChannelPlugin 子类
+            for _, obj in inspect.getmembers(mod, inspect.isclass):
+                if issubclass(obj, ChannelPlugin) and obj is not ChannelPlugin:
+                    ch = obj()
+                    ch.start()
+                    channels.append(ch)
+                    logger.info(f"[{ch_name}] 已启动")
+                    break
         except Exception as e:
-            logger.warning(f"[{channel.name}] 停止旧连接失败: {e}")
+            logger.error(f"[{ch_name}] 加载失败: {e}")
 
-        # If the plugin has a rebuild method, use it to pick up new credentials
-        if hasattr(channel, 'rebuild'):
-            channel.rebuild()
+    _discovered_channels = channels
+    return channels
 
-        # Start in new daemon thread
-        self._credentials[channel.name] = new_creds
-        t = threading.Thread(target=channel.start, daemon=True, name=f"channel-{channel.name}")
-        t.start()
-        self._threads.append(t)
-        logger.info(f"[{channel.name}] 已重启")
 
-    def _try_import(self, module_path: str, class_name: str) -> Optional[ChannelPlugin]:
+def _stop_all() -> None:
+    """Stop all discovered channels."""
+    for ch in _discovered_channels:
         try:
-            import importlib
-            module = importlib.import_module(module_path)
-            cls = getattr(module, class_name)
-            instance = cls()
-            self.register(instance)
-            return instance
-        except ImportError as e:
-            logger.debug(f"Channel module not found: {module_path} ({e})")
+            ch.stop()
+            logger.info(f"[{ch.name}] 已停止")
         except Exception as e:
-            logger.warning(f"Failed to load channel {module_path}: {e}")
-        return None
+            logger.warning(f"[{ch.name}] 停止失败: {e}")

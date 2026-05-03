@@ -97,10 +97,9 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
-    # Discover and start channel plugins
-    from src.channels import ChannelManager
-    mgr = ChannelManager()
-    mgr.discover_and_start()
+    # Discover and start channel plugins (YAML-config driven)
+    from src.channels import _discover_and_start, _discovered_channels, _stop_all
+    _discover_and_start()
 
     # 初始化提醒模块
     from src.reminders.store import ReminderStore
@@ -113,7 +112,7 @@ async def lifespan(app: FastAPI):
     reminder_store = ReminderStore(
         str(config.resolve_path(config.get("storage.reminders_file", "data/reminders.json")))
     )
-    reminder_handler = ReminderHandler(mgr)
+    reminder_handler = ReminderHandler(_discovered_channels)
     reminder_handler.set_store(reminder_store)
     reminder_scheduler = ReminderScheduler(reminder_store, reminder_handler)
     reminder_scheduler.start()
@@ -126,6 +125,9 @@ async def lifespan(app: FastAPI):
     app.state.reminder_store = reminder_store
 
     yield
+
+    # 停止所有 channel
+    _stop_all()
 
     # 清理提醒调度器
     reminder_scheduler.shutdown()

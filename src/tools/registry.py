@@ -1,7 +1,7 @@
 import importlib
 import logging
-import pkgutil
 import threading
+from pathlib import Path
 from langchain_core.tools import BaseTool
 from typing import Optional
 
@@ -25,30 +25,36 @@ class ToolRegistry:
         return list(self._tools.values())
 
     def discover_and_register(self) -> None:
-        """Auto-discover tools by scanning tools/ directory.
+        """Auto-discover tools by scanning tools/*/ subdirectories.
 
-        Each tool module can provide a ``create_default()`` factory function
+        Each tool subdirectory must expose a ``create_default()`` factory function
         that returns a fully-configured BaseTool instance.  If the function
-        is absent, the module is skipped (useful for helper-only modules).
+        is absent, the subdirectory is skipped (useful for helper-only modules).
         """
         import src.tools as tools_pkg
 
-        for _, module_name, _ in pkgutil.iter_modules(tools_pkg.__path__):
-            if module_name.startswith("_"):
+        tools_path = Path(tools_pkg.__path__[0])
+
+        # 遍历 src/tools/ 下的子目录
+        for item in sorted(tools_path.iterdir()):
+            if not item.is_dir():
                 continue
+            if item.name.startswith('_') or item.name == 'registry':
+                continue
+
             try:
-                module = importlib.import_module(f"src.tools.{module_name}")
-                factory = getattr(module, "create_default", None)
+                mod = importlib.import_module(f"src.tools.{item.name}")
+                factory = getattr(mod, "create_default", None)
                 if factory is None:
                     continue
                 tool = factory()
                 if isinstance(tool, BaseTool):
                     self.register(tool)
-                    logger.info(f"[{tool.name}] 已注册 (from {module_name})")
+                    logger.info(f"[{tool.name}] 已注册 (from {item.name})")
                 else:
-                    logger.warning(f"{module_name}.create_default() 未返回 BaseTool 实例")
+                    logger.warning(f"{item.name}.create_default() 未返回 BaseTool 实例")
             except Exception as e:
-                logger.warning(f"加载工具模块 {module_name} 失败: {e}")
+                logger.warning(f"加载工具模块 {item.name} 失败: {e}")
 
     @classmethod
     def get_instance(cls) -> "ToolRegistry":
