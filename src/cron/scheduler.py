@@ -29,13 +29,13 @@ class CronScheduler:
             replace_existing=True,
         )
 
-    def add_cron_job(self, func, job_id, **cron_kwargs):
+    def add_cron_job(self, func, job_id, args=None, **cron_kwargs):
         """添加重复定时任务。cron_kwargs 如 hour=3, minute=0"""
         from apscheduler.triggers.cron import CronTrigger
 
         self._scheduler.add_job(
             func, trigger=CronTrigger(**cron_kwargs),
-            id=job_id, replace_existing=True,
+            args=args or [], id=job_id, replace_existing=True,
         )
 
     def remove_job(self, job_id):

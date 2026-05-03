@@ -40,7 +40,7 @@ def schedule_reminder(reminder):
             cron.add_date_job(handler.handle, reminder.trigger_time, reminder.id, args=[reminder])
     else:
         kwargs = repeat_rule_to_cron_kwargs(reminder.trigger_time, reminder.repeat_rule)
-        cron.add_cron_job(handler.handle, reminder.id, **kwargs)
+        cron.add_cron_job(handler.handle, reminder.id, args=[reminder], **kwargs)
 
 
 def repeat_rule_to_cron_kwargs(trigger_time, repeat_rule):
