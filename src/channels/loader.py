@@ -57,7 +57,8 @@ def discover_and_start() -> list:
         except Exception as e:
             logger.error(f"[{ch_name}] 加载失败: {e}")
 
-    _discovered_channels = channels
+    _discovered_channels.clear()
+    _discovered_channels.extend(channels)
     return channels
 
 
