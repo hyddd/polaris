@@ -265,7 +265,7 @@ class FeishuChannel(ChannelPlugin):
             self._bot.stop()
             self._bot = None
 
-    def send_message(self, session_id: str, message: str) -> bool:
+    def send_message(self, session_id: str, message: str, channel: str = "") -> bool:
         try:
             if self._bot:
                 self._bot._send_message(session_id, message)

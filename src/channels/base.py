@@ -71,7 +71,7 @@ class ChannelPlugin(abc.ABC):
         """Start the channel (usually a blocking call — runs in a daemon thread)."""
         ...
 
-    def send_message(self, session_id: str, message: str) -> bool:
+    def send_message(self, session_id: str, message: str, channel: str = "") -> bool:
         """发送消息到指定会话。返回是否成功。"""
         raise NotImplementedError(f"{self.name} 不支持主动发送消息")
 
