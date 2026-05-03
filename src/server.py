@@ -504,8 +504,10 @@ def update_config(req: ConfigUpdate):
     import yaml
     from src.config import config
 
+    from src.config import _LOCAL_CONFIG_FILE
+
     # Write to config.local.yaml to override defaults
-    local_path = config._local_path
+    local_path = _LOCAL_CONFIG_FILE
     local_data = {}
     if local_path.exists():
         local_data = yaml.safe_load(local_path.read_text(encoding="utf-8")) or {}
