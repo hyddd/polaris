@@ -11,6 +11,7 @@ Endpoints:
   POST /sessions/{id}/activate — switch active session
 """
 
+import os
 import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -24,18 +25,15 @@ from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import get_session_manager, SessionManager
 from src.tools.registry import ToolRegistry
-from src.tools.todos import TodoTool
-from src.tools.notes import NoteTool
-from src.tools.calendar import GoogleCalendarTool
-from src.tools.rag import RAGSearchTool
-from src.tools.persona import PersonaTool
-from src.config import CALENDAR_FILE, TODOS_FILE, NOTES_DIR, ARCHIVE_DIR, CHROMA_PERSIST_DIR
 
 
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
     channel: str = ""
+    retry_message_id: str | None = None  # 重试指定消息
+    edit_message_id: str | None = None   # 编辑指定消息
+    edit_content: str | None = None      # 编辑后的内容
 
 
 class ChatResponse(BaseModel):
@@ -65,14 +63,16 @@ _tools_registered = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from src.config import LLM_API_KEY
+    if not LLM_API_KEY:
+        raise RuntimeError(
+            "LLM_API_KEY 未配置。请在环境变量或 .env 文件中设置 OPENAI_API_KEY。"
+        )
+
     global _tools_registered
     if not _tools_registered:
         registry = ToolRegistry.get_instance()
-        registry.register(TodoTool(data_file=str(TODOS_FILE)))
-        registry.register(NoteTool(notes_dir=str(NOTES_DIR), archive_dir=str(ARCHIVE_DIR), persist_dir=str(CHROMA_PERSIST_DIR), collection_name="notes"))
-        registry.register(GoogleCalendarTool(data_file=str(CALENDAR_FILE), use_mock=True))
-        registry.register(RAGSearchTool(persist_dir=CHROMA_PERSIST_DIR, collection_name="notes"))
-        registry.register(PersonaTool())
+        registry.discover_and_register()
         _tools_registered = True
 
     # Check embedding config (cloud API, no local model to pre-warm)
@@ -87,7 +87,24 @@ async def lifespan(app: FastAPI):
     mgr = ChannelManager()
     mgr.discover_and_start()
 
+    # 初始化提醒模块
+    from src.reminders.store import ReminderStore
+    from src.reminders.scheduler import ReminderScheduler
+    from src.reminders.handlers import ReminderHandler
+    from src.config import REMINDERS_FILE
+
+    reminder_store = ReminderStore(str(REMINDERS_FILE))
+    reminder_handler = ReminderHandler(mgr)
+    reminder_scheduler = ReminderScheduler(reminder_store, reminder_handler)
+    reminder_scheduler.start()
+
+    app.state.reminder_scheduler = reminder_scheduler
+    app.state.reminder_store = reminder_store
+
     yield
+
+    # 清理提醒调度器
+    reminder_scheduler.shutdown()
 
 
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
@@ -97,10 +114,13 @@ app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
 
 @app.middleware("http")
 async def admin_auth_middleware(request: Request, call_next):
-    """Require Bearer token for /api/* endpoints when ADMIN_TOKEN is set."""
-    if request.url.path.startswith("/api/"):
-        import src.config as _cfg
-        token = _cfg.ADMIN_TOKEN  # re-read from config module on each request
+    """Require Bearer token for /api/* (ADMIN_TOKEN) and /chat* (CHAT_TOKEN)."""
+    import src.config as _cfg
+    path = request.url.path
+
+    # /api/* — admin token
+    if path.startswith("/api/"):
+        token = _cfg.ADMIN_TOKEN
         if token:
             auth_header = request.headers.get("authorization", "")
             if auth_header != f"Bearer {token}":
@@ -108,6 +128,18 @@ async def admin_auth_middleware(request: Request, call_next):
                     status_code=401,
                     content={"detail": "Missing or invalid admin token"},
                 )
+
+    # /chat, /chat/* — chat token
+    if path == "/chat" or path.startswith("/chat/"):
+        token = _cfg.CHAT_TOKEN
+        if token:
+            auth_header = request.headers.get("authorization", "")
+            if auth_header != f"Bearer {token}":
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Missing or invalid chat token"},
+                )
+
     return await call_next(request)
 
 
@@ -124,6 +156,34 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager, cha
     return session_mgr.active_session(channel)
 
 
+def _retry_message(session_id: str, message_id: str, session_mgr: SessionManager, channel: str = "default"):
+    """重试指定消息：找到原消息，重新执行"""
+    session = session_mgr.get(session_id) if session_id else session_mgr.active_session(channel)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    original = session.get_message(message_id)
+    if not original:
+        raise HTTPException(status_code=404, detail=f"消息不存在: {message_id}")
+
+    # 获取原消息内容
+    content = original.content if hasattr(original, 'content') else str(original)
+    return content
+
+
+def _edit_message(session_id: str, message_id: str, new_content: str, session_mgr: SessionManager, channel: str = "default"):
+    """编辑消息并返回新内容"""
+    session = session_mgr.get(session_id) if session_id else session_mgr.active_session(channel)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 更新消息内容
+    if not session.update_message(message_id, new_content):
+        raise HTTPException(status_code=404, detail=f"消息不存在: {message_id}")
+
+    return new_content
+
+
 # --- Chat endpoints (for external channels: admin UI, remote bots, etc.) ---
 # In-process channels (Feishu, QQ) call agent directly, not via HTTP.
 
@@ -131,10 +191,32 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager, cha
 def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
-    _get_active_session(req.session_id, session_mgr, channel)
+    session = _get_active_session(req.session_id, session_mgr, channel)
+
+    # 重试逻辑
+    if req.retry_message_id:
+        original_content = _retry_message(session.session_id, req.retry_message_id, session_mgr, channel)
+        response_text, tool_calls = process_message(original_content, session_mgr, channel)
+        return ChatResponse(
+            session_id=session.session_id,
+            response=response_text,
+            tool_calls=tool_calls,
+        )
+
+    # 编辑逻辑
+    if req.edit_message_id and req.edit_content:
+        new_content = _edit_message(session.session_id, req.edit_message_id, req.edit_content, session_mgr, channel)
+        response_text, tool_calls = process_message(new_content, session_mgr, channel)
+        return ChatResponse(
+            session_id=session.session_id,
+            response=response_text,
+            tool_calls=tool_calls,
+        )
+
+    # 正常聊天
     response_text, tool_calls = process_message(req.message, session_mgr, channel)
     return ChatResponse(
-        session_id=session_mgr.active_session(channel).session_id,
+        session_id=session.session_id,
         response=response_text,
         tool_calls=tool_calls,
     )
@@ -157,9 +239,20 @@ async def chat_stream(req: ChatRequest):
     channel = req.channel or "default"
     session = _get_active_session(req.session_id, session_mgr, channel)
 
+    # Determine the message content (retry/edit/normal)
+    message_content = req.message
+
+    # 重试逻辑
+    if req.retry_message_id:
+        message_content = _retry_message(session.session_id, req.retry_message_id, session_mgr, channel)
+
+    # 编辑逻辑
+    elif req.edit_message_id and req.edit_content:
+        message_content = _edit_message(session.session_id, req.edit_message_id, req.edit_content, session_mgr, channel)
+
     # System commands: wrap in SSE
-    if req.message.strip().startswith("/"):
-        response_text, _ = process_message(req.message, session_mgr, channel)
+    if message_content.strip().startswith("/"):
+        response_text, _ = process_message(message_content, session_mgr, channel)
 
         async def cmd_gen() -> AsyncGenerator[str, None]:
             import json as _j
@@ -170,8 +263,13 @@ async def chat_stream(req: ChatRequest):
     # Normal message: streaming agent pipeline
     agent = get_agent()
     memory = session.memory
-    old_messages = list(memory._messages)
-    human_msg = HumanMessage(content=req.message)
+    old_messages = memory.get_messages()
+
+    # Create HumanMessage with ID for retry/edit support
+    human_msg = HumanMessage(content=message_content)
+    memory.add_message(human_msg)
+    human_msg_id = memory.get_message_id(human_msg)
+
     state = AgentState(
         messages=old_messages + [human_msg],
         intent="",
@@ -246,11 +344,11 @@ async def chat_stream(req: ChatRequest):
 
         if full_response:
             # Strip intermediate tool messages, keep only user + final AI reply
-            memory._messages = old_messages + [
+            memory.set_messages(old_messages + [
                 human_msg,
                 AIMessage(content=full_response),
-            ]
-            session_mgr.record_message(req.message, full_response, channel)
+            ])
+            session_mgr.record_message(message_content, full_response, channel)
 
         # Save pending_action to session for next invocation
         session.pending_action = new_pending_action
@@ -318,8 +416,12 @@ def get_session_detail(session_id: str):
         "session_id": session.session_id,
         "name": session.name,
         "messages": [
-            {"type": m.type, "content": m.content if hasattr(m, "content") else ""}
-            for m in messages
+            {
+                "id": session.memory.get_message_id(m) or f"msg_{i}",
+                "type": m.type,
+                "content": m.content if hasattr(m, "content") else "",
+            }
+            for i, m in enumerate(messages)
         ],
         "summary": compressor.summary,
         "token_stats": {
@@ -335,13 +437,74 @@ def delete_session(session_id: str):
     session_mgr = get_session_manager()
     if not session_mgr.delete(session_id):
         raise HTTPException(status_code=400, detail=f"Cannot delete session: {session_id}")
+    _cleanup_session_locks(session_id)
     return {"ok": True}
 
 
 # --- Admin API: Config management ---
 
 import re as _re
+import tempfile
 from dotenv import dotenv_values
+
+
+def _atomic_write(path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Atomic file write with backup.
+
+    Strategy:
+      1. Write new content to a temp file in the same directory.
+      2. If original exists, create .bak backup.
+      3. os.replace() temp -> original (atomic on POSIX).
+      4. On any failure, attempt to restore from backup.
+
+    Raises the original exception after restore attempt.
+    """
+    path = Path(path)
+    dir_fd = path.parent
+    backup = path.with_suffix(path.suffix + ".bak")
+    tmp_fd = None
+    tmp_path = None
+
+    try:
+        # Step 1: write to temp file in same directory (same filesystem for rename)
+        tmp_fd = tempfile.NamedTemporaryFile(
+            mode="w", encoding=encoding, dir=dir_fd,
+            suffix=".tmp", delete=False,
+        )
+        tmp_path = Path(tmp_fd.name)
+        tmp_fd.write(content)
+        tmp_fd.flush()
+        os.fsync(tmp_fd.fileno())  # ensure data hits disk
+        tmp_fd.close()
+        tmp_fd = None
+
+        # Step 2: backup existing file
+        if path.exists():
+            import shutil
+            shutil.copy2(path, backup)
+
+        # Step 3: atomic rename
+        os.replace(str(tmp_path), str(path))
+        tmp_path = None  # rename succeeded, don't clean up
+
+    except Exception:
+        # Attempt restore from backup if original was overwritten or corrupted
+        if backup.exists() and (not path.exists() or path.read_text(encoding=encoding) != content):
+            try:
+                import shutil
+                shutil.copy2(backup, path)
+            except Exception:
+                pass  # best-effort restore
+        raise
+    finally:
+        # Clean up temp file if rename didn't happen
+        if tmp_fd is not None:
+            tmp_fd.close()
+        if tmp_path is not None and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
 
 # Whitelist of config keys that can be written via the admin API.
 # Unknown keys are rejected to prevent environment variable injection.
@@ -350,6 +513,7 @@ ALLOWED_CONFIG_KEYS: set[str] = {
     "LLM_API_KEY",
     "LLM_BASE_URL",
     "ADMIN_TOKEN",
+    "CHAT_TOKEN",
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
     "EMBEDDING_API_KEY",
@@ -405,7 +569,7 @@ def update_config(req: ConfigUpdate):
     existing = dotenv_values(env_path) if env_path.exists() else {}
     existing.update(req.vars)
     lines = [f"{k}={v}" for k, v in existing.items()]
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _atomic_write(env_path, "\n".join(lines) + "\n")
     # Reload config module so changes take effect immediately
     from src.config import reload
     reload()
@@ -449,7 +613,7 @@ def create_data(data_type: str, req: DataUpdate):
         existing.append(req.data)
     else:
         existing = req.data
-    path.write_text(_json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write(path, _json.dumps(existing, ensure_ascii=False, indent=2))
     return {"ok": True}
 
 
@@ -465,7 +629,7 @@ def update_data(data_type: str, item_id: str, req: DataUpdate):
         if item.get("id") == item_id:
             items[i] = req.data
             break
-    path.write_text(_json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write(path, _json.dumps(items, ensure_ascii=False, indent=2))
     return {"ok": True}
 
 
@@ -478,7 +642,7 @@ def delete_data(data_type: str, item_id: str):
 
     items = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
     items = [i for i in items if i.get("id") != item_id]
-    path.write_text(_json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write(path, _json.dumps(items, ensure_ascii=False, indent=2))
     return {"ok": True}
 
 
@@ -504,6 +668,14 @@ def _get_session_lock(channel: str, session_id: str) -> threading.Lock:
     return lock
 
 
+def _cleanup_session_locks(session_id: str) -> None:
+    """Remove all per-session locks for the given session ID (all channels)."""
+    with _message_locks_guard:
+        keys_to_remove = [k for k in _message_locks if k.endswith(f":{session_id}")]
+        for key in keys_to_remove:
+            del _message_locks[key]
+
+
 def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
     session_id = session_mgr.active_session(channel).session_id
@@ -524,8 +696,14 @@ def _process_message_impl(text: str, session_mgr: SessionManager, channel: str =
     agent = get_agent()
 
     # Save pre-invoke state for rollback on error
-    previous_messages = list(memory._messages)
-    state_messages = previous_messages + [HumanMessage(content=text)]
+    previous_messages = memory.get_messages()
+
+    # Create HumanMessage with ID for retry/edit support
+    human_msg = HumanMessage(content=text)
+    memory.add_message(human_msg)
+    human_msg_id = memory.get_message_id(human_msg)
+
+    state_messages = previous_messages + [human_msg]
 
     state = AgentState(
         messages=state_messages,
@@ -544,7 +722,7 @@ def _process_message_impl(text: str, session_mgr: SessionManager, channel: str =
         tool_calls = _extract_tool_calls(result)
     except Exception as e:
         # Roll back memory and return error
-        memory._messages = previous_messages
+        memory.set_messages(previous_messages)
         import logging
         logging.getLogger("polaris.agent").error(f"Agent 调用失败: {e}", exc_info=True)
         return (f"抱歉，处理请求时出错：{e}", [])
@@ -556,10 +734,11 @@ def _process_message_impl(text: str, session_mgr: SessionManager, channel: str =
         return (response_text, tool_calls)
 
     # Persist only user msg + final AI reply. Strip intermediate tool messages.
-    memory._messages = previous_messages + [
-        HumanMessage(content=text),
+    # Keep the original human message with its ID
+    memory.set_messages(previous_messages + [
+        human_msg,
         AIMessage(content=response_text),
-    ]
+    ])
     session_mgr.record_message(text, response_text, channel)
 
     return (response_text, tool_calls)

@@ -1,3 +1,4 @@
+import uuid
 from langchain_core.messages import BaseMessage
 from pathlib import Path
 from typing import Optional
@@ -6,14 +7,56 @@ from typing import Optional
 class MemoryManager:
     def __init__(self, profile_path: Optional[str] = None):
         self._messages: list[BaseMessage] = []
+        self._message_ids: dict[str, int] = {}  # message_id -> index
         self.profile_path = Path(profile_path) if profile_path else None
         self._profile: dict = {}
 
-    def add_message(self, message: BaseMessage) -> None:
+    def add_message(self, message: BaseMessage, message_id: str | None = None) -> str:
+        """Add a message and return its ID."""
+        mid = message_id or f"msg_{uuid.uuid4().hex[:12]}"
+        # Store ID as metadata on the message
+        if not hasattr(message, '_polaris_id'):
+            message._polaris_id = mid
+        self._message_ids[mid] = len(self._messages)
         self._messages.append(message)
+        return mid
 
-    def get_history(self) -> list[BaseMessage]:
+    def get_message_by_id(self, message_id: str) -> BaseMessage | None:
+        """Get a message by its ID."""
+        idx = self._message_ids.get(message_id)
+        if idx is not None and idx < len(self._messages):
+            return self._messages[idx]
+        return None
+
+    def get_message_id(self, message: BaseMessage) -> str | None:
+        """Get the ID of a message."""
+        return getattr(message, '_polaris_id', None)
+
+    def update_message(self, message_id: str, new_content: str) -> bool:
+        """Update the content of a message by ID. Returns True if found."""
+        idx = self._message_ids.get(message_id)
+        if idx is not None and idx < len(self._messages):
+            msg = self._messages[idx]
+            # Create a new message with updated content
+            msg.__class__ = msg.__class__
+            msg.content = new_content
+            return True
+        return False
+
+    def get_messages(self) -> list[BaseMessage]:
+        """Return a copy of all messages."""
         return list(self._messages)
+
+    # Backward-compatible alias
+    get_history = get_messages
+
+    def set_messages(self, messages: list[BaseMessage]) -> None:
+        """Replace all messages with the given list."""
+        self._messages = list(messages)
+
+    def clear_messages(self) -> None:
+        """Remove all messages."""
+        self._messages.clear()
 
     def get_profile(self) -> dict:
         if not self._profile and self.profile_path and self.profile_path.exists():

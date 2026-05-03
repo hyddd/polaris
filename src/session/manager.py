@@ -28,6 +28,14 @@ class Session:
     })
     pending_action: dict | None = None
 
+    def get_message(self, message_id: str):
+        """Get a message by ID from memory."""
+        return self.memory.get_message_by_id(message_id)
+
+    def update_message(self, message_id: str, new_content: str) -> bool:
+        """Update a message's content by ID."""
+        return self.memory.update_message(message_id, new_content)
+
     def to_dict(self) -> dict:
         """Serialize for persistence. Only clean conversation messages (human + ai without tool_calls)."""
         all_messages = self.memory.get_history()
@@ -109,7 +117,7 @@ class Session:
                 if m.get("tool_calls"):
                     kwargs["tool_calls"] = m["tool_calls"]
                 restored_messages.append(AIMessage(content=content, **kwargs))
-        memory._messages = restored_messages
+        memory.set_messages(restored_messages)
 
         compressor = ConversationCompressor()
         compressor.summary = data.get("summary", "")
@@ -221,7 +229,7 @@ class SessionManager:
 
     def reset_active(self, channel: str = "default"):
         session = self.active_session(channel)
-        session.memory._messages.clear()
+        session.memory.clear_messages()
         session.compressor.summary = ""
         session.compressor._summary_tokens = 0
         session.metadata["message_count"] = 0
