@@ -27,6 +27,7 @@ export const useThemeStore = defineStore('theme', {
     apply() {
       this.resolved = this.mode === 'system' ? getSystemTheme() : this.mode
       document.documentElement.setAttribute('data-theme', this.resolved)
+      document.documentElement.classList.toggle('dark', this.resolved === 'dark')
     },
     toggle() {
       const next = this.resolved === 'dark' ? 'light' : 'dark'
