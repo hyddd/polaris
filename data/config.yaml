@@ -49,7 +49,7 @@ cleanup:
 heartbeat:
   enabled: true
   interval_minutes: 1
-  channel: "feishu"
+  channel: "qq:0437D53CF4EDC5FED95E957C1B2DE9AC"
   prompt_file: "data/heartbeat.md"
 
 storage:

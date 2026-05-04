@@ -48,24 +48,22 @@ class HeartbeatTask:
         from src.message import process_message
 
         session_mgr = get_session_manager()
-        # 根据 channel→session 绑定关系决定用哪个会话
-        session = session_mgr.active_session(self._channel_name)
-        channel_key = f"{self._channel_name}:{session.session_id}"
 
         try:
             response_text, _ = asyncio.run(
-                process_message(prompt, session_mgr, channel=channel_key)
+                process_message(prompt, session_mgr, channel=self._channel_name)
             )
         except Exception as e:
             logger.error(f"心跳 LLM 调用失败: {e}")
             return
 
+        session = session_mgr.active_session(self._channel_name)
         ch = self._get_channel()
         if ch:
             ch.send_message(
                 session_id=session.session_id,
                 message=response_text or "（心跳任务无响应）",
-                channel=channel_key,
+                channel=self._channel_name,
             )
 
     def _notify(self, message: str):
@@ -80,7 +78,7 @@ class HeartbeatTask:
         ch.send_message(
             session_id=session.session_id,
             message=message,
-            channel=f"{self._channel_name}:{session.session_id}",
+            channel=self._channel_name,
         )
 
     def _get_channel(self):
