@@ -22,6 +22,11 @@ class WebSearchTool(BaseTool):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._refresh_config()
+        from src.core.events import event_bus
+        event_bus.subscribe("config:reload", lambda **kw: self._refresh_config())
+
+    def _refresh_config(self):
         from src.core.config import config
         self.api_key = config.get("tools.web_search.api_key", "")
         self.api_base = config.get("tools.web_search.api_base", "https://api.tavily.com")
