@@ -563,14 +563,30 @@ def _flatten_config(d: dict, prefix: str, out: list):
 
 class ConfigUpdate(BaseModel):
     vars: dict[str, str]
+    old_key: str | None = None  # 改名时传入旧 key，后端先删再写
+    remove: bool = False        # 删除而非设置
 
 
 @app.post("/api/config")
 def update_config(req: ConfigUpdate):
     from src.core.config import config
 
-    for key, value in req.vars.items():
-        config.set(key, value)
+    if req.remove:
+        for key in req.vars:
+            config.remove(key)
+    else:
+        if req.old_key and req.old_key not in req.vars:
+            config.remove(req.old_key)
+        for key, value in req.vars.items():
+            config.set(key, value)
+    config.reload()
+    return {"ok": True}
+
+
+@app.delete("/api/config/{key:path}")
+def delete_config(key: str):
+    from src.core.config import config
+    config.remove(key)
     config.reload()
     return {"ok": True}
 

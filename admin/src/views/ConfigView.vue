@@ -6,18 +6,22 @@
     </div>
 
     <div class="config-list">
-      <div v-for="row in configList" :key="row.key" class="config-row">
-        <div class="config-key">{{ row.key }}</div>
+      <div v-for="(row, i) in configList" :key="i" class="config-row">
+        <div class="config-key">
+          <input v-if="row.editing" v-model="row.newKey" class="dark-input" placeholder="key" />
+          <span v-else>{{ row.key }}</span>
+        </div>
         <div class="config-value">
-          <input v-if="row.editing" v-model="row.newValue" class="dark-input" />
+          <input v-if="row.editing" v-model="row.newValue" class="dark-input" placeholder="value" />
           <span v-else>{{ row.value }}</span>
         </div>
         <div class="config-actions">
-          <button v-if="!row.editing" class="btn btn-small" @click="row.editing = true; row.newValue = row.value">编辑</button>
+          <button v-if="!row.editing" class="btn btn-small" @click="row.editing = true; row.newKey = row.key; row.newValue = row.value">编辑</button>
           <template v-else>
             <button class="btn btn-small btn-primary" @click="save(row)">保存</button>
             <button class="btn btn-small" @click="row.editing = false">取消</button>
           </template>
+          <button class="btn btn-small btn-danger" @click="remove(row, i)">删除</button>
         </div>
       </div>
     </div>
@@ -42,13 +46,24 @@ onMounted(async () => {
 })
 
 async function save(row) {
-  await post('/api/config', { vars: { [row.key]: row.newValue } })
+  const payload = { vars: { [row.newKey]: row.newValue } }
+  if (row.key && row.key !== row.newKey) payload.old_key = row.key
+  await post('/api/config', payload)
+  row.key = row.newKey
   row.value = row.newValue
   row.editing = false
 }
 
+async function remove(row, i) {
+  if (!row.key) { configList.value.splice(i, 1); return }
+  if (row.key in (await get('/api/config')).vars) {
+    await post('/api/config', { vars: { [row.key]: '' }, remove: true })
+  }
+  configList.value.splice(i, 1)
+}
+
 function addVar() {
-  configList.value.push({ key: '', value: '', newValue: '', editing: true })
+  configList.value.push({ key: '', value: '', newKey: '', newValue: '', editing: true })
 }
 </script>
 
@@ -64,7 +79,7 @@ function addVar() {
 }
 .config-key { width: 280px; font-size: 14px; color: var(--text-secondary); font-family: 'SF Mono', Monaco, monospace; }
 .config-value { flex: 1; font-size: 14px; }
-.config-actions { width: 120px; display: flex; gap: 8px; justify-content: flex-end; }
+.config-actions { min-width: 160px; display: flex; gap: 8px; justify-content: flex-end; }
 
 .dark-input {
   width: 100%; padding: 6px 10px; background: var(--bg-tertiary); border: 1px solid var(--border-primary);
@@ -80,5 +95,7 @@ function addVar() {
 .btn:hover { background: var(--bg-tertiary); }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-hover); }
+.btn-danger { color: var(--danger, #e74c3c); border-color: var(--danger, #e74c3c); }
+.btn-danger:hover { background: var(--danger, #e74c3c); color: #fff; }
 .btn-small { padding: 6px 12px; font-size: 12px; }
 </style>

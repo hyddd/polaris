@@ -100,6 +100,28 @@ class Config:
             encoding="utf-8",
         )
 
+    def remove(self, key: str) -> None:
+        """Remove a config key from config.local.yaml."""
+        import yaml
+
+        if not _LOCAL_CONFIG_FILE.exists():
+            return
+        local_data = yaml.safe_load(
+            _LOCAL_CONFIG_FILE.read_text(encoding="utf-8")
+        ) or {}
+        keys = key.split(".")
+        d = local_data
+        for k in keys[:-1]:
+            if k not in d:
+                return
+            d = d[k]
+        if keys[-1] in d:
+            del d[keys[-1]]
+        _LOCAL_CONFIG_FILE.write_text(
+            yaml.dump(local_data, allow_unicode=True, default_flow_style=False),
+            encoding="utf-8",
+        )
+
     def reload(self) -> dict:
         """Re-read YAML config files, publish config:reload event.
 
