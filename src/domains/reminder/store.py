@@ -3,6 +3,7 @@ import threading
 from pathlib import Path
 from datetime import datetime
 from .models import Reminder, ReminderStatus
+from src.storage.atomic import _atomic_write
 
 
 class ReminderStore:
@@ -21,8 +22,9 @@ class ReminderStore:
 
     def _save(self):
         data = {"reminders": [r.to_dict() for r in self._reminders.values()]}
+        content = json.dumps(data, ensure_ascii=False, indent=2)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        _atomic_write(self._path, content)
 
     def create(self, reminder: Reminder) -> Reminder:
         with self._lock:

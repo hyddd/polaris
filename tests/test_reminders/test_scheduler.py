@@ -1,6 +1,6 @@
 from datetime import datetime
-from src.tools.reminder.models import Reminder, RepeatRule
-from src.tools.reminder.service import repeat_rule_to_cron_kwargs
+from src.domains.reminder.models import Reminder, RepeatRule
+from src.domains.reminder.domain import repeat_rule_to_cron_kwargs
 
 
 def test_repeat_rule_to_cron_kwargs_daily():

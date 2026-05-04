@@ -14,7 +14,6 @@ Endpoints:
 import logging
 import os
 import re as _re
-import json as _json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -31,9 +30,6 @@ from src.session.manager import get_session_manager, SessionManager
 from src.tools.registry import ToolRegistry
 from src.core.context import set_context as _set_ctx
 from src.core.config import config
-
-CALENDAR_FILE = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
-TODOS_FILE = config.resolve_path(config.get("storage.todos_file", "data/todos.json"))
 
 from src.message import process_message
 from src.core.lock import get_session_lock, cleanup_session_locks
@@ -620,18 +616,33 @@ def delete_config(key: str):
 
 # --- Admin API: Data management ---
 
+def _require_calendar_domain():
+    from src.domains.calendar import get_calendar_domain
+    domain = get_calendar_domain()
+    if domain is None:
+        raise HTTPException(503, "服务未就绪")
+    return domain
+
+
+def _require_todo_domain():
+    from src.domains.todos import get_todo_domain
+    domain = get_todo_domain()
+    if domain is None:
+        raise HTTPException(503, "服务未就绪")
+    return domain
+
+
 @app.get("/api/data/{data_type}")
 def list_data(data_type: str):
     if data_type == "calendar":
-        path = CALENDAR_FILE
+        domain = _require_calendar_domain()
+        items = [e.to_dict() for e in domain.list_events()]
     elif data_type == "todos":
-        path = TODOS_FILE
+        domain = _require_todo_domain()
+        items = [t.to_dict() for t in domain.list_todos("all")]
     else:
         raise HTTPException(400, f"Unknown type: {data_type}")
-
-    if not path.exists():
-        return {"items": []}
-    return {"items": _json.loads(path.read_text(encoding="utf-8"))}
+    return {"items": items}
 
 
 class DataUpdate(BaseModel):
@@ -641,50 +652,49 @@ class DataUpdate(BaseModel):
 @app.post("/api/data/{data_type}")
 def create_data(data_type: str, req: DataUpdate):
     if data_type == "calendar":
-        path = CALENDAR_FILE
+        domain = _require_calendar_domain()
+        d = req.data if isinstance(req.data, dict) else {}
+        domain.create_event(
+            date=d.get("date", ""),
+            title=d.get("title", ""),
+            time=d.get("time", "09:00"),
+            duration=d.get("duration", 60),
+            attendees=d.get("attendees"),
+        )
     elif data_type == "todos":
-        path = TODOS_FILE
+        domain = _require_todo_domain()
+        d = req.data if isinstance(req.data, dict) else {}
+        domain.create_todo(
+            title=d.get("title", ""),
+            priority=d.get("priority", "medium"),
+            due=d.get("due", ""),
+        )
     else:
         raise HTTPException(400, f"Unknown type: {data_type}")
-
-    existing = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-    if isinstance(existing, list):
-        existing.append(req.data)
-    else:
-        existing = req.data
-    from src.storage import JsonFileStore
-    JsonFileStore(str(path)).save(existing)
     return {"ok": True}
 
 
 @app.put("/api/data/{data_type}/{item_id}")
 def update_data(data_type: str, item_id: str, req: DataUpdate):
     if data_type == "todos":
-        path = TODOS_FILE
+        domain = _require_todo_domain()
+        updates = req.data if isinstance(req.data, dict) else {}
+        result = domain.update_todo(item_id, updates)
+        if result is None:
+            raise HTTPException(404, f"Item not found: {item_id}")
     else:
         raise HTTPException(400, f"Update not supported for {data_type}")
-
-    items = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-    for i, item in enumerate(items):
-        if item.get("id") == item_id:
-            items[i] = req.data
-            break
-    from src.storage import JsonFileStore
-    JsonFileStore(str(path)).save(items)
     return {"ok": True}
 
 
 @app.delete("/api/data/{data_type}/{item_id}")
 def delete_data(data_type: str, item_id: str):
     if data_type == "todos":
-        path = TODOS_FILE
+        domain = _require_todo_domain()
+        if not domain.delete_todo(item_id):
+            raise HTTPException(404, f"Item not found: {item_id}")
     else:
         raise HTTPException(400, f"Delete not supported for {data_type}")
-
-    items = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-    items = [i for i in items if i.get("id") != item_id]
-    from src.storage import JsonFileStore
-    JsonFileStore(str(path)).save(items)
     return {"ok": True}
 
 

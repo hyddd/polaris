@@ -2,8 +2,8 @@ import json
 import tempfile
 from pathlib import Path
 from datetime import datetime
-from src.tools.reminder.models import Reminder, ReminderStatus
-from src.tools.reminder.store import ReminderStore
+from src.domains.reminder.models import Reminder, ReminderStatus
+from src.domains.reminder.store import ReminderStore
 
 
 def test_create_and_get(tmp_path):

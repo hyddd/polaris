@@ -23,23 +23,26 @@ class RAGSearchTool(BaseTool):
     collection_name: str = "notes"
 
     def _run(self, query: str) -> str:
-        from src.storage.vector import search_notes
+        from src.domains.rag import get_rag_domain
 
         query = query.strip()
         if not query:
             return "请输入搜索内容。"
 
-        results = search_notes(query, self.persist_dir, self.collection_name)
+        domain = get_rag_domain()
+        if not domain:
+            return "检索服务未就绪，请稍后重试。"
+
+        results = domain.search(query, top_k=5)
         if not results:
             return "没有找到相关笔记。"
 
         output = []
         for r in results:
-            similarity = max(0, 1 - r.get("distance", 0))
-            if similarity < 0.3:
+            if r.score < 0.3:
                 continue
-            title = r["metadata"].get("title", "未命名")
-            output.append(f"## {title} (相关度: {similarity:.0%})\n{r['content'][:500]}")
+            title = r.title or "未命名"
+            output.append(f"## {title} (相关度: {r.score:.0%})\n{r.content[:500]}")
 
         if not output:
             return "没有找到足够相关的笔记，换个关键词试试？"

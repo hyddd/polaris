@@ -1,5 +1,20 @@
+import pytest
 from src.tools.persona import PersonaTool
+from src.domains.persona import set_persona_domain
+from src.domains.persona.domain import PersonaDomain
 from src.session.manager import get_session_manager
+
+
+@pytest.fixture(autouse=True)
+def setup_domain():
+    """初始化 PersonaDomain 供测试使用。"""
+    import src.session.manager as sm
+    sm._session_manager = None
+    mgr = get_session_manager()
+    domain = PersonaDomain(mgr)
+    set_persona_domain(domain)
+    yield
+    set_persona_domain(None)
 
 
 def _reset():
@@ -8,6 +23,9 @@ def _reset():
     mgr = get_session_manager()
     session = mgr.active_session()
     session.persona = {"name": "", "call_user": "", "identity": "", "personality": "", "timezone": "Asia/Shanghai", "notes": ""}
+    # Re-set persona domain with the fresh session manager
+    from src.domains.persona import set_persona_domain as _set
+    _set(PersonaDomain(mgr))
     return mgr
 
 

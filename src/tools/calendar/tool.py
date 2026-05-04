@@ -1,4 +1,3 @@
-import uuid
 import json as _json
 import logging
 from typing import Optional, Literal
@@ -6,8 +5,6 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, field_validator
 
 from src.core.config import config
-from src.storage import JsonFileStore
-from src.tools._utils import find_by_id_or_title
 
 logger = logging.getLogger("polaris.tools.calendar")
 
@@ -57,153 +54,87 @@ class GoogleCalendarTool(BaseTool):
     args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
     use_mock: bool = config.get("tools.calendar.use_mock", False)
-    _store: JsonFileStore | None = None
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._store = JsonFileStore(self.data_file)
+    def _resolve_event_id(self, domain, event_id: str | None,
+                          title: str | None, date: str | None) -> str | None:
+        """通过 event_id 或 title+date 搜索解析事件 ID。"""
+        if event_id:
+            return event_id
+        if title:
+            matches = domain.search(title)
+            for d, ev in matches:
+                if date and d != date:
+                    continue
+                return ev.id
+        return None
 
     def _run(self, action: str, date: str | None = None, keyword: str | None = None,
              title: str | None = None, time: str | None = None, attendees: list[str] | None = None,
              duration: int = 60, event_id: str | None = None, updates: dict | None = None) -> str:
-        raw = self._store.load()
-        data = raw if isinstance(raw, list) else []
+        from src.domains.calendar import get_calendar_domain
+        from src.core.context import get_channel, get_session_id
+
+        domain = get_calendar_domain()
+        if not domain:
+            return "日历服务未就绪，请稍后重试。"
 
         if action == "list":
             if not date:
                 return "请提供要查询的日期（YYYY-MM-DD）。"
-            for day in data:
-                if day.get("date") == date:
-                    events = day.get("events", [])
-                    if not events:
-                        return f"{date} 没有日程安排。"
-                    return "\n".join(
-                        f"- [{ev['id']}] {ev['time']} {ev['title']} ({ev.get('duration', 60)}分钟)"
-                        for ev in sorted(events, key=lambda e: e.get("time", ""))
-                    )
-            return f"{date} 没有日程安排。"
+            events = domain.list_events(date)
+            if not events:
+                return f"{date} 没有日程安排。"
+            return "\n".join(
+                f"- [{ev.id}] {ev.time} {ev.title} ({ev.duration}分钟)"
+                for ev in sorted(events, key=lambda e: e.time)
+            )
 
         elif action == "search":
             if not keyword:
                 return "请提供搜索关键词。"
-            matches = []
-            for day in data:
-                for ev in day.get("events", []):
-                    if keyword.lower() in ev.get("title", "").lower():
-                        matches.append((day["date"], ev))
+            matches = domain.search(keyword)
             if not matches:
                 return f"没有找到包含「{keyword}」的日程。"
-            return "\n".join(f"- [{ev['id']}] {date} {ev['time']} {ev['title']}" for date, ev in matches)
+            return "\n".join(f"- [{ev.id}] {d} {ev.time} {ev.title}" for d, ev in matches)
 
         elif action == "create":
             if not title or not date:
                 return "创建日程需要提供标题和日期。"
-            new_event = {
-                "id": f"evt-{uuid.uuid4().hex[:8]}",
-                "title": title,
-                "time": time or "09:00",
-                "duration": duration,
-                "attendees": attendees or [],
-                        }
-            # 通知提醒模块
-            self._create_event_reminder(new_event, date)
-            for day in data:
-                if day.get("date") == date:
-                    day.setdefault("events", []).append(new_event)
-                    self._store.save(data)
-                    return f"已添加日程：{date} {new_event['time']} {title}"
-            data.append({"date": date, "events": [new_event]})
-            self._store.save(data)
-            return f"已添加日程：{date} {new_event['time']} {title}"
+            ev = domain.create_event(
+                date=date, title=title, time=time or "09:00",
+                duration=duration, attendees=attendees or [],
+                channel=get_channel() or "admin",
+                session_id=get_session_id() or "",
+            )
+            return f"已添加日程：{date} {ev.time} {title}"
 
         elif action == "update":
-            # Fallback: if updates dict not provided, build it from individual fields
-            # This handles models that struggle with dict parameters
             if not updates:
                 updates = {}
                 if time:
                     updates["time"] = time
-                # Note: title param is used for matching, not for updating
                 if not updates:
                     return "修改日程需要提供要修改的字段。请在 updates 中指定要修改的内容，例如 {\"time\": \"15:00\"}"
 
-            # Normalize update keys: LLM may pass "new_time" instead of "time", "new_date" instead of "date"
-            _key_map = {"new_time": "time", "new_date": "date", "new_title": "title", "new_duration": "duration"}
-            updates = {_key_map.get(k, k): v for k, v in updates.items()}
+            resolved_id = self._resolve_event_id(domain, event_id, title, date)
+            if not resolved_id:
+                return f"未找到日程：{event_id or f'{date} {title}'}"
 
-            new_date = updates.get("date")
-            # Find by event_id or title (with optional date filter)
-            for day in data:
-                if date and day.get("date") != date:
-                    continue
-                events = day.get("events", [])
-                ev = find_by_id_or_title(events, "id", event_id, "title", title)
-                if ev:
-                    if new_date and new_date != day.get("date"):
-                        # Date changed: move event to new date
-                        events.remove(ev)
-                        ev.update({k: v for k, v in updates.items() if k != "date"})
-                        moved = False
-                        for d in data:
-                            if d.get("date") == new_date:
-                                d.setdefault("events", []).append(ev)
-                                moved = True
-                                break
-                        if not moved:
-                            data.append({"date": new_date, "events": [ev]})
-                    else:
-                        # Same date update — filter out "date" key to avoid corrupting event
-                        ev.update({k: v for k, v in updates.items() if k != "date"})
-                    self._store.save(data)
-                    # 更新关联提醒
-                    self._update_event_reminder(ev, new_date or day.get("date"), updates, data)
-                    return f"已更新日程：{ev.get('title', event_id)}"
-            return f"未找到日程：{event_id or f'{date} {title}'}"
+            result = domain.update_event(resolved_id, updates, date=date)
+            if result:
+                return f"已更新日程：{result.title}"
+            return f"未找到日程：{resolved_id}"
 
         elif action == "delete":
-            # Find by event_id or title (with optional date filter)
-            for day in data:
-                if date and day.get("date") != date:
-                    continue
-                events = day.get("events", [])
-                ev = find_by_id_or_title(events, "id", event_id, "title", title)
-                if ev:
-                    matched_title = ev["title"]
-                    # 删除关联提醒
-                    self._delete_event_reminder(ev)
-                    events.remove(ev)
-                    self._store.save(data)
-                    return f"已删除日程：{matched_title}"
-            return f"未找到日程：{event_id or f'{date} {title}'}"
+            resolved_id = self._resolve_event_id(domain, event_id, title, date)
+            if not resolved_id:
+                return f"未找到日程：{event_id or f'{date} {title}'}"
+
+            if domain.delete_event(resolved_id):
+                return f"已删除日程：{resolved_id}"
+            return f"未找到日程：{resolved_id}"
 
         return "未知操作。"
 
     async def _arun(self, **kwargs) -> str:
         return self._run(**kwargs)
-
-    def _create_event_reminder(self, event: dict, date: str):
-        """通知提醒模块：新日程已创建。"""
-        from src.core.events import event_bus
-        from src.core.context import get_channel, get_session_id
-
-        event_time_str = f"{date} {event.get('time', '09:00')}"
-        event_bus.publish("calendar:event_created",
-            event_id=event["id"], title=event["title"],
-            event_time_str=event_time_str,
-            channel=get_channel() or "admin",
-            session_id=get_session_id() or "")
-
-    def _update_event_reminder(self, event: dict, date: str, updates: dict, data=None):
-        """通知提醒模块：日程已更新。"""
-        from src.core.events import event_bus
-
-        event_time_str = f"{date} {event.get('time', '09:00')}"
-        event_bus.publish("calendar:event_updated",
-            event_id=event["id"], title=event["title"],
-            event_time_str=event_time_str)
-
-    def _delete_event_reminder(self, event: dict):
-        """通知提醒模块：日程已删除。"""
-        from src.core.events import event_bus
-
-        event_bus.publish("calendar:event_deleted", event_id=event["id"])
