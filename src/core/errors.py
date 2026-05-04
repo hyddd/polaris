@@ -15,17 +15,20 @@ class ToolError(Exception):
 
 class ValidationError(ToolError):
     """参数校验错误"""
-    pass
+    def __init__(self, message: str, suggestion: str = "请检查参数是否正确"):
+        super().__init__(message, suggestion)
 
 
 class NotFoundError(ToolError):
     """资源不存在"""
-    pass
+    def __init__(self, message: str, suggestion: str = "请确认 ID 或名称是否正确"):
+        super().__init__(message, suggestion)
 
 
 class ExternalServiceError(ToolError):
     """外部服务调用失败"""
-    pass
+    def __init__(self, message: str, suggestion: str = "服务暂时不可用，请稍后重试"):
+        super().__init__(message, suggestion)
 
 
 def format_tool_error(e: Exception) -> str:

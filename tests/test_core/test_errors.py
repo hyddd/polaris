@@ -43,10 +43,12 @@ def test_not_found_error():
 
 
 def test_external_service_error():
-    """ExternalServiceError 是 ToolError 子类。"""
+    """ExternalServiceError 是 ToolError 子类，带默认 suggestion。"""
     e = ExternalServiceError("API 调用失败")
     assert isinstance(e, ToolError)
-    assert format_tool_error(e) == "❌ API 调用失败"
+    result = format_tool_error(e)
+    assert "❌ API 调用失败" in result
+    assert "💡 服务暂时不可用，请稍后重试" in result
 
 
 def test_unknown_error():
