@@ -30,9 +30,11 @@ def command_node(state: AgentState) -> dict:
                     result = tool.invoke(pending["params"])
                     result_str = str(result) if not isinstance(result, str) else result
                 except Exception as e:
-                    result_str = f"执行失败：{e}"
+                    from src.core.errors import format_tool_error
+                    result_str = format_tool_error(e)
             else:
-                result_str = f"未找到工具：{pending['target_tool']}"
+                from src.core.errors import NotFoundError, format_tool_error
+                result_str = format_tool_error(NotFoundError(f"未找到工具：{pending['target_tool']}"))
             return {"pending_action": None, "messages": [], "final_response": result_str}
         elif stripped in ("取消", "cancel", "no"):
             return {"pending_action": None, "messages": [], "final_response": "已取消操作。"}

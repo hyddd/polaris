@@ -76,6 +76,14 @@ class Config:
     def load(self) -> None:
         """Load (or reload) configuration from YAML files."""
         self._data = _load_yaml_config()
+        # 校验（仅在有 llm 配置时，避免测试环境报错）
+        if "llm" in self._data:
+            from .schema import AppConfig
+            try:
+                AppConfig(**self._data)
+            except Exception as e:
+                import logging
+                logging.getLogger("polaris.config").warning(f"配置校验警告: {e}")
 
     def as_dict(self) -> dict:
         """Return the full config as a dict (read-only snapshot)."""

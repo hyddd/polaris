@@ -1,0 +1,56 @@
+"""Configuration schema — Pydantic models for YAML config validation.
+
+Usage:
+    from src.core.schema import AppConfig
+    validated = AppConfig(**raw_dict)
+"""
+
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class LLMConfig(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o"
+    api_key: str
+    base_url: Optional[str] = None
+    temperature: float = Field(default=0.7, ge=0, le=2)
+    max_tokens: int = Field(default=4096, gt=0)
+
+
+class StorageConfig(BaseModel):
+    calendar_file: str = "data/calendar.json"
+    todos_file: str = "data/todos.json"
+    reminders_file: str = "data/reminders.json"
+    notes_dir: str = "data/notes"
+    vector_db_dir: str = "data/chroma"
+    scheduler_file: str = "data/scheduler.json"
+
+
+class ChannelConfig(BaseModel):
+    plugin: str
+    enabled: bool = True
+
+
+class HeartbeatConfig(BaseModel):
+    enabled: bool = False
+    interval_minutes: int = Field(default=60, gt=0)
+    channel: str = ""
+    prompt_file: str = "data/heartbeat.md"
+
+
+class LoggingConfig(BaseModel):
+    level: str = "INFO"
+    format: str = "text"
+
+
+class AppConfig(BaseModel):
+    model_config = {"extra": "allow"}
+
+    llm: LLMConfig
+    storage: StorageConfig = StorageConfig()
+    channels: dict[str, ChannelConfig] = {}
+    heartbeat: HeartbeatConfig = HeartbeatConfig()
+    logging: LoggingConfig = LoggingConfig()
+    admin_token: Optional[str] = None
+    demo_mode: Optional[int] = None

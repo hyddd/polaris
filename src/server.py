@@ -61,8 +61,12 @@ class SessionInfo(BaseModel):
 
 # --- App lifecycle ---
 
-# Enable HTTP request logging for LLM API calls
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(levelname)s %(message)s')
+# Structured logging setup
+from src.core.logging_config import setup_logging
+_log_level = getattr(logging, config.get("logging.level", "INFO").upper(), logging.INFO)
+_log_format = config.get("logging.format", "text")
+setup_logging(level=_log_level, json_mode=(_log_format == "json"))
+
 logging.getLogger("httpx").setLevel(logging.INFO)
 logging.getLogger("openai").setLevel(logging.INFO)
 
@@ -612,6 +616,12 @@ def delete_config(key: str):
     config.remove(key)
     config.reload()
     return {"ok": True}
+
+
+@app.get("/api/metrics")
+def get_metrics():
+    from src.core.metrics import metrics
+    return metrics.snapshot()
 
 
 # --- Admin API: Data management ---
