@@ -24,16 +24,22 @@ def main():
     parser.add_argument("--port", type=int, default=8700, help="监听端口（默认 8700）")
     parser.add_argument("--home", type=str, default=None,
                         help="数据目录路径。多实例时指向独立目录。默认项目根 data/")
+    parser.add_argument("--demo", type=int, default=0, metavar="N",
+                        help="试用模式，限制每IP每日消息数（默认 0 不启用）")
     args = parser.parse_args()
 
     if args.home:
         os.environ["POLARIS_HOME"] = args.home
+    if args.demo:
+        os.environ["DEMO_DAILY_MESSAGES"] = str(args.demo)
 
     print("=" * 50)
     print("  Polaris Agent Server")
     print(f"  http://localhost:{args.port}")
     if args.home:
         print(f"  DATA: {args.home}/data/")
+    if args.demo:
+        print(f"  试用模式: 每 IP 每日 {args.demo} 条消息")
     print("=" * 50)
     print()
     if args.dev:

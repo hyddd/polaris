@@ -12,6 +12,7 @@ Endpoints:
 """
 
 import logging
+import os
 import re as _re
 import json as _json
 from contextlib import asynccontextmanager
@@ -215,8 +216,11 @@ _demo_counters: dict[str, list[float]] = {}
 _demo_lock = asyncio.Lock()
 
 
+_demo_daily = int(os.environ.get("DEMO_DAILY_MESSAGES", "0"))
+
+
 async def _demo_limit(request: Request, call_next):
-    if not config.get("server.demo_mode", False):
+    if not _demo_daily:
         return await call_next(request)
     path = request.url.path
     if path not in ("/api/chat", "/api/chat/stream"):
@@ -224,17 +228,16 @@ async def _demo_limit(request: Request, call_next):
 
     forwarded = request.headers.get("x-forwarded-for")
     client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
-    max_msg = config.get("server.demo_daily_messages", 50)
 
     now = _time.time()
     async with _demo_lock:
         ts = _demo_counters.setdefault(client_ip, [])
         cutoff = now - 86400
         ts[:] = [t for t in ts if t > cutoff]
-        if len(ts) >= max_msg:
+        if len(ts) >= _demo_daily:
             return JSONResponse(
                 429,
-                content={"detail": f"试用版每日消息上限已达（{max_msg}条），请明天再来。"},
+                content={"detail": f"试用版每日消息上限已达（{_demo_daily}条），请明天再来。"},
                 headers={"Retry-After": "86400"},
             )
         ts.append(now)

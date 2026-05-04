@@ -142,11 +142,11 @@ python run.py
 # 自用实例（默认端口 8700）
 python run.py
 
-# 公开试用实例（端口 8800，独立数据目录）
+# 公开试用实例（端口 8800，独立数据，每IP每日50条消息）
 mkdir -p /opt/polaris-demo/data
 cp data/config.yaml /opt/polaris-demo/data/
-# 编辑 /opt/polaris-demo/data/config.local.yaml（API key、端口等）
-python run.py --home /opt/polaris-demo --port 8800
+# 编辑 /opt/polaris-demo/data/config.local.yaml（API key 等）
+python run.py --home /opt/polaris-demo --port 8800 --demo 50
 ```
 
 不同实例的数据（会话、提醒、日程）完全隔离。
