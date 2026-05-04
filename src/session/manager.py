@@ -163,6 +163,13 @@ class SessionManager:
         return self._sessions.get(session_id)
 
     def create(self, name: str | None = None, source_channel: str = "") -> Session:
+        from src.core.config import config
+        max_sessions = config.get("server.max_sessions", 10)
+        if len(self._sessions) >= max_sessions:
+            raise RuntimeError(
+                f"会话数已达上限（{max_sessions}），请先删除旧会话。"
+                f"输入 /sessions 查看所有会话。"
+            )
         sid = f"sess_{uuid.uuid4().hex[:8]}"
         session = Session(
             session_id=sid,

@@ -479,7 +479,10 @@ class CreateSessionRequest(BaseModel):
 @app.post("/sessions")
 def create_session(req: CreateSessionRequest):
     session_mgr = get_session_manager()
-    session = session_mgr.create(name=req.name)
+    try:
+        session = session_mgr.create(name=req.name)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {
         "session_id": session.session_id,
         "name": session.name,
