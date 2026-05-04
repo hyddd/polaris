@@ -136,7 +136,7 @@ async def _admin_auth(request: Request, call_next):
     if path.startswith("/api/"):
         token = config.get("server.admin_token", "")
         if token and request.headers.get("authorization", "") != f"Bearer {token}":
-            return JSONResponse(401, content={"detail": "Missing or invalid admin token"})
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid admin token"})
     return await call_next(request)
 
 
@@ -206,7 +206,7 @@ async def _rate_limit(request: Request, call_next):
     limiter = _get_limiter()
     if not await limiter.is_allowed(client_ip):
         retry = limiter.get_retry_after(client_ip)
-        return JSONResponse(429, content={"detail": "请求过于频繁，请稍后再试"}, headers={"Retry-After": str(retry)})
+        return JSONResponse(status_code=429, content={"detail": "请求过于频繁，请稍后再试"}, headers={"Retry-After": str(retry)})
     return await call_next(request)
 
 
@@ -236,7 +236,7 @@ async def _demo_limit(request: Request, call_next):
         ts[:] = [t for t in ts if t > cutoff]
         if len(ts) >= _demo_daily:
             return JSONResponse(
-                429,
+                status_code=429,
                 content={"detail": f"试用版每日消息上限已达（{_demo_daily}条），请明天再来。"},
                 headers={"Retry-After": "86400"},
             )
