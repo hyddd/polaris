@@ -24,6 +24,26 @@ _DATA_DIR = _HOME / "data"
 _CONFIG_FILE = PROJECT_ROOT / "data/config.yaml"
 _LOCAL_CONFIG_FILE = _DATA_DIR / "config.local.yaml"
 
+def _coerce(value):
+    """将字符串转为合适的类型：bool / int / float / str。"""
+    if not isinstance(value, str):
+        return value
+    v = value.lower()
+    if v == "true":
+        return True
+    if v == "false":
+        return False
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base dict."""
     for key, val in override.items():
@@ -92,7 +112,7 @@ class Config:
         d = local_data
         for k in keys[:-1]:
             d = d.setdefault(k, {})
-        d[keys[-1]] = value
+        d[keys[-1]] = _coerce(value)
 
         _LOCAL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         _LOCAL_CONFIG_FILE.write_text(
