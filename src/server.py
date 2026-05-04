@@ -37,7 +37,6 @@ TODOS_FILE = config.resolve_path(config.get("storage.todos_file", "data/todos.js
 
 from src.message import process_message
 from src.core.lock import get_session_lock, cleanup_session_locks
-from src.storage.atomic import _atomic_write
 
 
 class ChatRequest(BaseModel):
@@ -653,7 +652,8 @@ def create_data(data_type: str, req: DataUpdate):
         existing.append(req.data)
     else:
         existing = req.data
-    _atomic_write(path, _json.dumps(existing, ensure_ascii=False, indent=2))
+    from src.storage import JsonFileStore
+    JsonFileStore(str(path)).save(existing)
     return {"ok": True}
 
 
@@ -669,7 +669,8 @@ def update_data(data_type: str, item_id: str, req: DataUpdate):
         if item.get("id") == item_id:
             items[i] = req.data
             break
-    _atomic_write(path, _json.dumps(items, ensure_ascii=False, indent=2))
+    from src.storage import JsonFileStore
+    JsonFileStore(str(path)).save(items)
     return {"ok": True}
 
 
@@ -682,7 +683,8 @@ def delete_data(data_type: str, item_id: str):
 
     items = _json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
     items = [i for i in items if i.get("id") != item_id]
-    _atomic_write(path, _json.dumps(items, ensure_ascii=False, indent=2))
+    from src.storage import JsonFileStore
+    JsonFileStore(str(path)).save(items)
     return {"ok": True}
 
 
