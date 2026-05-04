@@ -134,6 +134,23 @@ python run.py
 # 访问 http://localhost:8700
 ```
 
+### 多实例部署
+
+同一服务器上运行多个 Polaris 实例（如自用 + 公开试用），用 `--home` 指定独立数据目录：
+
+```bash
+# 自用实例（默认端口 8700）
+python run.py
+
+# 公开试用实例（端口 8800，独立数据目录）
+mkdir -p /opt/polaris-demo/data
+cp data/config.yaml /opt/polaris-demo/data/
+# 编辑 /opt/polaris-demo/data/config.local.yaml（API key、端口等）
+python run.py --home /opt/polaris-demo --port 8800
+```
+
+不同实例的数据（会话、提醒、日程）完全隔离。
+
 ## 系统命令
 
 | 命令 | 功能 |
