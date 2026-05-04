@@ -209,7 +209,41 @@ async def _rate_limit(request: Request, call_next):
     return await call_next(request)
 
 
+# --- Demo mode: per-IP daily message cap ---
+
+_demo_counters: dict[str, list[float]] = {}
+_demo_lock = asyncio.Lock()
+
+
+async def _demo_limit(request: Request, call_next):
+    if not config.get("server.demo_mode", False):
+        return await call_next(request)
+    path = request.url.path
+    if path not in ("/api/chat", "/api/chat/stream"):
+        return await call_next(request)
+
+    forwarded = request.headers.get("x-forwarded-for")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
+    max_msg = config.get("server.demo_daily_messages", 50)
+
+    now = _time.time()
+    async with _demo_lock:
+        ts = _demo_counters.setdefault(client_ip, [])
+        cutoff = now - 86400
+        ts[:] = [t for t in ts if t > cutoff]
+        if len(ts) >= max_msg:
+            return JSONResponse(
+                429,
+                content={"detail": f"试用版每日消息上限已达（{max_msg}条），请明天再来。"},
+                headers={"Retry-After": "86400"},
+            )
+        ts.append(now)
+
+    return await call_next(request)
+
+
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
+app.middleware("http")(_demo_limit)
 app.middleware("http")(_admin_auth)
 app.middleware("http")(_rate_limit)
 
