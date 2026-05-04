@@ -109,13 +109,6 @@ async def lifespan(app: FastAPI):
     from src.core.events import event_bus
     event_bus.publish("app:startup", cron=cron, channels=channels)
 
-    def _daily_tick():
-        event_bus.publish("cleanup:cron")
-
-    cron.add_cron_job(_daily_tick, "daily-tick", hour=3, minute=0)
-    srv_logger = logging.getLogger("polaris.server")
-    srv_logger.info("每日维护事件已注册: 每天 03:00")
-
     app.state.cron = cron
 
     yield
