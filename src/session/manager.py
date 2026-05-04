@@ -170,6 +170,11 @@ class SessionManager:
                 f"会话数已达上限（{max_sessions}），请先删除旧会话。"
                 f"输入 /sessions 查看所有会话。"
             )
+        # 重名检查
+        if name:
+            for s in self._sessions.values():
+                if s.name == name:
+                    raise RuntimeError(f"已存在同名会话「{name}」，请使用其他名称。")
         sid = f"sess_{uuid.uuid4().hex[:8]}"
         session = Session(
             session_id=sid,

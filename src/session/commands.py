@@ -84,7 +84,10 @@ def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str
             f"输入 /sessions 查看所有会话。"
         )
     name = arg.strip() if arg else ""
-    session = session_mgr.create(name=name if name else None, source_channel=channel)
+    try:
+        session = session_mgr.create(name=name if name else None, source_channel=channel)
+    except RuntimeError as e:
+        return str(e)
     summary = f"已创建会话「{session.name}」({session.session_id})。已切换到该会话。"
     if name:
         summary += f"\n提示：随时用 /session {session.session_id[:9]} 或 /session {name} 切回其他会话。"
