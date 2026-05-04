@@ -124,18 +124,20 @@ class PolarisFeishuBot:
                 return
 
             reaction_id = self._send_typing(msg_id)
-            response = self._process_message(sender_id, text)
+            results = self._process_message(sender_id, text)
             if reaction_id:
                 self._delete_typing(msg_id, reaction_id)
-            if chat_id:
-                self._send_message(chat_id, response)
-            else:
-                self._send_message_by_user(sender_id, response)
+            for response_text, tool_calls in results:
+                if response_text:
+                    if chat_id:
+                        self._send_message(chat_id, response_text)
+                    else:
+                        self._send_message_by_user(sender_id, response_text)
 
         except Exception as e:
             logger.error(f"[feishu] 处理消息失败: {e}", exc_info=True)
 
-    def _process_message(self, user_id: str, text: str) -> str:
+    def _process_message(self, user_id: str, text: str) -> list:
         import asyncio
         import threading
         from src.session.manager import get_session_manager
@@ -162,8 +164,8 @@ class PolarisFeishuBot:
         if error:
             raise error
         if result is None:
-            return "抱歉，处理超时。"
-        return result[0]
+            return [("抱歉，处理超时。", [])]
+        return result
 
     def _send_typing(self, message_id: str) -> str | None:
         from lark_oapi.api.im.v1 import CreateMessageReactionRequest, CreateMessageReactionRequestBody, Emoji

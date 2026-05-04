@@ -74,6 +74,8 @@ _WELCOME = (
     "直接用自然语言告诉我你想做什么就好！"
 )
 
+_SEPARATOR = '\n---WELCOME---\n'
+
 
 def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
     from src.core.config import config
@@ -91,7 +93,7 @@ def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str
     summary = f"已创建会话「{session.name}」({session.session_id})。已切换到该会话。"
     if name:
         summary += f"\n提示：随时用 /session {session.session_id[:9]} 或 /session {name} 切回其他会话。"
-    return summary + _WELCOME
+    return summary + _SEPARATOR + _WELCOME
 
 
 def _list_sessions(session_mgr: SessionManager, channel: str = "default") -> str:
@@ -144,7 +146,7 @@ def _rename(session_mgr: SessionManager, arg: str, channel: str = "default") -> 
 
 def _reset(session_mgr: SessionManager, channel: str = "default") -> str:
     session_mgr.reset_active(channel)
-    return "已重置对话记忆。所有上下文已清除，让我们重新开始。" + _WELCOME
+    return "已重置对话记忆。所有上下文已清除，让我们重新开始。" + _SEPARATOR + _WELCOME
 
 
 def _compact(session_mgr: SessionManager, channel: str = "default") -> str:

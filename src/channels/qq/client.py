@@ -46,17 +46,18 @@ class _PolarisQQClient(botpy.Client):
         )
 
         session_mgr = get_session_manager()
-        response_text, _ = await process_message(text, session_mgr, channel=f"qq:{user_id}")
+        results = await process_message(text, session_mgr, channel=f"qq:{user_id}")
 
-        if response_text:
-            chunks = ChannelPlugin._split_message(response_text, 2000)
-            for i, chunk in enumerate(chunks):
-                if i > 0:
-                    await asyncio.sleep(0.5)
-                await self._reply(message, chunk)
+        for response_text, tool_calls in results:
+            if response_text:
+                chunks = ChannelPlugin._split_message(response_text, 2000)
+                for i, chunk in enumerate(chunks):
+                    if i > 0:
+                        await asyncio.sleep(0.5)
+                    await self._send_proactive(message, chunk)
 
     async def _reply(self, message, content: str) -> None:
-        """Send markdown-rendered reply. msg_type=2 enables rich rendering on mobile."""
+        """Reply to the original message (first response only)."""
         md = {"content": content}
         try:
             if hasattr(message, "group_openid") and message.group_openid:
@@ -73,6 +74,28 @@ class _PolarisQQClient(botpy.Client):
                 await message._api.post_message(
                     channel_id=message.channel_id,
                     markdown=md, msg_id=message.id,
+                )
+            else:
+                await message.reply(content=content)
+        except Exception:
+            try:
+                await message.reply(content=content)
+            except Exception:
+                pass
+
+    async def _send_proactive(self, message, content: str) -> None:
+        """主动发送消息（不回复特定消息，避免 QQ 去重）。"""
+        md = {"content": content}
+        try:
+            if hasattr(message, "group_openid") and message.group_openid:
+                await message._api.post_group_message(
+                    group_openid=message.group_openid,
+                    msg_type=2, markdown=md,
+                )
+            elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
+                await message._api.post_c2c_message(
+                    openid=message.author.user_openid,
+                    msg_type=2, markdown=md,
                 )
             else:
                 await message.reply(content=content)

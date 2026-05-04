@@ -8,19 +8,31 @@ from src.agent.state import AgentState
 from src.session.manager import SessionManager
 from src.core.context import set_context as _set_ctx
 from src.core.lock import get_session_lock
+from src.session.commands import _SEPARATOR
 
 
-async def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
-    """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
+async def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> list[tuple[str, list[dict]]]:
+    """统一消息处理入口。返回消息列表（可能多条）。per-session 锁保证同一会话串行处理，不同会话可并发。"""
     session, switched = session_mgr.resolve_session(channel)
     session_id = session.session_id
     with get_session_lock(channel, session_id):
         # 在锁内设置 context，防止并发覆盖
         user_id = channel.split(":", 1)[-1] if ":" in channel else ""
         _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
+
+        results = []
         if switched:
-            return ("你之前绑定的会话已被删除，已自动切换到 default 会话。", [])
-        return await _process_message_impl(text, session_mgr, channel)
+            results.append(("⚠️ 你之前绑定的会话已被删除，已自动切换到 default 会话。", []))
+
+        response_text, tool_calls = await _process_message_impl(text, session_mgr, channel)
+
+        if _SEPARATOR in response_text:
+            parts = response_text.split(_SEPARATOR, 1)
+            results.append((parts[0], []))
+            results.append((parts[1], []))
+        else:
+            results.append((response_text, tool_calls))
+        return results
 
 
 async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:

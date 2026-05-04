@@ -254,8 +254,6 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager, cha
         if result is None:
             raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
     session, switched = session_mgr.resolve_session(channel)
-    if switched:
-        raise HTTPException(status_code=410, detail="会话已被删除，已自动切换到 default 会话")
     return session
 
 
@@ -294,21 +292,13 @@ def _edit_message(session_id: str, message_id: str, new_content: str, session_mg
 async def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
-    try:
-        session = _get_active_session(req.session_id, session_mgr, channel)
-    except HTTPException as e:
-        if e.status_code == 410:
-            return ChatResponse(
-                session_id="",
-                response=e.detail,
-                tool_calls=[],
-            )
-        raise
+    session = _get_active_session(req.session_id, session_mgr, channel)
 
     # 重试逻辑
     if req.retry_message_id:
         original_content = _retry_message(session.session_id, req.retry_message_id, session_mgr, channel)
-        response_text, tool_calls = await process_message(original_content, session_mgr, channel)
+        results = await process_message(original_content, session_mgr, channel)
+        response_text, tool_calls = results[-1]
         return ChatResponse(
             session_id=session.session_id,
             response=response_text,
@@ -318,7 +308,8 @@ async def chat(req: ChatRequest):
     # 编辑逻辑
     if req.edit_message_id and req.edit_content:
         new_content = _edit_message(session.session_id, req.edit_message_id, req.edit_content, session_mgr, channel)
-        response_text, tool_calls = await process_message(new_content, session_mgr, channel)
+        results = await process_message(new_content, session_mgr, channel)
+        response_text, tool_calls = results[-1]
         return ChatResponse(
             session_id=session.session_id,
             response=response_text,
@@ -326,7 +317,8 @@ async def chat(req: ChatRequest):
         )
 
     # 正常聊天
-    response_text, tool_calls = await process_message(req.message, session_mgr, channel)
+    results = await process_message(req.message, session_mgr, channel)
+    response_text, tool_calls = results[-1]
     return ChatResponse(
         session_id=session.session_id,
         response=response_text,
@@ -349,16 +341,7 @@ async def chat_stream(req: ChatRequest, request: Request):
 
     session_mgr = get_session_manager()
     channel = req.channel or "default"
-    try:
-        session = _get_active_session(req.session_id, session_mgr, channel)
-    except HTTPException as e:
-        if e.status_code == 410:
-            # 会话已删除，返回 SSE 格式的切换提示
-            async def switch_gen():
-                yield f"event: message\ndata: {json.dumps({'content': e.detail}, ensure_ascii=False)}\n\n"
-                yield "event: done\ndata: {}\n\n"
-            return StreamingResponse(switch_gen(), media_type="text/event-stream")
-        raise
+    session = _get_active_session(req.session_id, session_mgr, channel)
 
     # Determine the message content (retry/edit/normal)
     message_content = req.message
@@ -373,11 +356,12 @@ async def chat_stream(req: ChatRequest, request: Request):
 
     # System commands: wrap in SSE
     if message_content.strip().startswith("/"):
-        response_text, _ = await process_message(message_content, session_mgr, channel)
+        results = await process_message(message_content, session_mgr, channel)
 
         async def cmd_gen() -> AsyncGenerator[str, None]:
             import json as _j
-            yield f"event: message\ndata: {_j.dumps({'content': response_text}, ensure_ascii=False)}\n\n"
+            for response_text, _ in results:
+                yield f"event: message\ndata: {_j.dumps({'content': response_text}, ensure_ascii=False)}\n\n"
             yield f"event: done\ndata: {_j.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
         return StreamingResponse(cmd_gen(), media_type="text/event-stream")
 
