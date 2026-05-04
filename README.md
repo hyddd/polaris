@@ -36,6 +36,8 @@
 
 **消息重试与编辑。** hover 用户消息可重新生成或修改后重新触发，SSE 流式输出，前后端完整支持。
 
+**心跳定时任务。** 可配置的间隔触发机制，读取提示词文件自动调用 LLM 处理，结果推送到绑定 channel。适合定时汇报、每日总结等场景。
+
 **Token 预算感知的上下文压缩。** 基于 tiktoken 精确计数，超出阈值时自动摘要压缩（LLM 摘要层 + 最近消息层），重启无损恢复。
 
 ## 技术架构
@@ -48,14 +50,14 @@ src/
     config.py                #   YAML 配置中心，热重载，无模块级业务变量
     context.py               #   contextvars 上下文传播
     events.py                #   EventBus 发布订阅（框架与模块零耦合通信）
-    lock.py                  #   per-session 异步锁
+    lock.py                  #   per-session 锁（threading，跨线程互斥）
 
   agent/                     # LangGraph ReAct agent
   memory/                    # 对话记忆 + Token 预算压缩
   message/                   # 消息路由（统一入口：锁 + 上下文 + agent 调用）
   session/                   # 多会话管理 + 系统命令（/status, /reload, /cleanup 等）
 
-  cron/                      # 通用定时调度（APScheduler 封装，与业务无关）
+  cron/                      # 通用定时调度（daily-tick、heartbeat、提醒调度）
   llm/                       # LLM Provider（ChatOpenAI + tool_choice=auto）
   storage/                   # 持久化层（DataStore 协议 + JsonFileStore + 原子写入 + ChromaDB）
 
@@ -90,7 +92,7 @@ event_bus.publish("config:reload")              # 发布
 
 | 事件 | 发布者 | 订阅者 |
 |------|--------|--------|
-| `app:startup` | server 启动 | reminder 自初始化 |
+| `app:startup` | server 启动 | reminder、heartbeat、daily-tick 自初始化 |
 | `config:reload` | /reload 命令 | LLM 缓存清理、channel 重启、web_search 刷新 |
 | `cleanup:now` | /cleanup 命令 | calendar、todo、reminder 清理过期数据 |
 | `cleanup:cron` | cron 每天 3:00 | 同上 |
