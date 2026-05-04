@@ -33,11 +33,12 @@ class HeartbeatTask:
 
     def _run(self):
         if not self._prompt_file.exists():
-            logger.warning(f"心跳提示文件不存在: {self._prompt_file}")
+            self._notify(f"心跳任务已启用，但提示文件不存在：{self._prompt_file}")
             return
 
         prompt = self._prompt_file.read_text(encoding="utf-8").strip()
         if not prompt:
+            self._notify("心跳任务已启用，但提示文件内容为空。")
             return
 
         logger.info(f"心跳触发: {len(prompt)} 字符 → {self._channel_name}")
@@ -66,6 +67,21 @@ class HeartbeatTask:
                 message=response_text or "（心跳任务无响应）",
                 channel=channel_key,
             )
+
+    def _notify(self, message: str):
+        """直接推送通知到绑定 channel，不走 LLM。"""
+        logger.warning(message)
+        ch = self._get_channel()
+        if not ch:
+            return
+        from src.session.manager import get_session_manager
+        session_mgr = get_session_manager()
+        session = session_mgr.active_session(self._channel_name)
+        ch.send_message(
+            session_id=session.session_id,
+            message=message,
+            channel=f"{self._channel_name}:{session.session_id}",
+        )
 
     def _get_channel(self):
         for c in self._channels:

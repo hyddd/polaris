@@ -47,8 +47,8 @@ cleanup:
   todos_retention_days: 30
 
 heartbeat:
-  enabled: false
-  interval_minutes: 60
+  enabled: true
+  interval_minutes: 1
   channel: "feishu"
   prompt_file: "data/heartbeat.md"
 
