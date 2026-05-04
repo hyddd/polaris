@@ -5,4 +5,4 @@ Channels are loaded from YAML configuration at startup.
 """
 
 from src.channels.base import ChannelPlugin
-from src.channels.loader import discover_and_start, stop_all, _discovered_channels
+from src.channels.loader import discover_and_start, stop_all

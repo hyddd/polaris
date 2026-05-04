@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from .models import Reminder, RepeatRule, ReminderStatus
-from . import get_reminder_store, schedule_reminder
+from .lifecycle import get_reminder_store, schedule_reminder
 from src.cron import get_cron_scheduler
 
 logger = logging.getLogger("polaris.tools.reminder")

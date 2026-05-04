@@ -1,0 +1,27 @@
+"""Calendar data cleanup — subscribe to cleanup events."""
+import json
+import logging
+from datetime import datetime, timedelta
+from src.core.config import config
+from src.core.events import event_bus
+from src.storage import JsonFileStore
+
+
+def _on_cleanup(**kwargs):
+    logger = logging.getLogger("polaris.tools.calendar")
+    path = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
+    if not path.exists():
+        return
+    data = json.loads(path.read_text(encoding="utf-8"))
+    events = data if isinstance(data, list) else []
+    retention = config.get("cleanup.calendar_retention_days", 14)
+    cutoff = (datetime.now() - timedelta(days=retention)).strftime("%Y-%m-%d")
+    kept = [e for e in events if e.get("date", "") >= cutoff]
+    archived = len(events) - len(kept)
+    if archived:
+        JsonFileStore(path).save(kept)
+        logger.info(f"清理 {archived} 条过期日程（保留 {retention} 天）")
+
+
+event_bus.subscribe("cleanup:now", _on_cleanup)
+event_bus.subscribe("cleanup:cron", _on_cleanup)
