@@ -38,6 +38,15 @@ class CronScheduler:
             args=args or [], id=job_id, replace_existing=True,
         )
 
+    def add_interval_job(self, func, job_id, minutes=60):
+        """添加间隔定时任务（每 N 分钟执行一次）。"""
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        self._scheduler.add_job(
+            func, trigger=IntervalTrigger(minutes=minutes),
+            id=job_id, replace_existing=True,
+        )
+
     def remove_job(self, job_id):
         try:
             self._scheduler.remove_job(job_id)

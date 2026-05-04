@@ -109,6 +109,11 @@ async def lifespan(app: FastAPI):
     from src.core.events import event_bus
     event_bus.publish("app:startup", cron=cron, channels=channels)
 
+    # 心跳任务
+    from src.heartbeat import HeartbeatTask
+    heartbeat = HeartbeatTask(cron, channels)
+    heartbeat.start()
+
     def _daily_tick():
         event_bus.publish("cleanup:cron")
 

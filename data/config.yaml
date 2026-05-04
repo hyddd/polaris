@@ -46,6 +46,13 @@ cleanup:
   calendar_retention_days: 14
   todos_retention_days: 30
 
+heartbeat:
+  enabled: false
+  interval_minutes: 60
+  channel: "feishu"
+  session_id: ""
+  prompt_file: "data/heartbeat.md"
+
 storage:
   sessions_dir: "data/sessions"
   calendar_file: "data/calendar.json"
