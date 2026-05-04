@@ -441,8 +441,15 @@ async def chat_stream(req: ChatRequest, request: Request):
 
 # --- Session management endpoints ---
 
+
+def _is_page(request: Request) -> bool:
+    return "text/html" in request.headers.get("accept", "")
+
+
 @app.get("/sessions")
-def list_sessions(channel: str = "default"):
+def list_sessions(channel: str = "default", request: Request = None):
+    if request and _is_page(request):
+        return _serve_index()
     session_mgr = get_session_manager()
     sessions = session_mgr.list_sessions()
     active_session = session_mgr.active_session(channel)
@@ -491,7 +498,9 @@ def create_session(req: CreateSessionRequest):
 
 
 @app.get("/sessions/{session_id}")
-def get_session_detail(session_id: str):
+def get_session_detail(session_id: str, request: Request = None):
+    if request and _is_page(request):
+        return _serve_index()
     session_mgr = get_session_manager()
     session = session_mgr.get(session_id)
     if session is None:
@@ -645,6 +654,12 @@ def delete_data(data_type: str, item_id: str):
     return {"ok": True}
 
 
+def _serve_index():
+    if not ADMIN_DIR.exists():
+        raise HTTPException(404, "Admin frontend not built. Run: cd admin && npm run build")
+    return FileResponse(ADMIN_DIR / "index.html")
+
+
 # --- Admin frontend catch-all (must be LAST) ---
 
 @app.get("/{full_path:path}")
@@ -655,4 +670,4 @@ async def serve_admin(full_path: str):
     file_path = ADMIN_DIR / full_path
     if file_path.is_file():
         return FileResponse(file_path)
-    return FileResponse(ADMIN_DIR / "index.html")
+    return _serve_index()
