@@ -88,7 +88,7 @@ event_bus.subscribe("cleanup:now", my_handler)  # 订阅
 event_bus.publish("config:reload")              # 发布
 ```
 
-订阅在模块 `__init__.py` 中声明，模块被 import 时自动完成。事件名格式 `<域>:<动作>`。
+订阅在模块 `__init__.py` 中声明，模块被 import 时自动完成。事件名格式 `<domain>:<entity>_<action>`。
 
 | 事件 | 发布者 | 订阅者 |
 |------|--------|--------|
@@ -96,7 +96,13 @@ event_bus.publish("config:reload")              # 发布
 | `config:reload` | /reload 命令 | LLM 缓存清理、channel 重启、web_search 刷新 |
 | `cleanup:now` | /cleanup 命令 | calendar、todo、reminder 清理过期数据 |
 | `cleanup:cron` | cron 每天 3:00 | 同上 |
-| `calendar:event_*` | calendar tool | reminder 管理关联提醒 |
+| `calendar:event_*` | CalendarDomain | reminder 管理关联提醒 |
+| `todos:todo_*` | TodoDomain | — |
+| `notes:note_*` | NotesDomain | — |
+| `reminder:reminder_*` | ReminderDomain | — |
+| `scheduler:job_*` | SchedulerDomain | — |
+
+> 完整事件表见 [docs/eventbus.md](docs/eventbus.md)
 
 ### 新增工具
 

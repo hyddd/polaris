@@ -11,7 +11,8 @@ venv/
 *.egg-info/
 chainlit.md
 logs/
-docs/
+docs/*
+!docs/eventbus.md
 botpy.log
 deploy.sh
 admin/node_modules/
