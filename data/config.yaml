@@ -50,7 +50,6 @@ heartbeat:
   enabled: false
   interval_minutes: 60
   channel: "feishu"
-  session_id: ""
   prompt_file: "data/heartbeat.md"
 
 storage:

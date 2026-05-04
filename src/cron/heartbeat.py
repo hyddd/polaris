@@ -14,7 +14,6 @@ class HeartbeatTask:
         self._enabled = config.get("heartbeat.enabled", False)
         self._interval = config.get("heartbeat.interval_minutes", 60)
         self._channel_name = config.get("heartbeat.channel", "")
-        self._session_id = config.get("heartbeat.session_id", "")
         self._prompt_file = config.resolve_path(
             config.get("heartbeat.prompt_file", "data/heartbeat.md")
         )
@@ -48,7 +47,9 @@ class HeartbeatTask:
         from src.message import process_message
 
         session_mgr = get_session_manager()
-        channel_key = f"{self._channel_name}:{self._session_id}"
+        # 根据 channel→session 绑定关系决定用哪个会话
+        session = session_mgr.active_session(self._channel_name)
+        channel_key = f"{self._channel_name}:{session.session_id}"
 
         try:
             response_text, _ = asyncio.run(
@@ -61,7 +62,7 @@ class HeartbeatTask:
         ch = self._get_channel()
         if ch:
             ch.send_message(
-                session_id=self._session_id,
+                session_id=session.session_id,
                 message=response_text or "（心跳任务无响应）",
                 channel=channel_key,
             )
