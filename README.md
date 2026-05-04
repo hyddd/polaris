@@ -23,14 +23,14 @@
 | 工具 | 能力 |
 |------|------|
 | calendar | 日程增删改查 + 提醒自动关联 |
-| todo | 待办管理，支持优先级、截止日期 |
+| todos | 待办管理，支持优先级、截止日期 |
 | notes | 笔记管理 + RAG 语义搜索（ChromaDB） |
 | reminder | 定时提醒，支持暂停/恢复/周期重复 |
 | web_search | 联网搜索（Tavily API） |
 | persona | 会话独立人格（名称/身份/性格/称呼） |
-| rag_search | 笔记内容语义检索 |
+| rag | 笔记内容语义检索 |
 
-**多通道，插件配置驱动。** 飞书 WebSocket Bot、QQ botpy SDK、Admin Web UI——所有通道共享会话记忆。新增通道只需写实现 + YAML 配置，不动框架代码。超长消息按段落/句子边界智能分段。
+**多通道，插件配置驱动。** 飞书 WebSocket Bot、QQ botpy SDK——所有通道共享会话记忆。新增通道只需写实现 + YAML 配置，不动框架代码。超长消息按段落/句子边界智能分段。Admin Web UI 由 FastAPI 直接托管。
 
 **会话独立人格。** 不同会话可以是不同角色——诸葛亮、哈利波特、或一个默认助手。人格持久化存储，切换会话即切换角色。
 
@@ -44,7 +44,7 @@
 
 ```
 src/
-  server.py                  # FastAPI 应用入口（不依赖具体 tools/channels）
+  server.py                  # FastAPI 入口（内置速率限制 + Demo 模式）
 
   core/                      # 基础层
     config.py                #   YAML 配置中心，热重载，无模块级业务变量
