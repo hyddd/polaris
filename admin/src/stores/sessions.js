@@ -9,13 +9,13 @@ export const useSessionsStore = defineStore('sessions', {
   }),
   actions: {
     async fetch() {
-      const data = await get('/sessions?channel=admin')
+      const data = await get('/api/sessions?channel=admin')
       this.sessions = data.sessions || []
       this.activeId = data.active_session_id || ''
     },
     async create(name) {
       try {
-        await post('/sessions', { name, source_channel: 'admin' })
+        await post('/api/sessions', { name, source_channel: 'admin' })
         await this.fetch()
       } catch (e) {
         ElMessage.error(e.message)
@@ -23,15 +23,15 @@ export const useSessionsStore = defineStore('sessions', {
       }
     },
     async switchTo(sid) {
-      await post(`/sessions/${sid}/activate?channel=admin`)
+      await post(`/api/sessions/${sid}/activate?channel=admin`)
       await this.fetch()
     },
     async remove(sid) {
-      await del(`/sessions/${sid}`)
+      await del(`/api/sessions/${sid}`)
       await this.fetch()
     },
     async rename(sid, name) {
-      await post('/chat', { message: `/rename ${name}`, channel: 'admin' })
+      await post('/api/chat', { message: `/rename ${name}`, channel: 'admin' })
       await this.fetch()
     },
   },

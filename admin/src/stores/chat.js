@@ -17,7 +17,7 @@ export const useChatStore = defineStore('chat', {
       this.sessionId = sid
       this.allMessages = []
       try {
-        const data = await get(`/sessions/${sid}?channel=admin`)
+        const data = await get(`/api/sessions/${sid}?channel=admin`)
         if (data.messages) {
           this.allMessages = data.messages.filter(m => m.type === 'human' || m.type === 'ai')
           // Load last 50 messages
@@ -112,7 +112,7 @@ export const useChatStore = defineStore('chat', {
 
       try {
         await streamSSE(
-          '/chat/stream',
+          '/api/chat/stream',
           data,
           (token) => {
             if (hasToolCalls) {

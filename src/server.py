@@ -130,16 +130,12 @@ async def lifespan(app: FastAPI):
 
 
 async def _admin_auth(request: Request, call_next):
-    """Require Bearer token for /api/* (ADMIN_TOKEN) and /chat* (CHAT_TOKEN)."""
+    """Require Bearer token for /api/* (ADMIN_TOKEN)."""
     path = request.url.path
     if path.startswith("/api/"):
         token = config.get("server.admin_token", "")
         if token and request.headers.get("authorization", "") != f"Bearer {token}":
             return JSONResponse(401, content={"detail": "Missing or invalid admin token"})
-    if path == "/chat" or path.startswith("/chat/"):
-        token = config.get("server.chat_token", "")
-        if token and request.headers.get("authorization", "") != f"Bearer {token}":
-            return JSONResponse(401, content={"detail": "Missing or invalid chat token"})
     return await call_next(request)
 
 
@@ -262,7 +258,7 @@ def _edit_message(session_id: str, message_id: str, new_content: str, session_mg
 # --- Chat endpoints (for external channels: admin UI, remote bots, etc.) ---
 # In-process channels (Feishu, QQ) call agent directly, not via HTTP.
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
@@ -297,7 +293,7 @@ async def chat(req: ChatRequest):
     )
 
 
-@app.post("/chat/stream")
+@app.post("/api/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request):
     """SSE streaming — node-level progress via LangGraph astream.
 
@@ -442,14 +438,8 @@ async def chat_stream(req: ChatRequest, request: Request):
 # --- Session management endpoints ---
 
 
-def _is_page(request: Request) -> bool:
-    return "text/html" in request.headers.get("accept", "")
-
-
-@app.get("/sessions")
-def list_sessions(channel: str = "default", request: Request = None):
-    if request and _is_page(request):
-        return _serve_index()
+@app.get("/api/sessions")
+def list_sessions(channel: str = "default"):
     session_mgr = get_session_manager()
     sessions = session_mgr.list_sessions()
     active_session = session_mgr.active_session(channel)
@@ -470,7 +460,7 @@ def list_sessions(channel: str = "default", request: Request = None):
     }
 
 
-@app.post("/sessions/{session_id}/activate")
+@app.post("/api/sessions/{session_id}/activate")
 def activate_session(session_id: str, channel: str = "default"):
     session_mgr = get_session_manager()
     result = session_mgr.switch(session_id, channel)
@@ -483,7 +473,7 @@ class CreateSessionRequest(BaseModel):
     name: str | None = None
 
 
-@app.post("/sessions")
+@app.post("/api/sessions")
 def create_session(req: CreateSessionRequest):
     session_mgr = get_session_manager()
     try:
@@ -497,10 +487,8 @@ def create_session(req: CreateSessionRequest):
     }
 
 
-@app.get("/sessions/{session_id}")
-def get_session_detail(session_id: str, request: Request = None):
-    if request and _is_page(request):
-        return _serve_index()
+@app.get("/api/sessions/{session_id}")
+def get_session_detail(session_id: str):
     session_mgr = get_session_manager()
     session = session_mgr.get(session_id)
     if session is None:
@@ -527,7 +515,7 @@ def get_session_detail(session_id: str, request: Request = None):
     }
 
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/api/sessions/{session_id}")
 def delete_session(session_id: str):
     session_mgr = get_session_manager()
     if not session_mgr.delete(session_id):
