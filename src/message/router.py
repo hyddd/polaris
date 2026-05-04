@@ -13,7 +13,7 @@ from src.core.lock import get_session_lock
 async def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
     """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
     session_id = session_mgr.active_session(channel).session_id
-    async with get_session_lock(channel, session_id):
+    with get_session_lock(channel, session_id):
         # 在锁内设置 context，防止并发覆盖
         user_id = channel.split(":", 1)[-1] if ":" in channel else ""
         _set_ctx(channel=channel, session_id=session_id, user_id=user_id)

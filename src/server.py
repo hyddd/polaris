@@ -392,12 +392,10 @@ async def chat_stream(req: ChatRequest, request: Request):
 
         # Non-blocking try_lock: if another request is already processing
         # for this session, return an error instead of blocking the SSE stream.
-        if session_lock.locked():
+        if not session_lock.acquire(blocking=False):
             yield f"event: error\ndata: {json.dumps({'error': '该会话正在处理中，请稍后再试'}, ensure_ascii=False)}\n\n"
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
             return
-
-        await session_lock.acquire()
         try:
             # 在锁内设置 context，防止并发覆盖
             user_id = channel.split(":", 1)[-1] if ":" in channel else ""

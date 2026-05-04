@@ -1,14 +1,14 @@
 """Per-session locks for message processing."""
-import asyncio
+import threading
 
-_message_locks: dict[str, asyncio.Lock] = {}
+_message_locks: dict[str, threading.Lock] = {}
 
 
-def get_session_lock(channel: str, session_id: str) -> asyncio.Lock:
+def get_session_lock(channel: str, session_id: str) -> threading.Lock:
     """Return (and lazily create) the lock for a given session+channel."""
     key = f"{channel}:{session_id}"
     if key not in _message_locks:
-        _message_locks[key] = asyncio.Lock()
+        _message_locks[key] = threading.Lock()
     return _message_locks[key]
 
 

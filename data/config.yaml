@@ -48,8 +48,8 @@ cleanup:
 
 heartbeat:
   enabled: true
-  interval_minutes: 1
-  channel: "qq:0437D53CF4EDC5FED95E957C1B2DE9AC"
+  interval_minutes: 60
+  channel: "qq:xxx"
   prompt_file: "data/heartbeat.md"
 
 storage:
