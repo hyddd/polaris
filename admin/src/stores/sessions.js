@@ -13,8 +13,13 @@ export const useSessionsStore = defineStore('sessions', {
       this.activeId = data.active_session_id || ''
     },
     async create(name) {
-      await post('/sessions', { name, source_channel: 'admin' })
-      await this.fetch()
+      try {
+        await post('/sessions', { name, source_channel: 'admin' })
+        await this.fetch()
+      } catch (e) {
+        alert(e.message)
+        throw e
+      }
     },
     async switchTo(sid) {
       await post(`/sessions/${sid}/activate?channel=admin`)

@@ -12,7 +12,15 @@ export async function post(path, data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
+  if (!r.ok) {
+    const text = await r.text()
+    let msg = `HTTP ${r.status}`
+    try {
+      const d = JSON.parse(text)
+      msg = d.detail || msg
+    } catch { msg += `: ${text}` }
+    throw new Error(msg)
+  }
   return r.json()
 }
 

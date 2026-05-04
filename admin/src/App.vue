@@ -85,9 +85,13 @@ async function switchSession(sid) {
 }
 
 async function newChat() {
-  await store.create(`对话 ${store.sessions.length + 1}`)
-  chatStore.clearMessages()
-  if (route.path !== '/') router.push('/')
+  try {
+    await store.create(`对话 ${store.sessions.length + 1}`)
+    chatStore.clearMessages()
+    if (route.path !== '/') router.push('/')
+  } catch {
+    // error already alerted in store
+  }
 }
 </script>
 
