@@ -13,10 +13,16 @@ Usage:
 import yaml
 from pathlib import Path
 
+import os
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# 多实例部署：POLARIS_HOME 指向独立数据目录
+_HOME = Path(os.environ.get("POLARIS_HOME", PROJECT_ROOT))
+_DATA_DIR = _HOME / "data"
+
 _CONFIG_FILE = PROJECT_ROOT / "data/config.yaml"
-_LOCAL_CONFIG_FILE = PROJECT_ROOT / "data/config.local.yaml"
+_LOCAL_CONFIG_FILE = _DATA_DIR / "config.local.yaml"
 
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base dict."""
@@ -66,11 +72,11 @@ class Config:
         return val
 
     def resolve_path(self, val: str) -> Path:
-        """Resolve a possibly-relative path against PROJECT_ROOT."""
+        """Resolve a relative path against the data home directory."""
         p = Path(val)
         if p.is_absolute():
             return p
-        return PROJECT_ROOT / p
+        return _HOME / p
 
     def set(self, key: str, value: str) -> None:
         """Persist a config value to config.local.yaml (overrides default)."""
