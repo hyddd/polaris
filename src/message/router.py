@@ -77,6 +77,8 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
     session.pending_action = result.get("pending_action")
 
     if result.get("final_response"):
+        # 系统命令不残留记忆
+        memory.set_messages(previous_messages)
         return (response_text, tool_calls)
 
     # Persist only user msg + final AI reply. Strip intermediate tool messages.

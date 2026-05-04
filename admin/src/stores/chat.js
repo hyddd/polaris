@@ -150,7 +150,7 @@ export const useChatStore = defineStore('chat', {
           }
         )
       } catch (e) {
-        response = `连接失败: ${e.message}`
+        response = e.message
       }
 
       // Mark pending message as complete, or create final message
