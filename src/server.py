@@ -100,18 +100,14 @@ async def lifespan(app: FastAPI):
     channels = discover_and_start()
 
     # 启动 cron 框架
-    from src.cron import CronScheduler, set_cron_scheduler, HeartbeatTask
+    from src.cron import CronScheduler, set_cron_scheduler
     cron = CronScheduler()
     cron.start()
     set_cron_scheduler(cron)
 
-    # 通知各模块：框架已就绪（各 tools/channels 可自初始化）
+    # 通知各模块：框架已就绪（各 tools/channels/heartbeat 可自初始化）
     from src.core.events import event_bus
     event_bus.publish("app:startup", cron=cron, channels=channels)
-
-    # 心跳任务
-    heartbeat = HeartbeatTask(cron, channels)
-    heartbeat.start()
 
     def _daily_tick():
         event_bus.publish("cleanup:cron")
