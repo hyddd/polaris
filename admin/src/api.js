@@ -51,7 +51,12 @@ export function streamSSE(path, data, onToken, onEvent) {
 
       if (!r.ok) {
         const text = await r.text()
-        reject(new Error(`HTTP ${r.status}: ${text}`))
+        let msg = `HTTP ${r.status}`
+        try {
+          const d = JSON.parse(text)
+          msg = d.detail || msg
+        } catch { msg += `: ${text}` }
+        reject(new Error(msg))
         return
       }
 
