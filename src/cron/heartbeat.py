@@ -82,8 +82,10 @@ class HeartbeatTask:
         )
 
     def _get_channel(self):
+        # channel_name 可能是 "qq:具体用户ID"，按 : 拆分取 channel 名
+        name = self._channel_name.split(":")[0]
         for c in self._channels:
-            if c.name == self._channel_name:
+            if c.name == name:
                 return c
         logger.warning(f"心跳绑定的 channel 未找到: {self._channel_name}")
         return None
