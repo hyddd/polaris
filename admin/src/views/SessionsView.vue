@@ -64,7 +64,12 @@ async function create() {
 }
 
 async function handleDelete(sid) {
-  if (!confirm('确认删除此会话？')) return
+  try {
+    await ElMessageBox.confirm('此操作不可恢复。', '删除会话', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+    })
+  } catch { return }
   await store.remove(sid)
 }
 
