@@ -64,6 +64,13 @@ def is_command(text: str) -> bool:
 
 
 def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
+    from src.core.config import config
+    max_sessions = config.get("server.max_sessions", 10)
+    if len(session_mgr._sessions) >= max_sessions:
+        return (
+            f"会话数已达上限（{max_sessions}），请先删除旧会话。\n"
+            f"输入 /sessions 查看所有会话。"
+        )
     name = arg.strip() if arg else ""
     session = session_mgr.create(name=name if name else None, source_channel=channel)
     summary = f"已创建会话「{session.name}」({session.session_id})。已切换到该会话。"
