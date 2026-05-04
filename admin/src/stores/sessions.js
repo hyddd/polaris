@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { get, post, del } from '../api.js'
+import { ElMessage } from 'element-plus'
 
 export const useSessionsStore = defineStore('sessions', {
   state: () => ({
@@ -17,7 +18,7 @@ export const useSessionsStore = defineStore('sessions', {
         await post('/sessions', { name, source_channel: 'admin' })
         await this.fetch()
       } catch (e) {
-        alert(e.message)
+        ElMessage.error(e.message)
         throw e
       }
     },
