@@ -253,7 +253,10 @@ def _get_active_session(session_id: str | None, session_mgr: SessionManager, cha
         result = session_mgr.switch(session_id, channel)
         if result is None:
             raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
-    return session_mgr.active_session(channel)
+    session, switched = session_mgr.resolve_session(channel)
+    if switched:
+        raise HTTPException(status_code=410, detail="会话已被删除，已自动切换到 default 会话")
+    return session
 
 
 def _retry_message(session_id: str, message_id: str, session_mgr: SessionManager, channel: str = "default"):
@@ -291,7 +294,16 @@ def _edit_message(session_id: str, message_id: str, new_content: str, session_mg
 async def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
-    session = _get_active_session(req.session_id, session_mgr, channel)
+    try:
+        session = _get_active_session(req.session_id, session_mgr, channel)
+    except HTTPException as e:
+        if e.status_code == 410:
+            return ChatResponse(
+                session_id="",
+                response=e.detail,
+                tool_calls=[],
+            )
+        raise
 
     # 重试逻辑
     if req.retry_message_id:
@@ -337,7 +349,16 @@ async def chat_stream(req: ChatRequest, request: Request):
 
     session_mgr = get_session_manager()
     channel = req.channel or "default"
-    session = _get_active_session(req.session_id, session_mgr, channel)
+    try:
+        session = _get_active_session(req.session_id, session_mgr, channel)
+    except HTTPException as e:
+        if e.status_code == 410:
+            # 会话已删除，返回 SSE 格式的切换提示
+            async def switch_gen():
+                yield f"event: message\ndata: {json.dumps({'content': e.detail}, ensure_ascii=False)}\n\n"
+                yield "event: done\ndata: {}\n\n"
+            return StreamingResponse(switch_gen(), media_type="text/event-stream")
+        raise
 
     # Determine the message content (retry/edit/normal)
     message_content = req.message
@@ -545,6 +566,9 @@ def get_session_detail(session_id: str):
 @app.delete("/api/sessions/{session_id}")
 def delete_session(session_id: str):
     session_mgr = get_session_manager()
+    session = session_mgr.get(session_id)
+    if session and session.name == "default":
+        raise HTTPException(status_code=400, detail="default 会话不能删除")
     if not session_mgr.delete(session_id):
         raise HTTPException(status_code=400, detail=f"Cannot delete session: {session_id}")
     cleanup_session_locks(session_id)
