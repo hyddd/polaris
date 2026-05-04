@@ -16,3 +16,4 @@ botpy.log
 deploy.sh
 admin/node_modules/
 admin/dist/
+deploy.sh
