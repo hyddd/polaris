@@ -28,7 +28,7 @@ class NotesDomain:
             return
         def _work():
             try:
-                from src.storage.vector import add_note_to_index
+                from src.domains.rag.vector import add_note_to_index
                 add_note_to_index(filename, title, content, tags,
                                   self._persist_dir, self._collection_name)
                 logger.debug(f"笔记已索引: {filename}")
@@ -42,7 +42,7 @@ class NotesDomain:
             return
         def _work():
             try:
-                from src.storage.vector import remove_note_from_index
+                from src.domains.rag.vector import remove_note_from_index
                 remove_note_from_index(filename, self._persist_dir,
                                        self._collection_name)
                 logger.debug(f"笔记已从索引移除: {filename}")
@@ -75,7 +75,7 @@ class NotesDomain:
                 for n in notes
             ]
         try:
-            from src.storage.vector import search_notes
+            from src.domains.rag.vector import search_notes
             raw = search_notes(keyword, self._persist_dir,
                                self._collection_name)
             results = []

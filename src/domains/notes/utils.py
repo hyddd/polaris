@@ -1,48 +1,9 @@
-import json
+"""Notes domain utilities — frontmatter parsing and formatting."""
+
 import re
 import yaml
-from pathlib import Path
 from datetime import date
-
-
-def load_json(path: Path) -> dict | list:
-    if not path.exists():
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_json(path: Path, data: dict | list) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def load_calendar_events(path: Path, target_date: str | None = None) -> list[dict]:
-    data = load_json(path)
-    if not isinstance(data, list):
-        return []
-    if target_date:
-        return [ev for day in data if day.get("date") == target_date for ev in day.get("events", [])]
-    return [ev for day in data for ev in day.get("events", [])]
-
-
-def save_calendar_event(path: Path, date_str: str, event: dict) -> None:
-    data = load_json(path)
-    if not isinstance(data, list):
-        data = []
-    for day in data:
-        if day.get("date") == date_str:
-            day.setdefault("events", []).append(event)
-            save_json(path, data)
-            return
-    data.append({"date": date_str, "events": [event]})
-    save_json(path, data)
-
-
-def load_todos(path: Path) -> list[dict]:
-    data = load_json(path)
-    return data if isinstance(data, list) else []
+from pathlib import Path
 
 
 def parse_note_frontmatter(content: str) -> tuple[dict, str]:
@@ -58,11 +19,13 @@ def parse_note_frontmatter(content: str) -> tuple[dict, str]:
 
 
 def format_note_file(metadata: dict, body: str) -> str:
+    """Format metadata and body into a markdown file with YAML frontmatter."""
     frontmatter = yaml.dump(metadata, allow_unicode=True, default_flow_style=False).strip()
     return f"---\n{frontmatter}\n---\n\n{body}\n"
 
 
 def load_notes(notes_dir: Path) -> list[dict]:
+    """Load all notes from a directory."""
     results = []
     if not notes_dir.exists():
         return results
@@ -74,6 +37,7 @@ def load_notes(notes_dir: Path) -> list[dict]:
 
 
 def save_note(notes_dir: Path, title: str, body: str, tags: list[str] | None = None) -> Path:
+    """Save a note to the notes directory."""
     notes_dir.mkdir(parents=True, exist_ok=True)
     slug = re.sub(r"[^\w\s-]", "", title).strip().lower().replace(" ", "-")
     filename = f"{slug}.md"
@@ -85,6 +49,7 @@ def save_note(notes_dir: Path, title: str, body: str, tags: list[str] | None = N
 
 
 def archive_note(filepath: Path, archive_dir: Path) -> bool:
+    """Archive a note to the archive directory."""
     if not filepath.exists():
         return False
     archive_dir.mkdir(parents=True, exist_ok=True)

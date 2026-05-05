@@ -6,7 +6,7 @@ import threading
 from datetime import date
 from pathlib import Path
 
-from src.storage.loaders import format_note_file, parse_note_frontmatter
+from .utils import format_note_file, parse_note_frontmatter
 from .models import Note
 
 logger = logging.getLogger("polaris.notes.store")

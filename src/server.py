@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
 
     # Check embedding config (cloud API, no local model to pre-warm)
     try:
-        from src.storage.vector import check_embedding_config
+        from src.domains.rag.vector import check_embedding_config
         check_embedding_config()
     except Exception:
         pass

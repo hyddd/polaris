@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from src.core.events import event_bus
-from src.tools.entity_utils import find_by_id_or_title
+from src.core.tools import find_by_id_or_title
 from .models import TodoItem
 from .store import TodoStore
 
