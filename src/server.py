@@ -104,6 +104,9 @@ async def lifespan(app: FastAPI):
     cron.start()
     set_cron_scheduler(cron)
 
+    # 确保所有 Domain 模块已导入（注册 app:startup handler）
+    import src.domains  # noqa: F401
+
     # 通知各模块：框架已就绪（各 tools/channels/heartbeat 可自初始化）
     from src.core.events import event_bus
     event_bus.publish("app:startup", cron=cron, channels=channels)
