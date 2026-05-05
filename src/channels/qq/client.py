@@ -31,10 +31,36 @@ class _PolarisQQClient(botpy.Client):
 
     async def _handle(self, content: str, message) -> None:
         from src.message import process_message
+        from src.message.models import Attachment
         from src.session.manager import get_session_manager
 
         text = content.strip()
-        if not text:
+
+        # 提取图片附件
+        attachments = []
+        msg_attachments = getattr(message, 'attachments', None) or []
+        for att in msg_attachments:
+            url = getattr(att, 'url', None)
+            content_type = getattr(att, 'content_type', '')
+            if url and content_type.startswith('image/'):
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            import base64
+                            b64 = base64.b64encode(resp.content).decode()
+                            attachments.append(Attachment(
+                                type="image",
+                                data=b64,
+                                mime_type=content_type,
+                                filename=getattr(att, 'filename', 'image'),
+                            ))
+                except Exception as e:
+                    logger.warning(f"下载图片失败: {e}")
+
+        # 如果既没有文本也没有附件，忽略
+        if not text and not attachments:
             return
 
         # Get openid: member_openid > user_openid > id
@@ -46,7 +72,10 @@ class _PolarisQQClient(botpy.Client):
         )
 
         session_mgr = get_session_manager()
-        results = await process_message(text, session_mgr, channel=f"qq:{user_id}")
+        results = await process_message(
+            text, session_mgr, channel=f"qq:{user_id}",
+            attachments=attachments if attachments else None,
+        )
 
         for response_text, tool_calls in results:
             if response_text:
