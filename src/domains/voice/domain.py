@@ -61,19 +61,67 @@ class VoiceDomain:
 
         filename = f"tts_{uuid.uuid4().hex[:8]}"
 
-        # 尝试转为 MP3（减小体积，WAV ~1.6MB → MP3 ~150KB）
+        # 优先转为 silk（QQ 语音条要求）
+        silk_data = self._wav_to_silk(audio)
+        if silk_data:
+            filename += ".silk"
+            path = self._output_dir / filename
+            path.write_bytes(silk_data)
+            return f"/api/voice/{filename}"
+
+        # silk 转换失败，尝试 MP3
         mp3_data = self._wav_to_mp3(audio)
         if mp3_data:
             filename += ".mp3"
             path = self._output_dir / filename
             path.write_bytes(mp3_data)
-        else:
-            # ffmpeg 不可用时，保存原始 WAV
-            filename += ".wav"
-            path = self._output_dir / filename
-            path.write_bytes(audio)
+            return f"/api/voice/{filename}"
 
+        # 都失败，保存原始 WAV
+        filename += ".wav"
+        path = self._output_dir / filename
+        path.write_bytes(audio)
         return f"/api/voice/{filename}"
+
+    def _wav_to_silk(self, wav_data: bytes) -> bytes | None:
+        """WAV 转 silk，需要 pilk 库。"""
+        import subprocess
+        import tempfile
+
+        try:
+            import pilk
+        except ImportError:
+            logger.debug("pilk 未安装，跳过 silk 转换")
+            return None
+
+        wav_path = pcm_path = silk_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_file:
+                wav_file.write(wav_data)
+                wav_path = wav_file.name
+
+            pcm_path = wav_path.replace(".wav", ".pcm")
+            silk_path = wav_path.replace(".wav", ".silk")
+
+            # WAV → PCM (16bit, mono, 24000Hz)
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", wav_path, "-f", "s16le", "-ar", "24000", "-ac", "1", pcm_path],
+                capture_output=True, timeout=30,
+            )
+            if result.returncode != 0:
+                return None
+
+            # PCM → silk
+            pilk.encode(pcm_path, silk_path, pcm_rate=24000, tencent=True)
+
+            return Path(silk_path).read_bytes()
+        except Exception as e:
+            logger.warning(f"silk 转换失败: {e}")
+            return None
+        finally:
+            for p in [wav_path, pcm_path, silk_path]:
+                if p:
+                    Path(p).unlink(missing_ok=True)
 
     def _wav_to_mp3(self, wav_data: bytes) -> bytes | None:
         """WAV 转 MP3，需要 ffmpeg。失败返回 None。"""

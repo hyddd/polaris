@@ -103,7 +103,7 @@ class _PolarisQQClient(botpy.Client):
         voice_urls = []
         for response_text, tool_calls in results:
             if response_text:
-                urls = re.findall(r'/api/voice/[\w]+\.(wav|mp3)', response_text)
+                urls = re.findall(r'/api/voice/[\w]+\.(wav|mp3|silk)', response_text)
                 voice_urls.extend(urls)
 
         if voice_urls:
@@ -118,8 +118,8 @@ class _PolarisQQClient(botpy.Client):
         for response_text, tool_calls in results:
             if response_text:
                 cleaned = re.sub(r'语音合成完成[。.]?\s*请直接将以下链接发送给用户[，,]?\s*不要再调用任何工具[：:]\s*', '', response_text)
-                cleaned = re.sub(r'https?://[^\s]+/api/voice/[\w]+\.(wav|mp3)', '', cleaned)
-                cleaned = re.sub(r'/api/voice/[\w]+\.(wav|mp3)', '', cleaned).strip()
+                cleaned = re.sub(r'https?://[^\s]+/api/voice/[\w]+\.(wav|mp3|silk)', '', cleaned)
+                cleaned = re.sub(r'/api/voice/[\w]+\.(wav|mp3|silk)', '', cleaned).strip()
                 if cleaned:
                     chunks = ChannelPlugin._split_message(cleaned, 2000)
                     for i, chunk in enumerate(chunks):
@@ -203,7 +203,7 @@ class _PolarisQQClient(botpy.Client):
     async def _send_proactive(self, message, content: str) -> None:
         """主动发送消息（不回复特定消息，避免 QQ 去重）。"""
         # 检测语音 URL
-        voice_match = re.search(r'(/api/voice/[\w]+\.(wav|mp3))', content)
+        voice_match = re.search(r'(/api/voice/[\w]+\.(wav|mp3|silk))', content)
         if voice_match:
             from src.core.config import config
             public_url = config.get("server.public_url", "")
