@@ -155,21 +155,32 @@ class _PolarisQQClient(botpy.Client):
                 pass
 
     async def send_voice(self, message, audio_url: str) -> bool:
-        """发送语音消息。使用 srv_send_msg=True 一步完成上传+发送。"""
+        """发送语音消息。两步：上传获取 media → 发送富媒体消息。"""
+        logger.info(f"发送语音: {audio_url}")
         try:
             if hasattr(message, "group_openid") and message.group_openid:
-                await message._api.post_group_file(
+                media = await message._api.post_group_file(
                     group_openid=message.group_openid,
                     file_type=3,  # 语音
                     url=audio_url,
-                    srv_send_msg=True,  # 上传即发送，避免二次调用超时
+                )
+                await message._api.post_group_message(
+                    group_openid=message.group_openid,
+                    msg_type=7,
+                    media=media,
+                    msg_id=message.id,
                 )
             elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
-                await message._api.post_c2c_file(
+                media = await message._api.post_c2c_file(
                     openid=message.author.user_openid,
                     file_type=3,
                     url=audio_url,
-                    srv_send_msg=True,
+                )
+                await message._api.post_c2c_message(
+                    openid=message.author.user_openid,
+                    msg_type=7,
+                    media=media,
+                    msg_id=message.id,
                 )
             else:
                 return False
