@@ -1,4 +1,4 @@
-"""Storage abstraction layer."""
-from src.storage.store import DataStore, JsonFileStore
+"""Storage — 兼容层，re-export core.storage。"""
+from src.core.storage import DataStore, JsonFileStore, _atomic_write
 
-__all__ = ["DataStore", "JsonFileStore"]
+__all__ = ["DataStore", "JsonFileStore", "_atomic_write"]
