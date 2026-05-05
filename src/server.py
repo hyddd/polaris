@@ -650,6 +650,22 @@ def _require_todo_domain():
     return domain
 
 
+def _require_notes_domain():
+    from src.domains.notes import get_notes_domain
+    domain = get_notes_domain()
+    if not domain:
+        raise HTTPException(503, "笔记服务未就绪")
+    return domain
+
+
+def _require_reminder_domain():
+    from src.domains.reminder import get_reminder_domain
+    domain = get_reminder_domain()
+    if not domain:
+        raise HTTPException(503, "提醒服务未就绪")
+    return domain
+
+
 @app.get("/api/data/{data_type}")
 def list_data(data_type: str):
     if data_type == "calendar":
@@ -714,6 +730,75 @@ def delete_data(data_type: str, item_id: str):
     else:
         raise HTTPException(400, f"Delete not supported for {data_type}")
     return {"ok": True}
+
+
+# --- Admin API: Notes management ---
+
+class NoteCreate(BaseModel):
+    title: str
+    content: str = ""
+    tags: list[str] = []
+
+
+class NoteUpdate(BaseModel):
+    content: str | None = None
+    tags: list[str] | None = None
+
+
+@app.get("/api/notes")
+def list_notes(tag: str = None):
+    domain = _require_notes_domain()
+    notes = domain.list_notes(tag=tag)
+    return {"items": [n.to_dict() for n in notes]}
+
+
+@app.get("/api/notes/search")
+def search_notes(q: str = "", top_k: int = 5):
+    domain = _require_notes_domain()
+    results = domain.search(q)
+    return {"items": [r.to_dict() for r in results[:top_k]]}
+
+
+@app.get("/api/notes/{filename}")
+def get_note(filename: str):
+    domain = _require_notes_domain()
+    note = domain.get_note(filename)
+    if not note:
+        raise HTTPException(404, f"笔记不存在: {filename}")
+    return note.to_dict()
+
+
+@app.post("/api/notes")
+def create_note(req: NoteCreate):
+    domain = _require_notes_domain()
+    note = domain.create_note(req.title, req.content, req.tags)
+    return note.to_dict()
+
+
+@app.put("/api/notes/{filename}")
+def update_note(filename: str, req: NoteUpdate):
+    domain = _require_notes_domain()
+    note = domain.update_note(filename, content=req.content, tags=req.tags)
+    if not note:
+        raise HTTPException(404, f"笔记不存在: {filename}")
+    return note.to_dict()
+
+
+@app.delete("/api/notes/{filename}")
+def delete_note(filename: str):
+    domain = _require_notes_domain()
+    if not domain.delete_note(filename):
+        raise HTTPException(404, f"笔记不存在: {filename}")
+    return {"ok": True}
+
+
+# --- Admin API: Reminders management ---
+
+@app.get("/api/reminders")
+def list_reminders():
+    domain = _require_reminder_domain()
+    reminders = domain.list_all()
+    return {"items": [r.to_dict() for r in reminders]}
 
 
 def _serve_index():

@@ -25,6 +25,9 @@
         <router-link to="/data" class="sidebar-link">
           <el-icon><Document /></el-icon> 数据
         </router-link>
+        <router-link to="/notes" class="sidebar-link">
+          <el-icon><Memo /></el-icon> 笔记
+        </router-link>
         <div class="theme-options">
           <div class="theme-slider" :style="sliderStyle"></div>
           <button class="theme-btn" @click="theme.setMode('light')" title="浅色">
