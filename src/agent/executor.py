@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage, SystemMessage
-from src.llm.openai import create_chat_model
+from src.core.llm.openai import create_chat_model
 
 if TYPE_CHECKING:
     from langchain_openai import ChatOpenAI

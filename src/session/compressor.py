@@ -9,7 +9,7 @@ NOT based on message count. Large-context models (200k) rarely compress.
 """
 
 from langchain_core.messages import BaseMessage, HumanMessage
-from src.llm.openai import create_chat_model
+from src.core.llm.openai import create_chat_model
 
 SUMMARIZE_PROMPT = """请将以下新对话内容合并到已有摘要中，生成更新后的摘要。
 

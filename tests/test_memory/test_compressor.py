@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage, AIMessage
-from src.memory.compressor import ConversationCompressor
+from src.session.compressor import ConversationCompressor
 
 
 def test_no_compression_under_budget():

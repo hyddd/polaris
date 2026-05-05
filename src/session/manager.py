@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, AIMessage
-from src.memory.store import MemoryManager
-from src.memory.compressor import ConversationCompressor
+from src.core.memory import MemoryManager
+from src.session.compressor import ConversationCompressor
 from src.core.config import config
 
 # sessions_dir from config is the sessions storage directory (e.g. "data/sessions")
