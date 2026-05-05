@@ -28,6 +28,12 @@
         <router-link to="/notes" class="sidebar-link">
           <el-icon><Memo /></el-icon> 笔记
         </router-link>
+        <router-link to="/reminders" class="sidebar-link">
+          <el-icon><Bell /></el-icon> 提醒
+        </router-link>
+        <router-link to="/status" class="sidebar-link">
+          <el-icon><Monitor /></el-icon> 状态
+        </router-link>
         <div class="theme-options">
           <div class="theme-slider" :style="sliderStyle"></div>
           <button class="theme-btn" @click="theme.setMode('light')" title="浅色">

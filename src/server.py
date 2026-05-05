@@ -801,6 +801,78 @@ def list_reminders():
     return {"items": [r.to_dict() for r in reminders]}
 
 
+class ReminderCreate(BaseModel):
+    title: str
+    description: str = ""
+    trigger_time: str  # ISO format datetime string
+    repeat_rule: str = "none"
+
+
+@app.post("/api/reminders")
+def create_reminder(req: ReminderCreate):
+    domain = _require_reminder_domain()
+    from datetime import datetime as dt
+    try:
+        trigger_time = dt.fromisoformat(req.trigger_time)
+    except ValueError:
+        raise HTTPException(400, "Invalid trigger_time format, expected ISO datetime")
+    reminder = domain.create(
+        title=req.title,
+        trigger_time=trigger_time,
+        repeat_rule=req.repeat_rule,
+        description=req.description,
+    )
+    return reminder.to_dict()
+
+
+@app.delete("/api/reminders/{reminder_id}")
+def delete_reminder(reminder_id: str):
+    domain = _require_reminder_domain()
+    if not domain.delete(reminder_id):
+        raise HTTPException(404, f"提醒不存在: {reminder_id}")
+    return {"ok": True}
+
+
+@app.post("/api/reminders/{reminder_id}/pause")
+def pause_reminder(reminder_id: str):
+    domain = _require_reminder_domain()
+    r = domain.pause(reminder_id)
+    if not r:
+        raise HTTPException(404, f"提醒不存在: {reminder_id}")
+    return r.to_dict()
+
+
+@app.post("/api/reminders/{reminder_id}/resume")
+def resume_reminder(reminder_id: str):
+    domain = _require_reminder_domain()
+    r = domain.resume(reminder_id)
+    if not r:
+        raise HTTPException(404, f"提醒不存在: {reminder_id}")
+    return r.to_dict()
+
+
+@app.get("/api/status")
+def get_status():
+    from src.tools.registry import ToolRegistry
+    from src.domains.scheduler import get_scheduler_domain
+    from src.channels.loader import _discovered_channels
+
+    registry = ToolRegistry.get_instance()
+    tools = [{"name": t.name} for t in registry.list_tools()]
+
+    scheduler = get_scheduler_domain()
+    jobs = [j.to_dict() for j in scheduler.list_jobs()] if scheduler else []
+
+    channels = []
+    for ch in _discovered_channels:
+        channels.append({
+            "name": ch.name,
+            "configured": ch.is_configured(),
+        })
+
+    return {"tools": tools, "jobs": jobs, "channels": channels}
+
+
 def _serve_index():
     if not ADMIN_DIR.exists():
         raise HTTPException(404, "Admin frontend not built. Run: cd admin && npm run build")

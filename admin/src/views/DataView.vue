@@ -30,6 +30,70 @@
 
     <!-- Todos -->
     <div v-if="activeTab === 'todos'" class="data-content">
+      <div class="todo-header">
+        <button class="btn btn-primary btn-small" @click="showCreateTodo = true">
+          <el-icon><Plus /></el-icon> 新建待办
+        </button>
+      </div>
+
+      <!-- Create Todo Modal -->
+      <div v-if="showCreateTodo" class="modal-overlay" @click.self="showCreateTodo = false">
+        <div class="modal">
+          <h3>新建待办</h3>
+          <div class="form-group">
+            <label>标题</label>
+            <input v-model="todoForm.title" placeholder="待办标题" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+            <select v-model="todoForm.priority" class="form-input">
+              <option value="low">低</option>
+              <option value="medium">中</option>
+              <option value="high">高</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>截止日期</label>
+            <input v-model="todoForm.due" type="date" class="form-input" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn" @click="showCreateTodo = false">取消</button>
+            <button class="btn btn-primary" @click="createTodo" :disabled="!todoForm.title">创建</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Todo Modal -->
+      <div v-if="editingTodo" class="modal-overlay" @click.self="editingTodo = null">
+        <div class="modal">
+          <h3>编辑待办</h3>
+          <div class="form-group">
+            <label>标题</label>
+            <input v-model="editForm.title" placeholder="待办标题" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+            <select v-model="editForm.priority" class="form-input">
+              <option value="low">低</option>
+              <option value="medium">中</option>
+              <option value="high">高</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>状态</label>
+            <select v-model="editForm.status" class="form-input">
+              <option value="pending">待处理</option>
+              <option value="in_progress">进行中</option>
+              <option value="done">已完成</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button class="btn" @click="editingTodo = null">取消</button>
+            <button class="btn btn-primary" @click="updateTodo" :disabled="!editForm.title">保存</button>
+          </div>
+        </div>
+      </div>
+
       <div class="todo-list">
         <div v-for="todo in items" :key="todo.id" class="todo-card">
           <div class="todo-main">
@@ -40,7 +104,10 @@
               <span v-if="todo.due" class="todo-due">截止: {{ todo.due }}</span>
             </div>
           </div>
-          <button class="btn btn-small btn-danger" @click="deleteItem(todo.id)">删除</button>
+          <div class="todo-actions">
+            <button class="btn btn-small" @click="startEditTodo(todo)">编辑</button>
+            <button class="btn btn-small btn-danger" @click="deleteItem(todo.id)">删除</button>
+          </div>
         </div>
         <div v-if="!items.length" class="empty">暂无待办事项</div>
       </div>
@@ -50,10 +117,15 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { get, del } from '../api.js'
+import { ElMessage } from 'element-plus'
+import { get, post, put, del } from '../api.js'
 
 const activeTab = ref('calendar')
 const items = ref([])
+const showCreateTodo = ref(false)
+const editingTodo = ref(null)
+const todoForm = ref({ title: '', priority: 'medium', due: '' })
+const editForm = ref({ title: '', priority: 'medium', status: 'pending' })
 
 async function loadData() {
   const data = await get(`/api/data/${activeTab.value}`)
@@ -64,6 +136,36 @@ async function deleteItem(id) {
   if (!confirm('确认删除？')) return
   await del(`/api/data/${activeTab.value}/${id}`)
   await loadData()
+}
+
+async function createTodo() {
+  if (!todoForm.value.title) return
+  try {
+    await post('/api/data/todos', { data: todoForm.value })
+    showCreateTodo.value = false
+    todoForm.value = { title: '', priority: 'medium', due: '' }
+    await loadData()
+    ElMessage.success('待办已创建')
+  } catch (e) {
+    ElMessage.error('创建失败: ' + e.message)
+  }
+}
+
+function startEditTodo(todo) {
+  editingTodo.value = todo
+  editForm.value = { title: todo.title, priority: todo.priority, status: todo.status }
+}
+
+async function updateTodo() {
+  if (!editForm.value.title || !editingTodo.value) return
+  try {
+    await put(`/api/data/todos/${editingTodo.value.id}`, { data: editForm.value })
+    editingTodo.value = null
+    await loadData()
+    ElMessage.success('待办已更新')
+  } catch (e) {
+    ElMessage.error('更新失败: ' + e.message)
+  }
 }
 
 onMounted(loadData)
@@ -125,10 +227,35 @@ onMounted(loadData)
 .btn {
   padding: 8px 16px; border: 1px solid var(--border-primary); border-radius: 8px;
   background: transparent; color: var(--text-primary); font-size: 13px; cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
 }
 .btn:hover { background: var(--bg-tertiary); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-danger { color: var(--danger); border-color: var(--danger-bg); }
 .btn-danger:hover { background: var(--danger-bg); }
 .btn-small { padding: 6px 12px; font-size: 12px; }
+
+/* Todo Header */
+.todo-header { margin-bottom: 16px; }
+.todo-actions { display: flex; gap: 6px; margin-left: 12px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: var(--bg-secondary); border: 1px solid var(--border-primary);
+  border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw;
+}
+.modal h3 { font-size: 18px; font-weight: 500; margin-bottom: 16px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.form-input {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border-primary); border-radius: 8px;
+  background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 </style>

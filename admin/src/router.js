@@ -6,6 +6,8 @@ const routes = [
   { path: '/config', name: 'config', component: () => import('./views/ConfigView.vue') },
   { path: '/data', name: 'data', component: () => import('./views/DataView.vue') },
   { path: '/notes', name: 'notes', component: () => import('./views/NotesView.vue') },
+  { path: '/reminders', name: 'reminders', component: () => import('./views/RemindersView.vue') },
+  { path: '/status', name: 'status', component: () => import('./views/StatusView.vue') },
 ]
 
 export default createRouter({
