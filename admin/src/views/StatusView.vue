@@ -51,6 +51,21 @@
         </div>
       </div>
 
+      <!-- Active Reminders -->
+      <div class="status-card">
+        <h3>活跃提醒</h3>
+        <div v-if="!activeReminders.length" class="empty-hint">暂无活跃提醒</div>
+        <div v-else class="status-list">
+          <div v-for="r in activeReminders" :key="r.id" class="status-item">
+            <div class="job-info">
+              <span class="status-name">{{ r.title }}</span>
+              <span class="job-meta">{{ formatTime(r.trigger_time) }} · {{ repeatLabel(r.repeat_rule) }}</span>
+            </div>
+            <span class="badge badge-success">活跃</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Metrics -->
       <div class="status-card">
         <h3>Metrics 快照</h3>
@@ -81,30 +96,51 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { get } from '../api.js'
 
 const status = ref({})
 const metrics = ref({})
+const reminders = ref([])
 const loading = ref(true)
+
+const activeReminders = computed(() =>
+  reminders.value.filter(r => r.status !== 'cancelled')
+)
 
 onMounted(refresh)
 
 async function refresh() {
   loading.value = true
   try {
-    const [s, m] = await Promise.all([
+    const [s, m, r] = await Promise.all([
       get('/api/status'),
       get('/api/metrics'),
+      get('/api/reminders'),
     ])
     status.value = s
     metrics.value = m
+    reminders.value = r.items || []
   } catch (e) {
     ElMessage.error('加载状态失败: ' + e.message)
   } finally {
     loading.value = false
   }
+}
+
+function formatTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+function repeatLabel(rule) {
+  const map = { none: '不重复', daily: '每天', weekly: '每周', monthly: '每月' }
+  return map[rule] || rule
 }
 </script>
 
