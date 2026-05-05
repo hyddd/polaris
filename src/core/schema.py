@@ -49,6 +49,7 @@ class VoiceConfig(BaseModel):
     api_key: Optional[str] = None
     stt_model: str = "whisper-1"
     tts_model: str = "tts-1"
+    voice: str = "alloy"
 
 
 class AppConfig(BaseModel):

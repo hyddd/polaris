@@ -16,8 +16,13 @@ def text_to_speech(text: str, voice: str = "alloy") -> bytes | None:
         MP3 音频 bytes，失败返回 None
     """
     try:
-        import openai
         from src.core.config import config
+        base_url = config.get("voice.base_url")
+        if not base_url:
+            logger.debug("语音合成未配置 voice.base_url，跳过")
+            return None
+
+        import openai
 
         client = openai.OpenAI(
             api_key=config.get("voice.api_key") or config.get("llm.api_key", ""),
@@ -26,7 +31,7 @@ def text_to_speech(text: str, voice: str = "alloy") -> bytes | None:
 
         response = client.audio.speech.create(
             model=config.get("voice.tts_model", "tts-1"),
-            voice=voice,
+            voice=config.get("voice.voice", "alloy"),
             input=text[:4096],  # TTS 有长度限制
         )
         return response.content

@@ -17,8 +17,13 @@ def speech_to_text(audio_data: bytes, language: str = "zh") -> str | None:
         识别出的文字，失败返回 None
     """
     try:
-        import openai
         from src.core.config import config
+        base_url = config.get("voice.base_url")
+        if not base_url:
+            logger.debug("语音识别未配置 voice.base_url，跳过")
+            return None
+
+        import openai
 
         client = openai.OpenAI(
             api_key=config.get("voice.api_key") or config.get("llm.api_key", ""),

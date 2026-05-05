@@ -659,6 +659,23 @@ def get_metrics():
     return metrics.snapshot()
 
 
+# --- Admin API: TTS ---
+
+
+@app.post("/api/tts")
+async def tts_endpoint(req: Request):
+    from fastapi.responses import Response
+    body = await req.json()
+    text = body.get("text", "")
+    if not text:
+        raise HTTPException(400, "text 不能为空")
+    from src.tools.voice.tts import text_to_speech
+    audio = text_to_speech(text)
+    if not audio:
+        raise HTTPException(500, "TTS 生成失败，请检查 voice 配置")
+    return Response(content=audio, media_type="audio/mpeg")
+
+
 # --- Admin API: Data management ---
 
 def _require_calendar_domain():
