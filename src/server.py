@@ -32,6 +32,7 @@ from src.core.context import set_context as _set_ctx
 from src.core.config import config
 
 from src.message import process_message
+from src.message.models import Attachment
 from src.core.lock import get_session_lock, cleanup_session_locks
 
 
@@ -42,6 +43,7 @@ class ChatRequest(BaseModel):
     retry_message_id: str | None = None  # 重试指定消息
     edit_message_id: str | None = None   # 编辑指定消息
     edit_content: str | None = None      # 编辑后的内容
+    attachments: list[dict] | None = None  # 附件列表
 
 
 class ChatResponse(BaseModel):
@@ -291,16 +293,36 @@ def _edit_message(session_id: str, message_id: str, new_content: str, session_mg
 # --- Chat endpoints (for external channels: admin UI, remote bots, etc.) ---
 # In-process channels (Feishu, QQ) call agent directly, not via HTTP.
 
+
+def _parse_attachments(raw: list[dict] | None) -> list[Attachment] | None:
+    """将请求中的 dict 附件转换为 Attachment 对象。"""
+    if not raw:
+        return None
+    result = []
+    for item in raw:
+        try:
+            result.append(Attachment(
+                type=item.get("type", "file"),
+                data=item.get("data", ""),
+                mime_type=item.get("mime_type", ""),
+                filename=item.get("filename", ""),
+            ))
+        except Exception:
+            continue
+    return result or None
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     session_mgr = get_session_manager()
     channel = req.channel or "default"
     session = _get_active_session(req.session_id, session_mgr, channel)
+    attachments = _parse_attachments(req.attachments)
 
     # 重试逻辑
     if req.retry_message_id:
         original_content = _retry_message(session.session_id, req.retry_message_id, session_mgr, channel)
-        results = await process_message(original_content, session_mgr, channel)
+        results = await process_message(original_content, session_mgr, channel, attachments)
         response_text, tool_calls = results[-1]
         return ChatResponse(
             session_id=session.session_id,
@@ -311,7 +333,7 @@ async def chat(req: ChatRequest):
     # 编辑逻辑
     if req.edit_message_id and req.edit_content:
         new_content = _edit_message(session.session_id, req.edit_message_id, req.edit_content, session_mgr, channel)
-        results = await process_message(new_content, session_mgr, channel)
+        results = await process_message(new_content, session_mgr, channel, attachments)
         response_text, tool_calls = results[-1]
         return ChatResponse(
             session_id=session.session_id,
@@ -320,7 +342,7 @@ async def chat(req: ChatRequest):
         )
 
     # 正常聊天
-    results = await process_message(req.message, session_mgr, channel)
+    results = await process_message(req.message, session_mgr, channel, attachments)
     response_text, tool_calls = results[-1]
     return ChatResponse(
         session_id=session.session_id,
@@ -341,10 +363,12 @@ async def chat_stream(req: ChatRequest, request: Request):
     """
     import json
     from typing import AsyncGenerator
+    from src.message.router import _build_message
 
     session_mgr = get_session_manager()
     channel = req.channel or "default"
     session = _get_active_session(req.session_id, session_mgr, channel)
+    attachments = _parse_attachments(req.attachments)
 
     # Determine the message content (retry/edit/normal)
     message_content = req.message
@@ -359,7 +383,7 @@ async def chat_stream(req: ChatRequest, request: Request):
 
     # System commands: wrap in SSE
     if message_content.strip().startswith("/"):
-        results = await process_message(message_content, session_mgr, channel)
+        results = await process_message(message_content, session_mgr, channel, attachments)
 
         async def cmd_gen() -> AsyncGenerator[str, None]:
             import json as _j
@@ -374,7 +398,7 @@ async def chat_stream(req: ChatRequest, request: Request):
     old_messages = memory.get_messages()
 
     # Create HumanMessage with ID for retry/edit support
-    human_msg = HumanMessage(content=message_content)
+    human_msg = _build_message(message_content, attachments)
     memory.add_message(human_msg)
     human_msg_id = memory.get_message_id(human_msg)
 
