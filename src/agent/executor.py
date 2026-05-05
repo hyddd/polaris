@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 from src.agent.state import AgentState
 from src.agent.interceptors import get_interceptors, init_default_interceptors
 from src.core.config import config
-from src.tools.registry import ToolRegistry
+from src.core.registry import ToolRegistry
 from src.session.manager import get_session_manager
 
 logger = logging.getLogger("polaris.tools")

@@ -6,7 +6,7 @@ from src.agent.state import AgentState
 from src.agent.executor import agent_node, tool_node, should_continue
 from src.session.commands import handle_command
 from src.session.manager import get_session_manager
-from src.tools.registry import ToolRegistry
+from src.core.registry import ToolRegistry
 
 
 def command_node(state: AgentState) -> dict:
