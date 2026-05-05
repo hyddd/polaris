@@ -34,4 +34,6 @@ def serve_voice(filename: str):
     filepath = voice_dir / filename
     if not filepath.exists():
         raise HTTPException(404, "音频文件不存在")
-    return FileResponse(filepath, media_type="audio/wav")
+    suffix = filepath.suffix.lower()
+    media_types = {".wav": "audio/wav", ".mp3": "audio/mpeg", ".silk": "audio/silk"}
+    return FileResponse(filepath, media_type=media_types.get(suffix, "application/octet-stream"))

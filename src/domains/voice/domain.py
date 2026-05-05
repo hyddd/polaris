@@ -53,31 +53,35 @@ class VoiceDomain:
             logger.warning(f"不支持的 TTS 模式: {mode}")
             return None
 
-    def synthesize_to_file(self, text: str, voice: str = None, context: str = None, mode: str = "preset") -> str | None:
-        """文字转语音，保存为文件，返回可访问的 URL 路径。"""
+    def synthesize_to_file(self, text: str, voice: str = None, context: str = None, mode: str = "preset", format: str = "mp3") -> str | None:
+        """文字转语音，保存为文件，返回可访问的 URL 路径。
+
+        Args:
+            format: 输出格式。mp3（默认，web/QQ 通用）、silk（QQ 语音条专用）、wav（原始）
+        """
         audio = self.synthesize(text, voice=voice, context=context, mode=mode)
         if not audio:
             return None
 
         filename = f"tts_{uuid.uuid4().hex[:8]}"
 
-        # 优先转为 silk（QQ 语音条要求）
-        silk_data = self._wav_to_silk(audio)
-        if silk_data:
-            filename += ".silk"
-            path = self._output_dir / filename
-            path.write_bytes(silk_data)
-            return f"/api/voice/{filename}"
+        if format == "silk":
+            silk_data = self._wav_to_silk(audio)
+            if silk_data:
+                filename += ".silk"
+                path = self._output_dir / filename
+                path.write_bytes(silk_data)
+                return f"/api/voice/{filename}"
 
-        # silk 转换失败，尝试 MP3
-        mp3_data = self._wav_to_mp3(audio)
-        if mp3_data:
-            filename += ".mp3"
-            path = self._output_dir / filename
-            path.write_bytes(mp3_data)
-            return f"/api/voice/{filename}"
+        if format in ("mp3", "silk"):
+            mp3_data = self._wav_to_mp3(audio)
+            if mp3_data:
+                filename += ".mp3"
+                path = self._output_dir / filename
+                path.write_bytes(mp3_data)
+                return f"/api/voice/{filename}"
 
-        # 都失败，保存原始 WAV
+        # 保存原始 WAV
         filename += ".wav"
         path = self._output_dir / filename
         path.write_bytes(audio)

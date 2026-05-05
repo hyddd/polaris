@@ -103,7 +103,7 @@ function renderContent(content) {
   // 转义 HTML
   let html = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // 将 /api/voice URL 替换为 audio 播放器
-  html = html.replace(/(\/api\/voice\/[\w]+\.wav)/g, '<br><audio controls preload="none" src="$1"></audio>')
+  html = html.replace(/(\/api\/voice\/[\w]+\.(?:wav|mp3))/g, '<br><audio controls preload="none" src="$1"></audio>')
   // Markdown 粗体
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
   return html
