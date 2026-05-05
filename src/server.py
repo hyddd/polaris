@@ -726,7 +726,11 @@ def update_data(data_type: str, item_id: str, req: DataUpdate):
 
 @app.delete("/api/data/{data_type}/{item_id}")
 def delete_data(data_type: str, item_id: str):
-    if data_type == "todos":
+    if data_type == "calendar":
+        domain = _require_calendar_domain()
+        if not domain.delete_event(item_id):
+            raise HTTPException(404, "日程不存在")
+    elif data_type == "todos":
         domain = _require_todo_domain()
         if not domain.delete_todo(item_id):
             raise HTTPException(404, f"Item not found: {item_id}")

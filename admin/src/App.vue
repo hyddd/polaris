@@ -22,8 +22,11 @@
         <router-link to="/config" class="sidebar-link">
           <el-icon><Setting /></el-icon> 配置
         </router-link>
-        <router-link to="/data" class="sidebar-link">
-          <el-icon><Document /></el-icon> 数据
+        <router-link to="/calendar" class="sidebar-link">
+          <el-icon><Calendar /></el-icon> 日程
+        </router-link>
+        <router-link to="/todos" class="sidebar-link">
+          <el-icon><Finished /></el-icon> 待办
         </router-link>
         <router-link to="/notes" class="sidebar-link">
           <el-icon><Memo /></el-icon> 笔记
