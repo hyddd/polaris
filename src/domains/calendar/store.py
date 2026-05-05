@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.storage.atomic import _atomic_write
+from src.storage.store import JsonFileStore
 from .models import CalendarEvent
 
 logger = logging.getLogger("polaris.calendar.store")
@@ -17,6 +17,7 @@ class CalendarStore:
 
     def __init__(self, file_path: str):
         self._path = Path(file_path)
+        self._store = JsonFileStore(file_path)
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -35,9 +36,7 @@ class CalendarStore:
 
     def _save(self, data: list[dict]) -> None:
         """原子写入 JSON 文件。"""
-        content = json.dumps(data, ensure_ascii=False, indent=2)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write(self._path, content)
+        self._store.save(data)
 
     # ------------------------------------------------------------------
     # 查询
