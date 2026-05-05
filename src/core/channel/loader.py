@@ -12,6 +12,11 @@ _credentials: dict[str, dict] = {}  # channel name → credentials snapshot
 _threads: dict[str, threading.Thread] = {}
 
 
+def get_discovered_channels() -> list:
+    """返回已发现的 channel 插件列表（只读副本）。"""
+    return list(_discovered_channels)
+
+
 def discover_and_start() -> list:
     """从 YAML 配置加载并启动所有 enabled 的 channel 插件。"""
     from src.core.config import config

@@ -225,6 +225,15 @@ def _on_startup(channels=None, **kwargs):
     handler = ReminderHandler(channels or [], store=store)
     _domain = ReminderDomain(store, handler)
 
+    # 向 SchedulerDomain 注册 reminder handler
+    from src.domains.scheduler import get_scheduler_domain
+    scheduler = get_scheduler_domain()
+    if scheduler:
+        scheduler.register_handler(
+            "reminder",
+            lambda **kw: _domain.trigger(kw["reminder_id"]),
+        )
+
     # 恢复活跃提醒的调度
     now = datetime.now()
     for r in store.list_active():
@@ -269,22 +278,15 @@ def _on_calendar_created(event_id=None, title=None, event_time_str=None,
     try:
         event_datetime = datetime.strptime(event_time_str, "%Y-%m-%d %H:%M")
         reminder_time = event_datetime - timedelta(minutes=15)
-        is_past = reminder_time <= datetime.now()
-        status = ReminderStatus.CANCELLED if is_past else ReminderStatus.ACTIVE
 
-        r = Reminder(
+        r = domain.create(
             title=f"{title} 即将开始",
-            description=f"日程「{title}」将在15分钟后开始",
             trigger_time=reminder_time,
-            repeat_rule=RepeatRule.NONE,
+            description=f"日程「{title}」将在15分钟后开始",
             event_id=event_id,
             channel=channel or "admin",
             session_id=session_id or "",
-            status=status,
         )
-        domain._store.create(r)
-        if not is_past:
-            domain._schedule(r)
         logger.info(f"已创建日程关联提醒: {r.id} @ {reminder_time}")
     except Exception as e:
         logger.error(f"创建日程关联提醒失败: {e}")
@@ -301,15 +303,13 @@ def _on_calendar_updated(event_id=None, title=None, event_time_str=None, **kwarg
             new_reminder_time = event_datetime - timedelta(minutes=15)
             new_title = f"{title} 即将开始"
 
-            domain._store.update(reminder.id,
-                                 trigger_time=new_reminder_time, title=new_title)
+            update_kwargs = {
+                "trigger_time": new_reminder_time,
+                "title": new_title,
+            }
             if new_reminder_time > datetime.now():
-                domain._store.update(reminder.id, status=ReminderStatus.ACTIVE)
-            reminder = domain._store.get(reminder.id)
-
-            domain._unschedule(reminder.id)
-            if new_reminder_time > datetime.now():
-                domain._schedule(reminder)
+                update_kwargs["status"] = ReminderStatus.ACTIVE
+            domain.update(reminder.id, **update_kwargs)
             logger.info(f"已更新日程关联提醒: {reminder.id} @ {new_reminder_time}")
         except Exception as e:
             logger.error(f"更新日程关联提醒失败: {e}")

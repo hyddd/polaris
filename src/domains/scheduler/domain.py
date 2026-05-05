@@ -1,6 +1,7 @@
 """SchedulerDomain — 统一任务调度核心服务。"""
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 
 from src.core.infra import event_bus
@@ -15,6 +16,12 @@ class SchedulerDomain:
     def __init__(self, store: JobStore, executor: SchedulerExecutor):
         self._store = store
         self._executor = executor
+        self._handlers: dict[str, Callable] = {}
+
+    def register_handler(self, handler_type: str, handler: Callable) -> None:
+        """注册外部 handler，供 _dispatch_handler 调用。"""
+        self._handlers[handler_type] = handler
+        logger.debug(f"已注册 handler: {handler_type}")
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -172,19 +179,13 @@ class SchedulerDomain:
                 job.id, seconds, _handler_wrapper, {})
 
     def _dispatch_handler(self, handler_type: str, handler_kwargs: dict):
-        """分发 handler 调用。"""
-        if handler_type == "reminder":
-            reminder_id = handler_kwargs.get("reminder_id")
-            if reminder_id:
-                from src.domains.reminder import get_reminder_domain
-                domain = get_reminder_domain()
-                if domain:
-                    domain.trigger(reminder_id)
-                else:
-                    logger.warning("ReminderDomain 未就绪")
-            else:
-                logger.warning("reminder handler 缺少 reminder_id")
-        elif handler_type == "heartbeat":
+        """分发 handler 调用。优先查找注册的外部 handler，再回退到内置类型。"""
+        handler = self._handlers.get(handler_type)
+        if handler:
+            handler(**handler_kwargs)
+            return
+
+        if handler_type == "heartbeat":
             logger.info("心跳任务触发")
         elif handler_type == "daily":
             event_bus.publish("cleanup:cron")

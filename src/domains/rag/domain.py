@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.core.infra import event_bus
-from src.domains.notes.models import SearchResult
+from .models import RAGSearchResult
 from .chunker import TextChunker
 from .vector import RAGVectorStore
 
@@ -28,7 +28,7 @@ class RAGDomain:
     # 公开 API
     # ------------------------------------------------------------------
 
-    def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
+    def search(self, query: str, top_k: int = 5) -> list[RAGSearchResult]:
         """语义搜索笔记。"""
         return self._store.search(query, n_results=top_k)
 

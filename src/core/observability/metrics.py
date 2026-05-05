@@ -1,7 +1,9 @@
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from contextlib import contextmanager
+
+_MAX_TIMER_SAMPLES = 10000
 
 
 class Metrics:
@@ -14,7 +16,7 @@ class Metrics:
                 if not cls._instance:
                     cls._instance = super().__new__(cls)
                     cls._instance._counters = defaultdict(int)
-                    cls._instance._timers = defaultdict(list)
+                    cls._instance._timers = defaultdict(lambda: deque(maxlen=_MAX_TIMER_SAMPLES))
         return cls._instance
 
     def inc(self, name: str, value: int = 1):

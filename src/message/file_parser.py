@@ -62,8 +62,12 @@ def _parse_pdf(content: bytes) -> str | None:
 def _transcribe_audio(content: bytes) -> str | None:
     """使用 Whisper STT 将音频转为文本。"""
     try:
-        from src.tools.voice.stt import speech_to_text
-        text = speech_to_text(content)
+        from src.domains.voice import get_voice_domain
+        domain = get_voice_domain()
+        if not domain:
+            logger.warning("Voice 域未初始化，无法转写语音")
+            return None
+        text = domain.transcribe(content)
         if text:
             return text
         return None

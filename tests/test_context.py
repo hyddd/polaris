@@ -1,7 +1,7 @@
 """Tests for src/context.py — contextvars-based context management."""
 
 import pytest
-from src.context import set_context, get_context, get_channel, get_session_id, get_user_id, _context
+from src.core.infra.context import set_context, get_context, get_channel, get_session_id, get_user_id, _context
 
 
 @pytest.fixture(autouse=True)

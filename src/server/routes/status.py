@@ -8,7 +8,7 @@ router = APIRouter()
 def get_status():
     from src.core.tools.registry import ToolRegistry
     from src.domains.scheduler import get_scheduler_domain
-    from src.core.channel.loader import _discovered_channels
+    from src.core.channel.loader import get_discovered_channels
 
     registry = ToolRegistry.get_instance()
     tools = [{"name": t.name} for t in registry.list_tools()]
@@ -17,7 +17,7 @@ def get_status():
     jobs = [j.to_dict() for j in scheduler.list_jobs()] if scheduler else []
 
     channels = []
-    for ch in _discovered_channels:
+    for ch in get_discovered_channels():
         channels.append({
             "name": ch.name,
             "configured": ch.is_configured(),

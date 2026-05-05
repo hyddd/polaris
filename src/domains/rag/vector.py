@@ -6,7 +6,7 @@ from pathlib import Path
 from chromadb import PersistentClient
 from chromadb.utils import embedding_functions
 
-from src.domains.notes.models import SearchResult
+from .models import RAGSearchResult
 
 logger = logging.getLogger("polaris.rag.vector")
 
@@ -139,15 +139,15 @@ class RAGVectorStore:
                                self._collection_name)
         logger.debug(f"笔记已从索引移除: {filename}")
 
-    def search(self, query: str, n_results: int = 5) -> list[SearchResult]:
-        """语义搜索，返回 SearchResult 列表。"""
+    def search(self, query: str, n_results: int = 5) -> list[RAGSearchResult]:
+        """语义搜索，返回 RAGSearchResult 列表。"""
         raw = search_notes(query, self._persist_dir,
                            self._collection_name, top_k=n_results)
         results = []
         for item in raw:
             meta = item.get("metadata", {})
             tags_raw = meta.get("tags", "")
-            results.append(SearchResult(
+            results.append(RAGSearchResult(
                 filename=meta.get("filename", ""),
                 title=meta.get("title", ""),
                 content=item.get("content", ""),

@@ -68,8 +68,9 @@ class _PolarisQQClient(botpy.Client):
                     async with httpx.AsyncClient() as client:
                         resp = await client.get(url)
                         if resp.status_code == 200:
-                            from src.tools.voice.stt import speech_to_text
-                            recognized = speech_to_text(resp.content)
+                            from src.domains.voice import get_voice_domain
+                            domain = get_voice_domain()
+                            recognized = domain.transcribe(resp.content) if domain else None
                             if recognized:
                                 voice_texts.append(recognized)
                                 logger.info(f"语音识别成功: {recognized[:50]}...")

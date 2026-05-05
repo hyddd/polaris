@@ -1,7 +1,6 @@
 """NotesDomain — 笔记管理核心服务。"""
 
 import logging
-import threading
 
 from src.core.infra import event_bus
 from .models import Note, SearchResult
@@ -16,39 +15,6 @@ class NotesDomain:
         self._store = store
         self._persist_dir = persist_dir
         self._collection_name = collection_name
-
-    # ------------------------------------------------------------------
-    # 向量索引联动
-    # ------------------------------------------------------------------
-
-    def _async_index(self, filename: str, title: str, content: str,
-                     tags: list[str]) -> None:
-        """后台异步将笔记加入向量索引。"""
-        if not self._persist_dir:
-            return
-        def _work():
-            try:
-                from src.domains.rag.vector import add_note_to_index
-                add_note_to_index(filename, title, content, tags,
-                                  self._persist_dir, self._collection_name)
-                logger.debug(f"笔记已索引: {filename}")
-            except Exception as e:
-                logger.warning(f"笔记索引失败 ({filename}): {e}")
-        threading.Thread(target=_work, daemon=True).start()
-
-    def _async_deindex(self, filename: str) -> None:
-        """后台异步从向量索引移除笔记。"""
-        if not self._persist_dir:
-            return
-        def _work():
-            try:
-                from src.domains.rag.vector import remove_note_from_index
-                remove_note_from_index(filename, self._persist_dir,
-                                       self._collection_name)
-                logger.debug(f"笔记已从索引移除: {filename}")
-            except Exception as e:
-                logger.warning(f"笔记移除索引失败 ({filename}): {e}")
-        threading.Thread(target=_work, daemon=True).start()
 
     # ------------------------------------------------------------------
     # 查询
@@ -110,7 +76,6 @@ class NotesDomain:
                     session_id: str = "") -> Note:
         """创建笔记。"""
         note = self._store.create_note(title, content, tags)
-        self._async_index(note.filename, note.title, note.content, note.tags)
         event_bus.publish("notes:note_created",
                           note_id=note.filename, title=note.title,
                           tags=note.tags,
@@ -122,7 +87,6 @@ class NotesDomain:
         """更新笔记。"""
         note = self._store.update_note(filename, content, tags)
         if note:
-            self._async_index(note.filename, note.title, note.content, note.tags)
             event_bus.publish("notes:note_updated",
                               note_id=note.filename, title=note.title,
                               tags=note.tags)
@@ -132,7 +96,6 @@ class NotesDomain:
         """删除笔记。"""
         deleted = self._store.delete_note(filename)
         if deleted:
-            self._async_deindex(filename)
             event_bus.publish("notes:note_deleted", note_id=filename)
         return deleted
 
@@ -140,7 +103,6 @@ class NotesDomain:
         """归档笔记。"""
         archived = self._store.archive_note(filename)
         if archived:
-            self._async_deindex(filename)
             event_bus.publish("notes:note_deleted", note_id=filename)
         return archived
 
