@@ -5,7 +5,7 @@ import logging
 import threading
 from pathlib import Path
 
-from src.storage.atomic import _atomic_write
+from src.storage.store import JsonFileStore
 from .models import ScheduledJob
 
 logger = logging.getLogger("polaris.scheduler.store")
@@ -14,6 +14,7 @@ logger = logging.getLogger("polaris.scheduler.store")
 class JobStore:
     def __init__(self, file_path: str):
         self._path = Path(file_path)
+        self._store = JsonFileStore(file_path)
         self._lock = threading.Lock()
         self._jobs: dict[str, ScheduledJob] = {}
         self._load()
@@ -28,9 +29,7 @@ class JobStore:
 
     def _save(self):
         data = {"jobs": [j.to_dict() for j in self._jobs.values()]}
-        content = json.dumps(data, ensure_ascii=False, indent=2)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write(self._path, content)
+        self._store.save(data)
 
     def create(self, job: ScheduledJob) -> ScheduledJob:
         with self._lock:
