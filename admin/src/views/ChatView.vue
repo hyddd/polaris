@@ -37,7 +37,36 @@
 
     <!-- Input bar -->
     <div class="input-wrapper">
+      <!-- Image preview -->
+      <div v-if="imagePreview" class="image-preview">
+        <img :src="imagePreview" alt="preview" />
+        <button class="remove-image" @click="removeImage">&times;</button>
+      </div>
       <div class="input-bar">
+        <button class="attach-btn" @click="triggerFileInput" :disabled="store.loading" title="上传图片">
+          <el-icon><Picture /></el-icon>
+        </button>
+        <input
+          type="file"
+          ref="fileInput"
+          accept="image/*"
+          style="display: none"
+          @change="handleFileSelect"
+        />
+        <button
+          class="mic-btn"
+          :class="{ 'recording': isRecording }"
+          @click="toggleRecording"
+          :disabled="store.loading"
+          :title="isRecording ? '停止录音' : '语音输入'"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
         <textarea
           v-model="input"
           placeholder="Message Polaris"
@@ -48,7 +77,7 @@
           @input="autoResize"
           ref="inputRef"
         />
-        <button class="send-btn" @click="send" :disabled="store.loading || !input.trim()">
+        <button class="send-btn" @click="send" :disabled="store.loading || (!input.trim() && !imagePreview)">
           <el-icon><Promotion /></el-icon>
         </button>
       </div>
@@ -92,10 +121,17 @@ const hasMore = computed(() => store.messages.length < store.allMessages.length)
 const input = ref('')
 const messagesRef = ref(null)
 const inputRef = ref(null)
+const fileInput = ref(null)
 const isComposing = ref(false)
 const loadingMore = ref(false)
 const editingMsg = ref(null)
 const editContent = ref('')
+const imagePreview = ref(null)
+const imageData = ref(null)
+const imageMimeType = ref('')
+const isRecording = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
 
 const suggestions = [
   '今天有什么安排？',
@@ -111,6 +147,89 @@ onMounted(() => {
   }, 100)
 })
 
+function triggerFileInput() {
+  fileInput.value?.click()
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  // 检查文件类型
+  if (!file.type.startsWith('image/')) {
+    alert('请选择图片文件')
+    return
+  }
+
+  // 检查文件大小 (限制 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    alert('图片大小不能超过 10MB')
+    return
+  }
+
+  imageMimeType.value = file.type
+  const reader = new FileReader()
+  reader.onload = (event) => {
+    imagePreview.value = event.target.result
+    // 提取 base64 数据（去掉 data:image/xxx;base64, 前缀）
+    imageData.value = event.target.result.split(',')[1]
+  }
+  reader.readAsDataURL(file)
+
+  // 清空 input 以便重复选择同一文件
+  e.target.value = ''
+}
+
+function removeImage() {
+  imagePreview.value = null
+  imageData.value = null
+  imageMimeType.value = ''
+}
+
+async function toggleRecording() {
+  if (isRecording.value) {
+    // 停止录音
+    mediaRecorder.value.stop()
+    isRecording.value = false
+  } else {
+    // 开始录音
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      audioChunks.value = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.value.push(e.data)
+      }
+
+      recorder.onstop = async () => {
+        const blob = new Blob(audioChunks.value, { type: 'audio/webm' })
+        const reader = new FileReader()
+        reader.onload = async () => {
+          const base64 = reader.result.split(',')[1]
+          const attachments = [{
+            type: 'file',
+            data: base64,
+            mime_type: 'audio/webm',
+            filename: 'voice.webm',
+          }]
+          await store.sendMessage('', attachments)
+          await nextTick()
+          if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+        }
+        reader.readAsDataURL(blob)
+        stream.getTracks().forEach(t => t.stop())
+      }
+
+      recorder.start()
+      mediaRecorder.value = recorder
+      isRecording.value = true
+    } catch (e) {
+      console.error('录音失败:', e)
+    }
+  }
+}
+
 function onEnter(e) {
   if (isComposing.value) return
   e.preventDefault()
@@ -119,13 +238,26 @@ function onEnter(e) {
 
 async function send() {
   const text = input.value.trim()
-  if (!text) return
+  if (!text && !imagePreview.value) return
+
+  // 准备附件
+  let attachments = null
+  if (imageData.value) {
+    attachments = [{
+      type: 'image',
+      data: imageData.value,
+      mime_type: imageMimeType.value,
+      filename: 'image.' + imageMimeType.value.split('/')[1],
+    }]
+  }
+
   input.value = ''
+  removeImage()
   if (inputRef.value) {
     inputRef.value.style.height = 'auto'
     inputRef.value.focus()
   }
-  await store.sendMessage(text)
+  await store.sendMessage(text, attachments)
   await nextTick()
   if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
 }
@@ -249,7 +381,47 @@ watch(() => {
 }
 .send-btn:hover:not(:disabled) { color: var(--text-primary); }
 .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.attach-btn {
+  background: transparent; border: none; color: var(--text-tertiary); cursor: pointer;
+  padding: 4px; border-radius: 8px; display: flex; align-items: center;
+  transition: color 0.2s; margin-right: 4px;
+}
+.attach-btn:hover:not(:disabled) { color: var(--text-primary); }
+.attach-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.mic-btn {
+  background: transparent; border: none; color: var(--text-tertiary); cursor: pointer;
+  padding: 4px; border-radius: 8px; display: flex; align-items: center;
+  transition: color 0.2s; margin-right: 4px;
+}
+.mic-btn:hover:not(:disabled) { color: var(--text-primary); }
+.mic-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.mic-btn.recording {
+  color: #e53e3e; animation: mic-pulse 1.2s infinite ease-in-out;
+}
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
 .input-hint { text-align: center; font-size: 12px; color: var(--text-tertiary); margin-top: 8px; }
+
+/* Image preview */
+.image-preview {
+  position: relative; display: inline-block; margin-bottom: 8px;
+  max-width: 200px; max-height: 200px;
+}
+.image-preview img {
+  max-width: 100%; max-height: 200px; border-radius: 8px;
+  object-fit: contain;
+}
+.remove-image {
+  position: absolute; top: -8px; right: -8px;
+  background: var(--bg-tertiary); border: 1px solid var(--border-primary);
+  color: var(--text-primary); width: 24px; height: 24px;
+  border-radius: 50%; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1;
+}
+.remove-image:hover { background: var(--accent); color: #fff; }
 
 /* Loading animation */
 .loading-message {

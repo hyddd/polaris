@@ -18,7 +18,7 @@ from src.session.manager import SessionManager
 
 def handle_command(text: str, session_mgr: SessionManager, channel: str = "") -> str | None:
     """Try to handle a system command. Returns response string, or None if not a command."""
-    from src.core.context import get_channel as _ctx_channel
+    from src.core.infra import get_channel as _ctx_channel
     channel = channel or _ctx_channel() or "default"
 
     text = text.strip()
@@ -63,6 +63,20 @@ def is_command(text: str) -> bool:
     return text.strip().startswith("/")
 
 
+_WELCOME = (
+    "\n\n你好！我是 Polaris，你的私人 AI 助手。我可以帮你：\n\n"
+    "📅 **日程管理** — 「帮我建一个明天下午 3 点的会议」\n"
+    "✅ **待办事项** — 「添加待办：买菜，优先级高」\n"
+    "📝 **笔记管理** — 「记一下：Python 装饰器的用法」\n"
+    "⏰ **定时提醒** — 「每天早上 9 点提醒我喝水」\n"
+    "🔍 **联网搜索** — 「搜一下最新的 AI 新闻」\n"
+    "🎭 **人格切换** — 「你来扮演诸葛亮」\n\n"
+    "直接用自然语言告诉我你想做什么就好！"
+)
+
+_SEPARATOR = '\n---WELCOME---\n'
+
+
 def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
     from src.core.config import config
     max_sessions = config.get("server.max_sessions", 10)
@@ -72,11 +86,14 @@ def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str
             f"输入 /sessions 查看所有会话。"
         )
     name = arg.strip() if arg else ""
-    session = session_mgr.create(name=name if name else None, source_channel=channel)
+    try:
+        session = session_mgr.create(name=name if name else None, source_channel=channel)
+    except RuntimeError as e:
+        return str(e)
     summary = f"已创建会话「{session.name}」({session.session_id})。已切换到该会话。"
     if name:
         summary += f"\n提示：随时用 /session {session.session_id[:9]} 或 /session {name} 切回其他会话。"
-    return summary
+    return summary + _SEPARATOR + _WELCOME
 
 
 def _list_sessions(session_mgr: SessionManager, channel: str = "default") -> str:
@@ -129,7 +146,7 @@ def _rename(session_mgr: SessionManager, arg: str, channel: str = "default") -> 
 
 def _reset(session_mgr: SessionManager, channel: str = "default") -> str:
     session_mgr.reset_active(channel)
-    return "已重置对话记忆。所有上下文已清除，让我们重新开始。"
+    return "已重置对话记忆。所有上下文已清除，让我们重新开始。" + _SEPARATOR + _WELCOME
 
 
 def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
@@ -202,7 +219,7 @@ def _reload() -> str:
 
 def _cleanup() -> str:
     try:
-        from src.core.events import event_bus
+        from src.core.infra import event_bus
         event_bus.publish("cleanup:now")
         return "已触发数据清理，各模块正在处理。"
     except Exception as e:
@@ -210,27 +227,23 @@ def _cleanup() -> str:
 
 
 def _help() -> str:
-    return """**Polaris 个人效率助手**
-
-🛠 **系统指令**
-`/new <名称>` — 创建新会话
-`/sessions` — 查看所有会话
-`/session <id|名称>` — 切换会话
-`/rename <名称>` — 重命名当前会话
-`/reload` — 热重载配置（LLM + 通道凭证，无需重启）
-`/reset` — 重置当前会话记忆
-`/compact` — 手动压缩上下文
-`/status` — 查看会话状态
-`/help` — 显示此帮助
-
-💬 **自然语言能力**
-• **查看日程** —「今天有什么安排」
-• **会议准备** —「下午3点的会帮我准备」
-• **搜索笔记** —「上次RBAC讨论了什么」
-• **快速记录** —「记一下，明天下午开会」
-• **管理信息** —「取消明天的晨会」
-
-直接说人话就行，不用记指令。"""
+    return (
+        "📋 **可用命令：**\n\n"
+        "/new <名称> — 创建新会话\n"
+        "/sessions — 查看所有会话\n"
+        "/session <id|名称> — 切换会话\n"
+        "/rename <名称> — 重命名当前会话\n"
+        "/status — 会话状态\n"
+        "/compact — 压缩上下文\n"
+        "/reset — 重置会话记忆\n"
+        "/reload — 热重载配置\n"
+        "/cleanup — 清理过期数据\n\n"
+        "💡 **使用技巧：**\n"
+        "- 直接用自然语言描述需求即可\n"
+        "- 说「你是诸葛亮」可以切换人设\n"
+        "- 说「搜索 xxx」可以联网查询\n"
+        "- 说「提醒我 xxx」可以创建定时提醒"
+    )
 
 
 def _fmt_time(iso_str: str) -> str:

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import ToolMessage, AIMessage, SystemMessage
-from src.llm.openai import create_chat_model
+from src.core.llm.openai import create_chat_model
 
 if TYPE_CHECKING:
     from langchain_openai import ChatOpenAI
@@ -21,12 +21,12 @@ if TYPE_CHECKING:
 from src.agent.state import AgentState
 from src.agent.interceptors import get_interceptors, init_default_interceptors
 from src.core.config import config
-from src.tools.registry import ToolRegistry
+from src.core.tools.registry import ToolRegistry
 from src.session.manager import get_session_manager
 
 logger = logging.getLogger("polaris.tools")
 
-from src.core.context import set_context as _set_ctx
+from src.core.infra import set_context as _set_ctx
 
 # --- Cached LLM instance (rebuilds when config changes) ---
 
@@ -41,7 +41,7 @@ def clear_llm_cache() -> None:
     _llm_cache_key = ("", "", "")
 
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 
 # Auto-clear LLM cache when config is reloaded
 event_bus.subscribe("config:reload", clear_llm_cache)
@@ -233,7 +233,10 @@ def tool_node(state: AgentState) -> dict:
         tool = registry.get(tool_name)
         if tool:
             try:
-                result = tool.invoke(tool_args)
+                from src.core.observability import metrics
+                metrics.inc(f"tool.calls.{tool_name}")
+                with metrics.timer(f"tool.latency.{tool_name}"):
+                    result = tool.invoke(tool_args)
                 result_str = str(result) if not isinstance(result, str) else result
                 duration_ms = (time.time() - start_time) * 1000
                 logger.info(f"[tool] {tool_name} done duration={duration_ms:.0f}ms result={_summarize_result(result_str)}")
@@ -242,11 +245,13 @@ def tool_node(state: AgentState) -> dict:
             except Exception as e:
                 duration_ms = (time.time() - start_time) * 1000
                 logger.error(f"[tool] {tool_name} failed duration={duration_ms:.0f}ms error={e}")
-                result_str = f"工具执行出错：{e}"
+                from src.core.errors import format_tool_error
+                result_str = format_tool_error(e)
         else:
             duration_ms = (time.time() - start_time) * 1000
             logger.warning(f"[tool] {tool_name} not_found duration={duration_ms:.0f}ms")
-            result_str = f"未找到工具：{tool_name}"
+            from src.core.errors import NotFoundError, format_tool_error
+            result_str = format_tool_error(NotFoundError(f"未找到工具：{tool_name}"))
 
         results.append(ToolMessage(content=result_str, tool_call_id=call_id))
 

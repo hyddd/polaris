@@ -6,7 +6,7 @@ from src.agent.state import AgentState
 from src.agent.executor import agent_node, tool_node, should_continue
 from src.session.commands import handle_command
 from src.session.manager import get_session_manager
-from src.tools.registry import ToolRegistry
+from src.core.tools.registry import ToolRegistry
 
 
 def command_node(state: AgentState) -> dict:
@@ -17,7 +17,14 @@ def command_node(state: AgentState) -> dict:
 
     last_msg = messages[-1]
     content = last_msg.content if hasattr(last_msg, "content") else ""
-    stripped = content.strip()
+    # 多模态消息 content 为 list，提取文本部分
+    if isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text_parts.append(part.get("text", ""))
+        content = " ".join(text_parts)
+    stripped = content.strip() if isinstance(content, str) else ""
 
     # Handle pending action confirmation
     pending = state.get("pending_action")
@@ -30,9 +37,11 @@ def command_node(state: AgentState) -> dict:
                     result = tool.invoke(pending["params"])
                     result_str = str(result) if not isinstance(result, str) else result
                 except Exception as e:
-                    result_str = f"执行失败：{e}"
+                    from src.core.errors import format_tool_error
+                    result_str = format_tool_error(e)
             else:
-                result_str = f"未找到工具：{pending['target_tool']}"
+                from src.core.errors import NotFoundError, format_tool_error
+                result_str = format_tool_error(NotFoundError(f"未找到工具：{pending['target_tool']}"))
             return {"pending_action": None, "messages": [], "final_response": result_str}
         elif stripped in ("取消", "cancel", "no"):
             return {"pending_action": None, "messages": [], "final_response": "已取消操作。"}

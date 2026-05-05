@@ -50,9 +50,10 @@ class HeartbeatTask:
         session_mgr = get_session_manager()
 
         try:
-            response_text, _ = asyncio.run(
+            results = asyncio.run(
                 process_message(prompt, session_mgr, channel=self._channel_name)
             )
+            response_text, _ = results[-1]
         except Exception as e:
             logger.error(f"心跳 LLM 调用失败: {e}")
             return
@@ -95,5 +96,5 @@ def _on_startup(cron=None, channels=None, **kwargs):
     HeartbeatTask(cron, channels or []).start()
 
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 event_bus.subscribe("app:startup", _on_startup)

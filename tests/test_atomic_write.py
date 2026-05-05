@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from src.server import _atomic_write
+from src.core.storage.atomic import _atomic_write
 
 
 class TestAtomicWrite:

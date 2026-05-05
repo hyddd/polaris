@@ -1,5 +1,19 @@
 import json
+import pytest
 from src.tools.todos import TodoTool
+from src.domains.todos import get_todo_domain, set_todo_domain
+from src.domains.todos.domain import TodoDomain
+from src.domains.todos.store import TodoStore
+
+
+@pytest.fixture(autouse=True)
+def setup_domain(tmp_data_dir):
+    """初始化 TodoDomain 供测试使用。"""
+    store = TodoStore(str(tmp_data_dir / "todos.json"))
+    domain = TodoDomain(store)
+    set_todo_domain(domain)
+    yield
+    set_todo_domain(None)
 
 
 def test_todo_list_all(tmp_data_dir):

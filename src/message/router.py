@@ -6,21 +6,65 @@ from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import SessionManager
-from src.core.context import set_context as _set_ctx
-from src.core.lock import get_session_lock
+from src.core.infra import set_context as _set_ctx
+from src.core.infra import get_session_lock
+from src.session.commands import _SEPARATOR
+from src.message.models import Attachment
+from src.message.file_parser import parse_file
 
 
-async def process_message(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
-    """统一消息处理入口。per-session 锁保证同一会话串行处理，不同会话可并发。"""
-    session_id = session_mgr.active_session(channel).session_id
+def _build_message(text: str, attachments: list[Attachment] | None) -> HumanMessage:
+    """构造 HumanMessage，支持文本+附件。"""
+    if not attachments:
+        return HumanMessage(content=text)
+
+    content = []
+    # 添加图片附件
+    for att in attachments:
+        if att.type == "image":
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{att.mime_type};base64,{att.data}"}
+            })
+        elif att.type == "file":
+            # 文件解析为文本注入上下文
+            file_text = parse_file(att)
+            if file_text:
+                content.append({
+                    "type": "text",
+                    "text": f"[文件: {att.filename}]\n{file_text}"
+                })
+
+    # 添加用户文本
+    content.append({"type": "text", "text": text})
+    return HumanMessage(content=content)
+
+
+async def process_message(text: str, session_mgr: SessionManager, channel: str = "default", attachments: list[Attachment] | None = None) -> list[tuple[str, list[dict]]]:
+    """统一消息处理入口。返回消息列表（可能多条）。per-session 锁保证同一会话串行处理，不同会话可并发。"""
+    session, switched = session_mgr.resolve_session(channel)
+    session_id = session.session_id
     with get_session_lock(channel, session_id):
         # 在锁内设置 context，防止并发覆盖
         user_id = channel.split(":", 1)[-1] if ":" in channel else ""
         _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
-        return await _process_message_impl(text, session_mgr, channel)
+
+        results = []
+        if switched:
+            results.append(("⚠️ 你之前绑定的会话已被删除，已自动切换到 default 会话。", []))
+
+        response_text, tool_calls = await _process_message_impl(text, session_mgr, channel, attachments)
+
+        if _SEPARATOR in response_text:
+            parts = response_text.split(_SEPARATOR, 1)
+            results.append((parts[0], []))
+            results.append((parts[1], []))
+        else:
+            results.append((response_text, tool_calls))
+        return results
 
 
-async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default") -> tuple[str, list[dict]]:
+async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default", attachments: list[Attachment] | None = None) -> tuple[str, list[dict]]:
     """统一消息处理入口。
 
     系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。
@@ -33,7 +77,7 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
     previous_messages = memory.get_messages()
 
     # Create HumanMessage with ID for retry/edit support
-    human_msg = HumanMessage(content=text)
+    human_msg = _build_message(text, attachments)
     memory.add_message(human_msg)
     human_msg_id = memory.get_message_id(human_msg)
 

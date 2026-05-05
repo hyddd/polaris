@@ -1,4 +1,18 @@
+import pytest
 from src.tools.calendar import GoogleCalendarTool
+from src.domains.calendar import get_calendar_domain, set_calendar_domain
+from src.domains.calendar.domain import CalendarDomain
+from src.domains.calendar.store import CalendarStore
+
+
+@pytest.fixture(autouse=True)
+def setup_domain(tmp_data_dir):
+    """初始化 CalendarDomain 供测试使用。"""
+    store = CalendarStore(str(tmp_data_dir / "calendar.json"))
+    domain = CalendarDomain(store)
+    set_calendar_domain(domain)
+    yield
+    set_calendar_domain(None)
 
 
 def test_calendar_list(tmp_data_dir):

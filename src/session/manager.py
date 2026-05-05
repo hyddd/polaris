@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, AIMessage
-from src.memory.store import MemoryManager
-from src.memory.compressor import ConversationCompressor
+from src.core.memory import MemoryManager
+from src.session.compressor import ConversationCompressor
 from src.core.config import config
 
 # sessions_dir from config is the sessions storage directory (e.g. "data/sessions")
@@ -159,6 +159,26 @@ class SessionManager:
             return self._sessions[sid]
         raise RuntimeError("No sessions available")
 
+    def resolve_session(self, channel: str = "default") -> tuple[Session, bool]:
+        """返回 (session, is_switched)。is_switched=True 表示原会话已失效，自动切到 default。"""
+        sid = self._active_ids.get(channel)
+        if sid and sid in self._sessions:
+            return self._sessions[sid], False
+
+        # 原会话已失效，切到 default
+        default = self._ensure_default_session()
+        self._active_ids[channel] = default.session_id
+        self.save()
+        return default, True
+
+    def _ensure_default_session(self) -> Session:
+        """确保 default 会话存在，不存在则创建。"""
+        for s in self._sessions.values():
+            if s.name == "default":
+                return s
+        # 不存在，创建
+        return self.create(name="default")
+
     def get(self, session_id: str) -> Session | None:
         return self._sessions.get(session_id)
 
@@ -170,6 +190,11 @@ class SessionManager:
                 f"会话数已达上限（{max_sessions}），请先删除旧会话。"
                 f"输入 /sessions 查看所有会话。"
             )
+        # 重名检查
+        if name:
+            for s in self._sessions.values():
+                if s.name == name:
+                    raise RuntimeError(f"已存在同名会话「{name}」，请使用其他名称。")
         sid = f"sess_{uuid.uuid4().hex[:8]}"
         session = Session(
             session_id=sid,
@@ -224,16 +249,14 @@ class SessionManager:
     def delete(self, session_id: str) -> bool:
         if session_id not in self._sessions:
             return False
+        if self._sessions[session_id].name == "default":
+            return False
         if len(self._sessions) <= 1:
             return False
         del self._sessions[session_id]
         # Delete session file
         path = SESSIONS_DIR / f"{session_id}.json"
         path.unlink(missing_ok=True)
-        # Update active IDs if deleted session was active
-        for ch, sid in list(self._active_ids.items()):
-            if sid == session_id:
-                self._active_ids[ch] = next(iter(self._sessions))
         self.save()
         return True
 
@@ -272,7 +295,7 @@ class SessionManager:
             if old_file.exists():
                 self._migrate_from_old(old_file)
             else:
-                self.create(name="默认", source_channel="system")
+                self.create(name="default", source_channel="system")
             return
 
         # Load active session IDs (per-channel or legacy single)
@@ -304,7 +327,10 @@ class SessionManager:
 
         # Ensure at least one session
         if not self._sessions:
-            self.create(name="默认", source_channel="system")
+            self.create(name="default", source_channel="system")
+
+        # 确保 default 会话存在
+        self._ensure_default_session()
 
     def _migrate_from_old(self, old_file: Path):
         """Migrate from single sessions.json to individual files."""

@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage, AIMessage
-from src.memory.store import MemoryManager
+from src.core.memory.store import MemoryManager
 
 
 def test_memory_add_and_retrieve():

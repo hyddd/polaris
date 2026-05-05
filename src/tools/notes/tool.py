@@ -1,8 +1,6 @@
-import threading
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 
 def create_default() -> "NoteTool":
@@ -38,54 +36,39 @@ class NoteTool(BaseTool):
 
     def _run(self, action: str, filename: str | None = None, title: str | None = None,
              content: str | None = None, tags: list[str] | None = None) -> str:
-        from src.storage.loaders import load_notes, save_note, archive_note
+        from src.domains.notes import get_notes_domain
 
-        notes_path = Path(self.notes_dir)
-        archive_path = Path(self.archive_dir)
+        domain = get_notes_domain()
+        if not domain:
+            return "笔记服务未就绪，请稍后重试。"
 
         if action == "list":
-            notes = load_notes(notes_path)
+            notes = domain.list_notes()
             if not notes:
                 return "没有笔记。"
             return "\n".join(
-                f"- {n['metadata'].get('title', n['filename'])} ({n['filename']})"
+                f"- {n.title or n.filename} ({n.filename})"
                 for n in notes
             )
 
         elif action == "read":
             if not filename:
                 return "请提供要读取的文件名。"
-            filepath = notes_path / filename
-            if not filepath.exists():
+            note = domain.get_note(filename)
+            if not note:
                 return f"笔记不存在：{filename}"
-            return filepath.read_text(encoding="utf-8")
+            return note.content
 
         elif action == "create":
             if not title:
                 return "创建笔记需要提供标题。"
-            filepath = save_note(notes_path, title, content or "", tags)
-            # Auto-index in background, don't block the response
-            if self.persist_dir:
-                threading.Thread(
-                    target=_index_note,
-                    args=(filepath.name, title, content or "", tags or [],
-                          self.persist_dir, self.collection_name),
-                    daemon=True,
-                ).start()
-            return f"已记录笔记：{title} ({filepath.name})"
+            note = domain.create_note(title=title, content=content or "", tags=tags)
+            return f"已记录笔记：{title} ({note.filename})"
 
         elif action == "archive":
             if not filename:
                 return "请提供要归档的文件名。"
-            filepath = notes_path / filename
-            if archive_note(filepath, archive_path):
-                # Remove from vector index in background
-                if self.persist_dir:
-                    threading.Thread(
-                        target=_deindex_note,
-                        args=(filename, self.persist_dir, self.collection_name),
-                        daemon=True,
-                    ).start()
+            if domain.archive_note(filename):
                 return f"已归档笔记：{filename}"
             return f"归档失败：{filename}"
 
@@ -93,28 +76,3 @@ class NoteTool(BaseTool):
 
     async def _arun(self, **kwargs) -> str:
         return self._run(**kwargs)
-
-
-def _index_note(filename: str, title: str, content: str, tags: list[str],
-                persist_dir: str, collection_name: str) -> None:
-    """Background indexing."""
-    import logging
-    logger = logging.getLogger("polaris.tools.notes")
-    try:
-        from src.storage.vector import add_note_to_index
-        add_note_to_index(filename, title, content, tags, persist_dir, collection_name)
-        logger.debug(f"笔记已索引: {filename}")
-    except Exception as e:
-        logger.warning(f"笔记索引失败 ({filename}): {e}")
-
-
-def _deindex_note(filename: str, persist_dir: str, collection_name: str) -> None:
-    """Background de-indexing."""
-    import logging
-    logger = logging.getLogger("polaris.tools.notes")
-    try:
-        from src.storage.vector import remove_note_from_index
-        remove_note_from_index(filename, persist_dir, collection_name)
-        logger.debug(f"笔记已从索引移除: {filename}")
-    except Exception as e:
-        logger.warning(f"笔记移除索引失败 ({filename}): {e}")

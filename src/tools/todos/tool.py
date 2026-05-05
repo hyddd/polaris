@@ -1,11 +1,7 @@
-import uuid
 import json as _json
 from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, field_validator
-
-from src.storage import JsonFileStore
-from src.tools._utils import find_by_id_or_title
 
 
 def create_default() -> "TodoTool":
@@ -40,6 +36,17 @@ class TodoInput(BaseModel):
         return v
 
 
+_STATUS_MAP = {"pending": "待完成", "in_progress": "进行中", "done": "已完成"}
+_PRIORITY_MAP = {"high": "高", "medium": "中", "low": "低"}
+
+
+def _format_todo(t) -> str:
+    """格式化单条待办为文本。"""
+    st = _STATUS_MAP.get(t.status, "未知")
+    pr = _PRIORITY_MAP.get(t.priority, "-")
+    return f"- [{t.id}] [{st}] 优先级{pr} {t.title} (截止: {t.due or '无'})"
+
+
 class TodoTool(BaseTool):
     name: str = "todo"
     description: str = """管理待办事项。
@@ -54,104 +61,84 @@ class TodoTool(BaseTool):
 - "把明天的截止日期改到后天" → search(keyword="xxx") → update(todo_id="xxx", due="后天日期")"""
     args_schema: type[BaseModel] = TodoInput
     data_file: str = ""
-    _store: JsonFileStore | None = None
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._store = JsonFileStore(self.data_file)
+    def _resolve_todo_id(self, domain, todo_id: str | None,
+                         title: str | None) -> str | None:
+        """通过 todo_id 或 title 搜索解析待办 ID。"""
+        if todo_id:
+            return todo_id
+        if title:
+            matches = domain.search(title)
+            if matches:
+                return matches[0].id
+        return None
 
     def _run(self, action: str, status: str | None = None, keyword: str | None = None,
              title: str | None = None, priority: str | None = None, due: str | None = None,
              todo_id: str | None = None, updates: dict | None = None) -> str:
-        todos = self._store.load()
-        if not isinstance(todos, list):
-            todos = []
-        status_map = {"pending": "待完成", "in_progress": "进行中", "done": "已完成"}
-        priority_map = {"high": "高", "medium": "中", "low": "低"}
+        from src.domains.todos import get_todo_domain
+
+        domain = get_todo_domain()
+        if not domain:
+            return "待办服务未就绪，请稍后重试。"
 
         if action == "list":
-            status_filter = status or "active"
-            if status_filter == "active":
-                filtered = [t for t in todos if t.get("status") in ("pending", "in_progress")]
-            elif status_filter == "all":
-                filtered = list(todos)
-            else:
-                filtered = [t for t in todos if t.get("status") == status_filter]
-
-            if not filtered:
+            todos = domain.list_todos(status or "active")
+            if not todos:
                 return "没有待办事项。"
-            lines = []
-            for t in filtered:
-                st = status_map.get(t.get("status", ""), "未知")
-                pr = priority_map.get(t.get("priority", ""), "-")
-                lines.append(f"- [{t['id']}] [{st}] 优先级{pr} {t['title']} (截止: {t.get('due', '无')})")
-            return "\n".join(lines)
+            return "\n".join(_format_todo(t) for t in todos)
 
         elif action == "search":
             if not keyword:
                 return "请提供搜索关键词。"
-            matches = [t for t in todos if keyword.lower() in t.get("title", "").lower()
-                       or keyword.lower() in " ".join(t.get("tags", [])).lower()]
+            matches = domain.search(keyword)
             if not matches:
                 return f"没有找到包含「{keyword}」的待办。"
-            lines = []
-            for t in matches:
-                st = status_map.get(t.get("status", ""), "未知")
-                pr = priority_map.get(t.get("priority", ""), "-")
-                lines.append(f"- [{t['id']}] [{st}] 优先级{pr} {t['title']} (截止: {t.get('due', '无')})")
-            return "\n".join(lines)
+            return "\n".join(_format_todo(t) for t in matches)
 
         elif action == "create":
             if not title:
                 return "创建待办需要提供标题。"
-            new_todo = {
-                "id": f"todo-{uuid.uuid4().hex[:8]}",
-                "title": title,
-                "priority": priority or "medium",
-                "status": "pending",
-                "due": due or "",
-                "tags": [],
-            }
-            todos.append(new_todo)
-            self._store.save(todos)
-            pr = priority_map.get(new_todo["priority"], "-")
+            t = domain.create_todo(title=title, priority=priority or "medium", due=due or "")
+            pr = _PRIORITY_MAP.get(t.priority, "-")
             return f"已添加待办（优先级{pr}）：{title}，截止 {due or '未设'}"
 
         elif action == "update":
             if not updates and not priority and not due:
                 return "修改待办需要提供要修改的字段。"
             updates = updates or {}
-            # title param is for matching only, new title must go through updates["title"]
             if priority and "priority" not in updates:
                 updates["priority"] = priority
             if due and "due" not in updates:
                 updates["due"] = due
-            # Find by todo_id or title
-            t = find_by_id_or_title(todos, "id", todo_id, "title", title)
-            if t:
-                t.update(updates)
-                self._store.save(todos)
-                return f"已更新待办：{t.get('title', todo_id)}"
-            return f"未找到待办：{todo_id or title}"
+
+            resolved_id = self._resolve_todo_id(domain, todo_id, title)
+            if not resolved_id:
+                return f"未找到待办：{todo_id or title}"
+
+            result = domain.update_todo(resolved_id, updates)
+            if result:
+                return f"已更新待办：{result.title}"
+            return f"未找到待办：{resolved_id}"
 
         elif action == "done":
-            # Find by todo_id or title
-            t = find_by_id_or_title(todos, "id", todo_id, "title", title)
-            if t:
-                t["status"] = "done"
-                self._store.save(todos)
-                return f"已将「{t['title']}」标记为已完成。"
-            return f"未找到待办：{todo_id or title}"
+            resolved_id = self._resolve_todo_id(domain, todo_id, title)
+            if not resolved_id:
+                return f"未找到待办：{todo_id or title}"
+
+            result = domain.mark_done(resolved_id)
+            if result:
+                return f"已将「{result.title}」标记为已完成。"
+            return f"未找到待办：{resolved_id}"
 
         elif action == "delete":
-            # Find by todo_id or title
-            t = find_by_id_or_title(todos, "id", todo_id, "title", title)
-            if t:
-                matched_title = t["title"]
-                todos.remove(t)
-                self._store.save(todos)
-                return f"已删除待办：{matched_title}"
-            return f"未找到待办：{todo_id or title}"
+            resolved_id = self._resolve_todo_id(domain, todo_id, title)
+            if not resolved_id:
+                return f"未找到待办：{todo_id or title}"
+
+            if domain.delete_todo(resolved_id):
+                return f"已删除待办：{resolved_id}"
+            return f"未找到待办：{resolved_id}"
 
         return "未知操作。"
 

@@ -10,6 +10,16 @@
       </div>
       <div class="content markdown-body" ref="contentRef"></div>
       <div v-if="!msg.pending" class="actions">
+        <button v-if="msg.role === 'assistant'" class="action-btn" :class="{ playing: ttsPlaying }" @click="playTTS" :disabled="ttsLoading" title="语音播放">
+          <svg v-if="!ttsLoading" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path v-if="!ttsPlaying" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            <path v-if="!ttsPlaying" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          </svg>
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+          </svg>
+        </button>
         <button v-if="msg.role === 'user'" class="action-btn" @click="$emit('edit', msg)" title="编辑">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -36,6 +46,68 @@ import ToolStep from './ToolStep.vue'
 const props = defineProps({ msg: Object })
 defineEmits(['edit', 'retry'])
 const contentRef = ref(null)
+const ttsLoading = ref(false)
+const ttsPlaying = ref(false)
+let currentAudio = null
+
+async function playTTS() {
+  // 如果正在播放，停止
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio = null
+    ttsPlaying.value = false
+    return
+  }
+
+  const text = props.msg.content || ''
+  if (!text.trim()) return
+
+  ttsLoading.value = true
+  try {
+    const resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.slice(0, 4096) }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error(err.detail || 'TTS 请求失败')
+    }
+    const blob = await resp.blob()
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    currentAudio = audio
+    ttsPlaying.value = true
+    audio.play()
+    audio.onended = () => {
+      URL.revokeObjectURL(url)
+      currentAudio = null
+      ttsPlaying.value = false
+    }
+    audio.onerror = () => {
+      URL.revokeObjectURL(url)
+      currentAudio = null
+      ttsPlaying.value = false
+    }
+  } catch (e) {
+    console.error('TTS 播放失败:', e)
+    currentAudio = null
+    ttsPlaying.value = false
+  } finally {
+    ttsLoading.value = false
+  }
+}
+
+function renderContent(content) {
+  if (!content) return ''
+  // 转义 HTML
+  let html = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // 将 /api/voice URL 替换为 audio 播放器
+  html = html.replace(/(\/api\/voice\/[\w]+\.wav)/g, '<br><audio controls preload="none" src="$1"></audio>')
+  // Markdown 粗体
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  return html
+}
 
 function renderMath(html) {
   html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
@@ -52,6 +124,13 @@ function renderMath(html) {
 function updateContent() {
   if (!contentRef.value) return
   const raw = props.msg.content || ''
+  // 先处理 audio URL（在 markdown 解析之前，避免被转义）
+  const withAudio = renderContent(raw)
+  // 对于包含 audio 标签的消息，跳过 markdown 解析直接使用 renderContent 结果
+  if (withAudio.includes('<audio')) {
+    contentRef.value.innerHTML = withAudio
+    return
+  }
   const html = marked.parse(raw, { breaks: true })
   contentRef.value.innerHTML = renderMath(html)
 }
@@ -94,6 +173,13 @@ watch(() => props.msg.content, () => nextTick(updateContent))
 }
 .action-btn:hover {
   background: var(--bg-tertiary); color: var(--text-primary);
+}
+.action-btn.playing {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.action-btn:disabled {
+  opacity: 0.5; cursor: not-allowed;
 }
 
 /* Markdown */

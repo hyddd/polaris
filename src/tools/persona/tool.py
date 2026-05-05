@@ -22,24 +22,6 @@ class PersonaInput(BaseModel):
     notes: str | None = Field(default=None, description="自由备注")
 
 
-def _persona_to_text(persona: dict) -> str:
-    """Format structured persona dict into readable text."""
-    parts = []
-    if persona.get("name"):
-        parts.append(f"名称：{persona['name']}")
-    if persona.get("call_user"):
-        parts.append(f"称呼用户：{persona['call_user']}")
-    if persona.get("identity"):
-        parts.append(f"身份：{persona['identity']}")
-    if persona.get("personality"):
-        parts.append(f"性格：{persona['personality']}")
-    if persona.get("timezone") and persona["timezone"] != "Asia/Shanghai":
-        parts.append(f"时区：{persona['timezone']}")
-    if persona.get("notes"):
-        parts.append(f"备注：{persona['notes']}")
-    return "\n".join(parts) if parts else ""
-
-
 class PersonaTool(BaseTool):
     name: str = "persona"
     description: str = (
@@ -61,46 +43,39 @@ class PersonaTool(BaseTool):
         notes: str | None = None,
         _session_id: str | None = None,
     ) -> str:
-        from src.session.manager import get_session_manager
-        from src.core.context import get_session_id as _ctx_session_id
+        from src.domains.persona import get_persona_domain
 
-        session_mgr = get_session_manager()
-        # Priority: explicit _session_id param > context > default
-        effective_session_id = _session_id or _ctx_session_id()
-        if effective_session_id:
-            session = session_mgr.get(effective_session_id)
-            if not session:
-                return f"未找到会话：{effective_session_id}"
-        else:
-            session = session_mgr.active_session()
+        domain = get_persona_domain()
+        if not domain:
+            return "人设服务未就绪，请稍后重试。"
 
         if action == "get":
-            text = _persona_to_text(session.persona)
+            persona = domain.get_persona(_session_id)
+            text = persona.to_text()
             if text:
                 return f"当前人设：\n{text}"
             return "当前会话没有人设。"
 
         if action == "set":
-            updates = {}
+            kwargs = {}
             if name is not None:
-                updates["name"] = name.strip()
+                kwargs["name"] = name.strip()
             if call_user is not None:
-                updates["call_user"] = call_user.strip()
+                kwargs["call_user"] = call_user.strip()
             if identity is not None:
-                updates["identity"] = identity.strip()
+                kwargs["identity"] = identity.strip()
             if personality is not None:
-                updates["personality"] = personality.strip()
+                kwargs["personality"] = personality.strip()
             if timezone is not None:
-                updates["timezone"] = timezone.strip()
+                kwargs["timezone"] = timezone.strip()
             if notes is not None:
-                updates["notes"] = notes.strip()
+                kwargs["notes"] = notes.strip()
 
-            if not updates:
+            if not kwargs:
                 return "请提供至少一个人设字段。"
 
-            session.persona.update(updates)
-            session_mgr.save()
-            text = _persona_to_text(session.persona)
+            persona = domain.set_persona(_session_id, **kwargs)
+            text = persona.to_text()
             return f"人设已更新：\n{text}"
 
         return "未知操作。"

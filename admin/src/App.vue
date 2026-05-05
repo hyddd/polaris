@@ -22,8 +22,23 @@
         <router-link to="/config" class="sidebar-link">
           <el-icon><Setting /></el-icon> 配置
         </router-link>
-        <router-link to="/data" class="sidebar-link">
-          <el-icon><Document /></el-icon> 数据
+        <router-link to="/calendar" class="sidebar-link">
+          <el-icon><Calendar /></el-icon> 日程
+        </router-link>
+        <router-link to="/todos" class="sidebar-link">
+          <el-icon><Finished /></el-icon> 待办
+        </router-link>
+        <router-link to="/notes" class="sidebar-link">
+          <el-icon><Memo /></el-icon> 笔记
+        </router-link>
+        <router-link to="/knowledge" class="sidebar-link">
+          <el-icon><Collection /></el-icon> 知识库
+        </router-link>
+        <router-link to="/reminders" class="sidebar-link">
+          <el-icon><Bell /></el-icon> 提醒
+        </router-link>
+        <router-link to="/status" class="sidebar-link">
+          <el-icon><Monitor /></el-icon> 状态
         </router-link>
         <div class="theme-options">
           <div class="theme-slider" :style="sliderStyle"></div>

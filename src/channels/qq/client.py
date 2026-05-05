@@ -2,11 +2,12 @@
 
 import asyncio
 import logging
+import re
 
 import botpy
 from botpy.message import GroupMessage, C2CMessage, Message, DirectMessage
 
-from src.channels import ChannelPlugin
+from src.core.channel import ChannelPlugin
 
 logger = logging.getLogger("polaris.channels.qq")
 
@@ -31,10 +32,58 @@ class _PolarisQQClient(botpy.Client):
 
     async def _handle(self, content: str, message) -> None:
         from src.message import process_message
+        from src.message.models import Attachment
         from src.session.manager import get_session_manager
 
         text = content.strip()
-        if not text:
+
+        # 提取图片附件 & 语音消息
+        attachments = []
+        voice_texts = []
+        msg_attachments = getattr(message, 'attachments', None) or []
+        for att in msg_attachments:
+            url = getattr(att, 'url', None)
+            content_type = getattr(att, 'content_type', '')
+            if url and content_type.startswith('image/'):
+                # 图片附件
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            import base64
+                            b64 = base64.b64encode(resp.content).decode()
+                            attachments.append(Attachment(
+                                type="image",
+                                data=b64,
+                                mime_type=content_type,
+                                filename=getattr(att, 'filename', 'image'),
+                            ))
+                except Exception as e:
+                    logger.warning(f"下载图片失败: {e}")
+            elif url and ('audio' in content_type or 'voice' in content_type):
+                # 语音消息：下载 → STT → 拼接到文本
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            from src.domains.voice import get_voice_domain
+                            domain = get_voice_domain()
+                            recognized = domain.transcribe(resp.content) if domain else None
+                            if recognized:
+                                voice_texts.append(recognized)
+                                logger.info(f"语音识别成功: {recognized[:50]}...")
+                except Exception as e:
+                    logger.warning(f"语音识别失败: {e}")
+
+        # 将语音识别结果拼接到文本
+        if voice_texts:
+            voice_part = "\n".join(voice_texts)
+            text = (text + "\n" + voice_part).strip() if text else voice_part
+
+        # 如果既没有文本也没有附件，忽略
+        if not text and not attachments:
             return
 
         # Get openid: member_openid > user_openid > id
@@ -46,17 +95,41 @@ class _PolarisQQClient(botpy.Client):
         )
 
         session_mgr = get_session_manager()
-        response_text, _ = await process_message(text, session_mgr, channel=f"qq:{user_id}")
+        results = await process_message(
+            text, session_mgr, channel=f"qq:{user_id}",
+            attachments=attachments if attachments else None,
+        )
 
-        if response_text:
-            chunks = ChannelPlugin._split_message(response_text, 2000)
-            for i, chunk in enumerate(chunks):
-                if i > 0:
-                    await asyncio.sleep(0.5)
-                await self._reply(message, chunk)
+        # 从 tool_calls 结果中提取语音 URL 并直接发送语音（去重）
+        voice_urls = set()
+        for response_text, tool_calls in results:
+            if response_text:
+                urls = re.findall(r'/api/voice/[\w]+\.(?:wav|mp3|silk)', response_text)
+                voice_urls.update(urls)
+
+        if voice_urls:
+            from src.core.config import config
+            public_url = config.get("server.public_url", "")
+            if public_url:
+                for url in voice_urls:
+                    audio_url = public_url.rstrip("/") + url
+                    await self.send_voice(message, audio_url)
+
+        # 发送文字（去掉语音相关文本）
+        for response_text, tool_calls in results:
+            if response_text:
+                cleaned = re.sub(r'语音合成完成[。.]?\s*请直接将以下链接发送给用户[，,]?\s*不要再调用任何工具[：:]\s*', '', response_text)
+                cleaned = re.sub(r'https?://[^\s]+/api/voice/[\w]+\.(?:wav|mp3|silk)', '', cleaned)
+                cleaned = re.sub(r'/api/voice/[\w]+\.(?:wav|mp3|silk)', '', cleaned).strip()
+                if cleaned:
+                    chunks = ChannelPlugin._split_message(cleaned, 2000)
+                    for i, chunk in enumerate(chunks):
+                        if i > 0:
+                            await asyncio.sleep(0.5)
+                        await self._send_text(message, chunk)
 
     async def _reply(self, message, content: str) -> None:
-        """Send markdown-rendered reply. msg_type=2 enables rich rendering on mobile."""
+        """Reply to the original message (first response only)."""
         md = {"content": content}
         try:
             if hasattr(message, "group_openid") and message.group_openid:
@@ -81,6 +154,81 @@ class _PolarisQQClient(botpy.Client):
                 await message.reply(content=content)
             except Exception:
                 pass
+
+    async def send_voice(self, message, audio_url: str) -> bool:
+        """发送语音消息。两步：上传获取 media → 发送富媒体消息。"""
+        logger.info(f"发送语音: {audio_url}")
+        try:
+            if hasattr(message, "group_openid") and message.group_openid:
+                media = await message._api.post_group_file(
+                    group_openid=message.group_openid,
+                    file_type=3,  # 语音
+                    url=audio_url,
+                )
+                await message._api.post_group_message(
+                    group_openid=message.group_openid,
+                    msg_type=7,
+                    media=media,
+                    msg_id=message.id,
+                )
+            elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
+                media = await message._api.post_c2c_file(
+                    openid=message.author.user_openid,
+                    file_type=3,
+                    url=audio_url,
+                )
+                await message._api.post_c2c_message(
+                    openid=message.author.user_openid,
+                    msg_type=7,
+                    media=media,
+                    msg_id=message.id,
+                )
+            else:
+                return False
+            return True
+        except Exception as e:
+            logger.warning(f"发送语音消息失败: {e}")
+            return False
+
+    async def _send_text(self, message, content: str) -> None:
+        """发送文本消息。"""
+        md = {"content": content}
+        try:
+            if hasattr(message, "group_openid") and message.group_openid:
+                await message._api.post_group_message(
+                    group_openid=message.group_openid,
+                    msg_type=2, markdown=md,
+                )
+            elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
+                await message._api.post_c2c_message(
+                    openid=message.author.user_openid,
+                    msg_type=2, markdown=md,
+                )
+            else:
+                await message.reply(content=content)
+        except Exception:
+            try:
+                await message.reply(content=content)
+            except Exception:
+                pass
+
+    async def _send_proactive(self, message, content: str) -> None:
+        """主动发送消息（不回复特定消息，避免 QQ 去重）。"""
+        # 检测语音 URL
+        voice_match = re.search(r'(/api/voice/[\w]+\.(?:wav|mp3|silk))', content)
+        if voice_match:
+            from src.core.config import config
+            public_url = config.get("server.public_url", "")
+            if public_url:
+                audio_url = public_url.rstrip("/") + voice_match.group(1)
+                success = await self.send_voice(message, audio_url)
+                if success:
+                    remaining = content.replace(voice_match.group(0), "").strip()
+                    if remaining:
+                        await self._send_text(message, remaining)
+                    return
+
+        await self._send_text(message, content)
 
 
 class QQChannel(ChannelPlugin):

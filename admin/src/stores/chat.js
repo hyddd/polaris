@@ -53,13 +53,17 @@ export const useChatStore = defineStore('chat', {
       this.messages = []
       this.toolSteps = []
     },
-    async sendMessage(text) {
+    async sendMessage(text, attachments = null) {
       const msgId = `msg_${++_msgIdCounter}`
       this.messages.push({ id: msgId, role: 'user', content: text })
       this.loading = true
       this.toolSteps = []
 
-      await this._streamResponse({ message: text, channel: 'admin' })
+      const data = { message: text, channel: 'admin' }
+      if (attachments && attachments.length > 0) {
+        data.attachments = attachments
+      }
+      await this._streamResponse(data)
     },
     async retryMessage(messageId) {
       // Find the message to retry
