@@ -133,8 +133,42 @@ class _PolarisQQClient(botpy.Client):
             except Exception:
                 pass
 
-    async def _send_proactive(self, message, content: str) -> None:
-        """主动发送消息（不回复特定消息，避免 QQ 去重）。"""
+    async def send_voice(self, message, audio_url: str) -> bool:
+        """发送语音消息。audio_url 需要是公网可访问的 WAV/MP3 URL。"""
+        try:
+            if hasattr(message, "group_openid") and message.group_openid:
+                media = await self.api.post_group_file(
+                    group_openid=message.group_openid,
+                    file_type=3,  # 语音
+                    url=audio_url,
+                )
+                await self.api.post_group_message(
+                    group_openid=message.group_openid,
+                    msg_type=7,  # 富媒体
+                    media=media,
+                    msg_id=message.id,
+                )
+            elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
+                media = await self.api.post_c2c_file(
+                    openid=message.author.user_openid,
+                    file_type=3,
+                    url=audio_url,
+                )
+                await self.api.post_c2c_message(
+                    openid=message.author.user_openid,
+                    msg_type=7,
+                    media=media,
+                    msg_id=message.id,
+                )
+            else:
+                return False
+            return True
+        except Exception as e:
+            logger.warning(f"发送语音消息失败: {e}")
+            return False
+
+    async def _send_text(self, message, content: str) -> None:
+        """发送文本消息。"""
         md = {"content": content}
         try:
             if hasattr(message, "group_openid") and message.group_openid:
@@ -154,6 +188,26 @@ class _PolarisQQClient(botpy.Client):
                 await message.reply(content=content)
             except Exception:
                 pass
+
+    async def _send_proactive(self, message, content: str) -> None:
+        """主动发送消息（不回复特定消息，避免 QQ 去重）。"""
+        import re
+
+        # 检测语音 URL
+        voice_match = re.search(r'(/api/voice/[\w]+\.wav)', content)
+        if voice_match:
+            from src.core.config import config
+            public_url = config.get("server.public_url", "")
+            if public_url:
+                audio_url = public_url.rstrip("/") + voice_match.group(1)
+                success = await self.send_voice(message, audio_url)
+                if success:
+                    remaining = content.replace(voice_match.group(0), "").strip()
+                    if remaining:
+                        await self._send_text(message, remaining)
+                    return
+
+        await self._send_text(message, content)
 
 
 class QQChannel(ChannelPlugin):

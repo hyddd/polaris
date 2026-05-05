@@ -53,6 +53,16 @@ class VoiceConfig(BaseModel):
     context: str = ""  # MiMo 风格控制指令
 
 
+class ServerConfig(BaseModel):
+    host: str = "0.0.0.0"
+    port: int = Field(default=8000, gt=0)
+    public_url: str = ""  # 服务器公网地址，用于 QQ 语音消息上传
+    admin_token: Optional[str] = None
+    rate_limit_max_requests: int = 30
+    rate_limit_window_seconds: int = 60
+    max_sessions: int = 10
+
+
 class AppConfig(BaseModel):
     model_config = {"extra": "allow"}
 
@@ -62,5 +72,6 @@ class AppConfig(BaseModel):
     channels: dict[str, ChannelConfig] = {}
     heartbeat: HeartbeatConfig = HeartbeatConfig()
     logging: LoggingConfig = LoggingConfig()
+    server: ServerConfig = ServerConfig()
     admin_token: Optional[str] = None
     demo_mode: Optional[int] = None
