@@ -53,15 +53,15 @@ class VoiceDomain:
             logger.warning(f"不支持的 TTS 模式: {mode}")
             return None
 
-    def synthesize_to_file(self, text: str, voice: str = None, context: str = None, mode: str = "preset") -> Path | None:
-        """文字转语音，保存为文件，返回文件路径。"""
+    def synthesize_to_file(self, text: str, voice: str = None, context: str = None, mode: str = "preset") -> str | None:
+        """文字转语音，保存为文件，返回可访问的 URL 路径。"""
         audio = self.synthesize(text, voice=voice, context=context, mode=mode)
         if not audio:
             return None
         filename = f"tts_{uuid.uuid4().hex[:8]}.wav"
         path = self._output_dir / filename
         path.write_bytes(audio)
-        return path
+        return f"/api/voice/{filename}"
 
     def transcribe(self, audio_data: bytes, language: str = "zh") -> str | None:
         """语音转文字。"""

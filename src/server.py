@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI):
 async def _admin_auth(request: Request, call_next):
     """Require Bearer token for /api/* (ADMIN_TOKEN)."""
     path = request.url.path
-    if path.startswith("/api/"):
+    if path.startswith("/api/") and not path.startswith("/api/voice/"):
         token = config.get("server.admin_token", "")
         if token and request.headers.get("authorization", "") != f"Bearer {token}":
             return JSONResponse(status_code=401, content={"detail": "Missing or invalid admin token"})
@@ -679,6 +679,16 @@ async def tts_endpoint(req: Request):
     if not audio:
         raise HTTPException(500, "TTS 生成失败，请检查 voice 配置")
     return Response(content=audio, media_type="audio/wav")
+
+
+@app.get("/api/voice/{filename}")
+def serve_voice(filename: str):
+    """Serve generated voice files (audio elements cannot carry Bearer token)."""
+    voice_dir = Path(config.resolve_path("data/voice"))
+    filepath = voice_dir / filename
+    if not filepath.exists():
+        raise HTTPException(404, "音频文件不存在")
+    return FileResponse(filepath, media_type="audio/wav")
 
 
 # --- Admin API: Data management ---

@@ -98,6 +98,17 @@ async function playTTS() {
   }
 }
 
+function renderContent(content) {
+  if (!content) return ''
+  // 转义 HTML
+  let html = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // 将 /api/voice URL 替换为 audio 播放器
+  html = html.replace(/(\/api\/voice\/[\w]+\.wav)/g, '<br><audio controls preload="none" src="$1"></audio>')
+  // Markdown 粗体
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  return html
+}
+
 function renderMath(html) {
   html = html.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
     try { return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false }) }
@@ -113,6 +124,13 @@ function renderMath(html) {
 function updateContent() {
   if (!contentRef.value) return
   const raw = props.msg.content || ''
+  // 先处理 audio URL（在 markdown 解析之前，避免被转义）
+  const withAudio = renderContent(raw)
+  // 对于包含 audio 标签的消息，跳过 markdown 解析直接使用 renderContent 结果
+  if (withAudio.includes('<audio')) {
+    contentRef.value.innerHTML = withAudio
+    return
+  }
   const html = marked.parse(raw, { breaks: true })
   contentRef.value.innerHTML = renderMath(html)
 }
