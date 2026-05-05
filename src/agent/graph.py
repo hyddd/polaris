@@ -17,7 +17,14 @@ def command_node(state: AgentState) -> dict:
 
     last_msg = messages[-1]
     content = last_msg.content if hasattr(last_msg, "content") else ""
-    stripped = content.strip()
+    # 多模态消息 content 为 list，提取文本部分
+    if isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text_parts.append(part.get("text", ""))
+        content = " ".join(text_parts)
+    stripped = content.strip() if isinstance(content, str) else ""
 
     # Handle pending action confirmation
     pending = state.get("pending_action")
