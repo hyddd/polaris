@@ -96,5 +96,5 @@ def _on_startup(cron=None, channels=None, **kwargs):
     HeartbeatTask(cron, channels or []).start()
 
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 event_bus.subscribe("app:startup", _on_startup)

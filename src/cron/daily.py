@@ -1,6 +1,6 @@
 """Daily maintenance tick — publishes cleanup:cron for all modules."""
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 
 
 def _on_startup(cron=None, **kwargs):

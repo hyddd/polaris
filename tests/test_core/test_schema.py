@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from src.core.schema import AppConfig
+from src.core.config.schema import AppConfig
 
 
 def test_valid_config():

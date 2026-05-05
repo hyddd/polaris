@@ -1,6 +1,6 @@
 """Tests for src.core.events.EventBus."""
 
-from src.core.events import EventBus
+from src.core.infra.events import EventBus
 
 
 def test_subscribe_and_publish():

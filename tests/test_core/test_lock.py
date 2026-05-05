@@ -3,8 +3,8 @@
 import threading
 import time
 
-from src.core import lock as lock_mod
-from src.core.lock import get_session_lock, cleanup_session_locks
+import src.core.infra.lock as lock_mod
+from src.core.infra.lock import get_session_lock, cleanup_session_locks
 
 
 def test_acquire_and_release():

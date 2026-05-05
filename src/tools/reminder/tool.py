@@ -33,7 +33,7 @@ class ReminderTool(BaseTool):
              description: str | None = None, trigger_time: str | None = None,
              repeat_rule: str | None = None, event_id: str | None = None) -> str:
         from src.domains.reminder import get_reminder_domain
-        from src.core.context import get_channel, get_session_id
+        from src.core.infra import get_channel, get_session_id
 
         domain = get_reminder_domain()
         if not domain:

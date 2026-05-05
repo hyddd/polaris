@@ -15,7 +15,7 @@ class JSONFormatter(logging.Formatter):
             log["exception"] = self.formatException(record.exc_info)
         # 附加 contextvars 信息
         try:
-            from src.core.context import get_channel, get_session_id
+            from src.core.infra import get_channel, get_session_id
             channel = get_channel()
             session_id = get_session_id()
             if channel:

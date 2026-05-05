@@ -1,10 +1,11 @@
 """Tests for src.core.config.Config."""
 
+import sys
 import yaml
 from pathlib import Path
 
-from src.core import config as config_mod
-from src.core.config import Config
+from src.core.config import Config  # triggers package load, populates sys.modules
+config_mod = sys.modules["src.core.config.config"]
 
 
 def test_get_nested_key():

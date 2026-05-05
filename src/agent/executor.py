@@ -26,7 +26,7 @@ from src.session.manager import get_session_manager
 
 logger = logging.getLogger("polaris.tools")
 
-from src.core.context import set_context as _set_ctx
+from src.core.infra import set_context as _set_ctx
 
 # --- Cached LLM instance (rebuilds when config changes) ---
 
@@ -41,7 +41,7 @@ def clear_llm_cache() -> None:
     _llm_cache_key = ("", "", "")
 
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 
 # Auto-clear LLM cache when config is reloaded
 event_bus.subscribe("config:reload", clear_llm_cache)
@@ -233,7 +233,7 @@ def tool_node(state: AgentState) -> dict:
         tool = registry.get(tool_name)
         if tool:
             try:
-                from src.core.metrics import metrics
+                from src.core.observability import metrics
                 metrics.inc(f"tool.calls.{tool_name}")
                 with metrics.timer(f"tool.latency.{tool_name}"):
                     result = tool.invoke(tool_args)

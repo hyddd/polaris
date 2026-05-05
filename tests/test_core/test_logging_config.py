@@ -3,7 +3,7 @@
 import logging
 import json
 
-from src.core.logging_config import setup_logging
+from src.core.observability.logging_config import setup_logging
 
 
 def test_setup_logging_text_mode():
@@ -13,11 +13,11 @@ def test_setup_logging_text_mode():
     assert len(root.handlers) == 1
     formatter = root.handlers[0].formatter
     assert isinstance(formatter, logging.Formatter)
-    assert not hasattr(formatter, "format") or not isinstance(formatter, __import__("src.core.logging_config", fromlist=["JSONFormatter"]).JSONFormatter)
+    assert not hasattr(formatter, "format") or not isinstance(formatter, __import__("src.core.observability.logging_config", fromlist=["JSONFormatter"]).JSONFormatter)
 
 
 def test_setup_logging_json_mode():
-    from src.core.logging_config import JSONFormatter
+    from src.core.observability.logging_config import JSONFormatter
     setup_logging(level=logging.WARNING, json_mode=True)
     root = logging.getLogger("polaris")
     assert root.level == logging.WARNING

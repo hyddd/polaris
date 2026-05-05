@@ -1,7 +1,7 @@
 """Tests for src.core.metrics — lightweight in-process metrics."""
 
 import time
-from src.core.metrics import Metrics
+from src.core.observability.metrics import Metrics
 
 
 def test_inc():

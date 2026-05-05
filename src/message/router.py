@@ -6,8 +6,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import SessionManager
-from src.core.context import set_context as _set_ctx
-from src.core.lock import get_session_lock
+from src.core.infra import set_context as _set_ctx
+from src.core.infra import get_session_lock
 from src.session.commands import _SEPARATOR
 from src.message.models import Attachment
 from src.message.file_parser import parse_file

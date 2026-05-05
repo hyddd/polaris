@@ -23,7 +23,7 @@ class WebSearchTool(BaseTool):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._refresh_config()
-        from src.core.events import event_bus
+        from src.core.infra import event_bus
         event_bus.subscribe("config:reload", lambda **kw: self._refresh_config())
 
     def _refresh_config(self):

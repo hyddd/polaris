@@ -3,7 +3,7 @@
 import logging
 import threading
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 from .models import Note, SearchResult
 from .store import NoteStore
 

@@ -28,12 +28,12 @@ from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import get_session_manager, SessionManager
 from src.core.tools.registry import ToolRegistry
-from src.core.context import set_context as _set_ctx
+from src.core.infra import set_context as _set_ctx
 from src.core.config import config
 
 from src.message import process_message
 from src.message.models import Attachment
-from src.core.lock import get_session_lock, cleanup_session_locks
+from src.core.infra import get_session_lock, cleanup_session_locks
 
 
 class ChatRequest(BaseModel):
@@ -64,7 +64,7 @@ class SessionInfo(BaseModel):
 # --- App lifecycle ---
 
 # Structured logging setup
-from src.core.logging_config import setup_logging
+from src.core.observability import setup_logging
 _log_level = getattr(logging, config.get("logging.level", "INFO").upper(), logging.INFO)
 _log_format = config.get("logging.format", "text")
 setup_logging(level=_log_level, json_mode=(_log_format == "json"))
@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
     import src.domains  # noqa: F401
 
     # 通知各模块：框架已就绪（各 tools/channels/heartbeat 可自初始化）
-    from src.core.events import event_bus
+    from src.core.infra import event_bus
     event_bus.publish("app:startup", cron=cron, channels=channels)
 
     app.state.cron = cron
@@ -655,7 +655,7 @@ def delete_config(key: str):
 
 @app.get("/api/metrics")
 def get_metrics():
-    from src.core.metrics import metrics
+    from src.core.observability import metrics
     return metrics.snapshot()
 
 

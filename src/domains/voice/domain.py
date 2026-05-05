@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 
 from src.core.config import config
-from src.core.events import event_bus
+from src.core.infra import event_bus
 
 logger = logging.getLogger("polaris.voice")
 

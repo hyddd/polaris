@@ -72,7 +72,7 @@ class GoogleCalendarTool(BaseTool):
              title: str | None = None, time: str | None = None, attendees: list[str] | None = None,
              duration: int = 60, event_id: str | None = None, updates: dict | None = None) -> str:
         from src.domains.calendar import get_calendar_domain
-        from src.core.context import get_channel, get_session_id
+        from src.core.infra import get_channel, get_session_id
 
         domain = get_calendar_domain()
         if not domain:

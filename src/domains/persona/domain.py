@@ -2,7 +2,7 @@
 
 import logging
 
-from src.core.events import event_bus
+from src.core.infra import event_bus
 from .models import Persona
 
 logger = logging.getLogger("polaris.persona")
@@ -51,7 +51,7 @@ class PersonaDomain:
         """根据 session_id 获取 session，为 None 时用 context 中的。"""
         if session_id:
             return self._session_mgr.get(session_id)
-        from src.core.context import get_session_id as _ctx_session_id
+        from src.core.infra import get_session_id as _ctx_session_id
         sid = _ctx_session_id()
         if sid:
             return self._session_mgr.get(sid)

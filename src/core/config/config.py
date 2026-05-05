@@ -15,7 +15,7 @@ from pathlib import Path
 
 import os
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 # 多实例部署：POLARIS_HOME 指向独立数据目录
 _HOME = Path(os.environ.get("POLARIS_HOME", PROJECT_ROOT))
@@ -156,7 +156,7 @@ class Config:
         Returns the full config snapshot dict.
         """
         self.load()
-        from src.core.events import event_bus
+        from src.core.infra import event_bus
         event_bus.publish("config:reload")
         return dict(self._data)
 
