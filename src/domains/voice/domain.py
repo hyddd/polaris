@@ -58,10 +58,49 @@ class VoiceDomain:
         audio = self.synthesize(text, voice=voice, context=context, mode=mode)
         if not audio:
             return None
-        filename = f"tts_{uuid.uuid4().hex[:8]}.wav"
-        path = self._output_dir / filename
-        path.write_bytes(audio)
+
+        filename = f"tts_{uuid.uuid4().hex[:8]}"
+
+        # 尝试转为 MP3（减小体积，WAV ~1.6MB → MP3 ~150KB）
+        mp3_data = self._wav_to_mp3(audio)
+        if mp3_data:
+            filename += ".mp3"
+            path = self._output_dir / filename
+            path.write_bytes(mp3_data)
+        else:
+            # ffmpeg 不可用时，保存原始 WAV
+            filename += ".wav"
+            path = self._output_dir / filename
+            path.write_bytes(audio)
+
         return f"/api/voice/{filename}"
+
+    def _wav_to_mp3(self, wav_data: bytes) -> bytes | None:
+        """WAV 转 MP3，需要 ffmpeg。失败返回 None。"""
+        import subprocess
+        import tempfile
+
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_file:
+                wav_file.write(wav_data)
+                wav_path = wav_file.name
+
+            mp3_path = wav_path.replace(".wav", ".mp3")
+
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", wav_path, "-codec:a", "libmp3lame", "-qscale:a", "2", mp3_path],
+                capture_output=True,
+                timeout=30,
+            )
+
+            if result.returncode == 0:
+                return Path(mp3_path).read_bytes()
+            return None
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+        finally:
+            Path(wav_path).unlink(missing_ok=True)
+            Path(mp3_path).unlink(missing_ok=True)
 
     def transcribe(self, audio_data: bytes, language: str = "zh") -> str | None:
         """语音转文字。"""
