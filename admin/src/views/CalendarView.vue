@@ -415,7 +415,7 @@ async function deleteEvent(id) {
   padding: 8px;
   cursor: pointer;
   transition: background-color 0.2s;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .day-cell:hover {
