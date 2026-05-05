@@ -189,7 +189,7 @@ async function deleteTodo(id) {
 </script>
 
 <style scoped>
-.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; overflow-y: auto; }
+.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 .page-header {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
 }
@@ -209,7 +209,7 @@ async function deleteTodo(id) {
 .tab:hover:not(.active) { color: var(--text-secondary); }
 
 /* Todo List */
-.todo-list { display: flex; flex-direction: column; gap: 8px; }
+.todo-list { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; min-height: 0; }
 .todo-card {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 16px; background: var(--bg-secondary);

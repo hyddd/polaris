@@ -39,6 +39,8 @@
             'has-events': day.events.length > 0
           }"
           @click="selectDate(day)"
+          @mouseenter="hoveredDay = day"
+          @mouseleave="hoveredDay = null"
         >
           <div class="day-number">{{ day.day }}</div>
           <div class="day-events">
@@ -52,6 +54,13 @@
             </div>
             <div v-if="day.events.length > 2" class="event-more">
               +{{ day.events.length - 2 }}
+            </div>
+          </div>
+          <!-- Hover tooltip -->
+          <div class="day-tooltip" v-if="hoveredDay === day && day.events.length">
+            <div v-for="ev in day.events" :key="ev.id" class="tooltip-item">
+              <span class="tooltip-time">{{ ev.time }}</span>
+              <span class="tooltip-title">{{ ev.title }}</span>
             </div>
           </div>
         </div>
@@ -155,6 +164,7 @@ const showCreate = ref(false)
 const showDetail = ref(false)
 const detailEvent = ref(null)
 const selectedDate = ref(null)
+const hoveredDay = ref(null)
 
 // Month navigation
 const today = new Date()
@@ -398,11 +408,14 @@ async function deleteEvent(id) {
 }
 
 .day-cell {
+  position: relative;
   background: var(--bg-secondary);
   min-height: 100px;
+  aspect-ratio: 1;
   padding: 8px;
   cursor: pointer;
   transition: background-color 0.2s;
+  overflow: hidden;
 }
 
 .day-cell:hover {
@@ -474,6 +487,47 @@ async function deleteEvent(id) {
   font-size: 11px;
   color: var(--text-tertiary);
   padding: 2px 6px;
+}
+
+/* Hover Tooltip */
+.day-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-primary, #1a1a2e);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 10;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+.tooltip-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+
+.tooltip-item + .tooltip-item {
+  border-top: 1px solid var(--border-primary);
+}
+
+.tooltip-time {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.tooltip-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Selected Date Panel */

@@ -183,11 +183,14 @@ function statusLabel(status) {
 </script>
 
 <style scoped>
-.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; overflow-y: auto; }
+.page { max-width: 768px; margin: 0 auto; padding: 32px 24px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 .page-header {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
 }
 .page-header h1 { font-size: 24px; font-weight: 400; }
+
+/* Data Content */
+.data-content { flex: 1; overflow-y: auto; min-height: 0; }
 
 /* Modal */
 .modal-overlay {
