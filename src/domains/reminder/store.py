@@ -3,7 +3,7 @@ import threading
 from pathlib import Path
 from datetime import datetime
 from .models import Reminder, ReminderStatus
-from src.storage.store import JsonFileStore
+from src.core.storage.store import JsonFileStore
 
 
 class ReminderStore:

@@ -5,7 +5,7 @@ import logging
 import threading
 from pathlib import Path
 
-from src.storage.store import JsonFileStore
+from src.core.storage.store import JsonFileStore
 from .models import ScheduledJob
 
 logger = logging.getLogger("polaris.scheduler.store")

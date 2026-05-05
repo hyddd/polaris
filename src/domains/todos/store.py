@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.storage.store import JsonFileStore
+from src.core.storage.store import JsonFileStore
 from .models import TodoItem
 
 logger = logging.getLogger("polaris.todos.store")

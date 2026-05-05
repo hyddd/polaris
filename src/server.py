@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
         pass
 
     # Discover and start channel plugins (YAML-config driven)
-    from src.channels import discover_and_start, stop_all
+    from src.core.channel.loader import discover_and_start, stop_all
     channels = discover_and_start()
 
     # 启动 cron 框架
@@ -960,7 +960,7 @@ def resume_reminder(reminder_id: str):
 def get_status():
     from src.core.registry import ToolRegistry
     from src.domains.scheduler import get_scheduler_domain
-    from src.channels.loader import _discovered_channels
+    from src.core.channel.loader import _discovered_channels
 
     registry = ToolRegistry.get_instance()
     tools = [{"name": t.name} for t in registry.list_tools()]

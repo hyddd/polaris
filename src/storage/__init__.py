@@ -1,4 +1,1 @@
-"""Storage — 兼容层，re-export core.storage。"""
-from src.core.storage import DataStore, JsonFileStore, _atomic_write
-
-__all__ = ["DataStore", "JsonFileStore", "_atomic_write"]
+"""Storage — 数据持久化（向量索引、文件加载等）。"""

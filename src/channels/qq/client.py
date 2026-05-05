@@ -7,7 +7,7 @@ import re
 import botpy
 from botpy.message import GroupMessage, C2CMessage, Message, DirectMessage
 
-from src.channels import ChannelPlugin
+from src.core.channel import ChannelPlugin
 
 logger = logging.getLogger("polaris.channels.qq")
 

@@ -10,7 +10,7 @@ import time
 import logging
 from collections import OrderedDict
 
-from src.channels import ChannelPlugin
+from src.core.channel import ChannelPlugin
 
 logger = logging.getLogger("polaris.channels.feishu")
 
