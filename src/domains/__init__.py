@@ -8,3 +8,4 @@ from . import persona
 from . import reminder
 from . import rag
 from . import scheduler
+from . import voice

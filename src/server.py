@@ -667,13 +667,18 @@ async def tts_endpoint(req: Request):
     from fastapi.responses import Response
     body = await req.json()
     text = body.get("text", "")
+    voice = body.get("voice")
+    context = body.get("context")
     if not text:
         raise HTTPException(400, "text 不能为空")
-    from src.tools.voice.tts import text_to_speech
-    audio = text_to_speech(text)
+    from src.domains.voice import get_voice_domain
+    domain = get_voice_domain()
+    if not domain:
+        raise HTTPException(503, "语音服务未就绪")
+    audio = domain.synthesize(text, voice=voice, context=context)
     if not audio:
         raise HTTPException(500, "TTS 生成失败，请检查 voice 配置")
-    return Response(content=audio, media_type="audio/mpeg")
+    return Response(content=audio, media_type="audio/wav")
 
 
 # --- Admin API: Data management ---

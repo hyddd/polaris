@@ -1,13 +1,12 @@
-"""Speech-to-Text — 语音转文字（OpenAI Whisper API）。"""
+"""Speech-to-Text — 向后兼容的便捷函数，内部调用 VoiceDomain。"""
 
 import logging
-from pathlib import Path
 
 logger = logging.getLogger("polaris.voice.stt")
 
 
 def speech_to_text(audio_data: bytes, language: str = "zh") -> str | None:
-    """将音频数据转为文字。
+    """将音频数据转为文字。内部委托给 VoiceDomain。
 
     Args:
         audio_data: 音频文件的 bytes 内容
@@ -16,41 +15,9 @@ def speech_to_text(audio_data: bytes, language: str = "zh") -> str | None:
     Returns:
         识别出的文字，失败返回 None
     """
-    try:
-        from src.core.config import config
-        base_url = config.get("voice.base_url")
-        if not base_url:
-            logger.debug("语音识别未配置 voice.base_url，跳过")
-            return None
-
-        import openai
-
-        client = openai.OpenAI(
-            api_key=config.get("voice.api_key") or config.get("llm.api_key", ""),
-            base_url=config.get("voice.base_url") or config.get("llm.base_url"),
-        )
-
-        # 创建临时文件（Whisper API 需要文件对象）
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
-            f.write(audio_data)
-            tmp_path = f.name
-
-        try:
-            with open(tmp_path, "rb") as f:
-                response = client.audio.transcriptions.create(
-                    model=config.get("voice.stt_model", "whisper-1"),
-                    file=f,
-                    language=language,
-                )
-            return response.text
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
-
-    except ImportError:
-        logger.warning("语音识别需要 openai 库")
+    from src.domains.voice import get_voice_domain
+    domain = get_voice_domain()
+    if not domain:
+        logger.warning("语音服务未就绪")
         return None
-    except Exception as e:
-        logger.warning(f"语音识别失败: {e}")
-        return None
+    return domain.transcribe(audio_data, language=language)
