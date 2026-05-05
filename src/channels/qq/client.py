@@ -99,12 +99,12 @@ class _PolarisQQClient(botpy.Client):
             attachments=attachments if attachments else None,
         )
 
-        # 从 tool_calls 结果中提取语音 URL 并直接发送语音
-        voice_urls = []
+        # 从 tool_calls 结果中提取语音 URL 并直接发送语音（去重）
+        voice_urls = set()
         for response_text, tool_calls in results:
             if response_text:
                 urls = re.findall(r'/api/voice/[\w]+\.(?:wav|mp3|silk)', response_text)
-                voice_urls.extend(urls)
+                voice_urls.update(urls)
 
         if voice_urls:
             from src.core.config import config
