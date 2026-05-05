@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import re
+import time
 
 import botpy
 from botpy.message import GroupMessage, C2CMessage, Message, DirectMessage
@@ -98,13 +100,33 @@ class _PolarisQQClient(botpy.Client):
             attachments=attachments if attachments else None,
         )
 
+        # 从 tool_calls 结果中提取语音 URL 并直接发送语音
+        voice_urls = []
         for response_text, tool_calls in results:
             if response_text:
-                chunks = ChannelPlugin._split_message(response_text, 2000)
-                for i, chunk in enumerate(chunks):
-                    if i > 0:
-                        await asyncio.sleep(0.5)
-                    await self._send_proactive(message, chunk)
+                urls = re.findall(r'/api/voice/[\w]+\.wav', response_text)
+                voice_urls.extend(urls)
+
+        if voice_urls:
+            from src.core.config import config
+            public_url = config.get("server.public_url", "")
+            if public_url:
+                for url in voice_urls:
+                    audio_url = public_url.rstrip("/") + url
+                    await self.send_voice(message, audio_url)
+
+        # 发送文字（去掉语音相关文本）
+        for response_text, tool_calls in results:
+            if response_text:
+                cleaned = re.sub(r'语音合成完成[。.]?\s*请直接将以下链接发送给用户[，,]?\s*不要再调用任何工具[：:]\s*', '', response_text)
+                cleaned = re.sub(r'https?://[^\s]+/api/voice/[\w]+\.wav', '', cleaned)
+                cleaned = re.sub(r'/api/voice/[\w]+\.wav', '', cleaned).strip()
+                if cleaned:
+                    chunks = ChannelPlugin._split_message(cleaned, 2000)
+                    for i, chunk in enumerate(chunks):
+                        if i > 0:
+                            await asyncio.sleep(0.5)
+                        await self._send_text(message, chunk)
 
     async def _reply(self, message, content: str) -> None:
         """Reply to the original message (first response only)."""
@@ -136,29 +158,29 @@ class _PolarisQQClient(botpy.Client):
     async def send_voice(self, message, audio_url: str) -> bool:
         """发送语音消息。audio_url 需要是公网可访问的 WAV/MP3 URL。"""
         try:
+            msgseq = int(time.time() * 1000) % 1000000
             if hasattr(message, "group_openid") and message.group_openid:
-                media = await self.api.post_group_file(
+                media = await message._api.post_group_file(
                     group_openid=message.group_openid,
                     file_type=3,  # 语音
                     url=audio_url,
                 )
-                await self.api.post_group_message(
+                await message._api.post_group_message(
                     group_openid=message.group_openid,
                     msg_type=7,  # 富媒体
                     media=media,
-                    msg_id=message.id,
+                    msgseq=msgseq,
                 )
             elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
-                media = await self.api.post_c2c_file(
+                media = await message._api.post_c2c_file(
                     openid=message.author.user_openid,
                     file_type=3,
                     url=audio_url,
                 )
-                await self.api.post_c2c_message(
+                await message._api.post_c2c_message(
                     openid=message.author.user_openid,
                     msg_type=7,
                     media=media,
-                    msg_id=message.id,
                 )
             else:
                 return False
@@ -191,8 +213,6 @@ class _PolarisQQClient(botpy.Client):
 
     async def _send_proactive(self, message, content: str) -> None:
         """主动发送消息（不回复特定消息，避免 QQ 去重）。"""
-        import re
-
         # 检测语音 URL
         voice_match = re.search(r'(/api/voice/[\w]+\.wav)', content)
         if voice_match:
