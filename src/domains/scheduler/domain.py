@@ -149,6 +149,10 @@ class SchedulerDomain:
                 self._store.update(job.id,
                                    last_run=datetime.now().isoformat(),
                                    run_count=job.run_count + 1)
+                # 一次性任务执行后自动清理
+                if job.trigger_type == "date":
+                    self._store.delete(job.id)
+                    logger.info(f"一次性任务已执行并清理: {job.id}")
             except Exception:
                 logger.exception(f"任务执行异常: {job.id}")
 
