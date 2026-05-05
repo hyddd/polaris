@@ -48,8 +48,9 @@ class VoiceConfig(BaseModel):
     base_url: Optional[str] = None
     api_key: Optional[str] = None
     stt_model: str = "whisper-1"
-    tts_model: str = "tts-1"
-    voice: str = "alloy"
+    tts_model: str = "mimo-v2.5-tts"
+    voice: str = "冰糖"
+    context: str = ""  # MiMo 风格控制指令
 
 
 class AppConfig(BaseModel):
