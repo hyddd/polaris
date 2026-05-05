@@ -16,6 +16,7 @@ class CalendarEvent:
         return {
             "id": self.id,
             "title": self.title,
+            "date": self.date,
             "time": self.time,
             "duration": self.duration,
             "attendees": self.attendees,
