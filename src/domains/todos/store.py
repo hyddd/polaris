@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from src.storage.atomic import _atomic_write
+from src.storage.store import JsonFileStore
 from .models import TodoItem
 
 logger = logging.getLogger("polaris.todos.store")
@@ -15,6 +15,7 @@ logger = logging.getLogger("polaris.todos.store")
 class TodoStore:
     def __init__(self, file_path: str):
         self._path = Path(file_path)
+        self._store = JsonFileStore(file_path)
         self._lock = threading.Lock()
         self._todos: list[TodoItem] = []
         self._load()
@@ -34,9 +35,7 @@ class TodoStore:
 
     def _save(self):
         data = [t.to_dict() for t in self._todos]
-        content = json.dumps(data, ensure_ascii=False, indent=2)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write(self._path, content)
+        self._store.save(data)
 
     # ------------------------------------------------------------------
     # 查询
