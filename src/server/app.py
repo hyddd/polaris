@@ -88,16 +88,16 @@ async def lifespan(app: FastAPI):
 
 from src.core.tools.registry import ToolRegistry
 
-from src.middleware import demo_limit, admin_auth, rate_limit
-from src.routes.chat import router as chat_router
-from src.routes.sessions import router as sessions_router
-from src.routes.config import router as config_router
-from src.routes.data import router as data_router
-from src.routes.notes import router as notes_router
-from src.routes.knowledge import router as knowledge_router
-from src.routes.reminders import router as reminders_router
-from src.routes.voice import router as voice_router
-from src.routes.status import router as status_router
+from .middleware import demo_limit, admin_auth, rate_limit
+from .routes.chat import router as chat_router
+from .routes.sessions import router as sessions_router
+from .routes.config import router as config_router
+from .routes.data import router as data_router
+from .routes.notes import router as notes_router
+from .routes.knowledge import router as knowledge_router
+from .routes.reminders import router as reminders_router
+from .routes.voice import router as voice_router
+from .routes.status import router as status_router
 
 # --- Create app and register middleware ---
 
@@ -120,7 +120,7 @@ app.include_router(status_router)
 
 # --- Admin frontend catch-all (must be LAST) ---
 
-ADMIN_DIR = Path(__file__).parent.parent / "admin" / "dist"
+ADMIN_DIR = Path(__file__).parent.parent.parent / "admin" / "dist"
 
 
 def _serve_index():
