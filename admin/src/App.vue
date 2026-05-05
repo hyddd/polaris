@@ -31,6 +31,9 @@
         <router-link to="/notes" class="sidebar-link">
           <el-icon><Memo /></el-icon> 笔记
         </router-link>
+        <router-link to="/knowledge" class="sidebar-link">
+          <el-icon><Collection /></el-icon> 知识库
+        </router-link>
         <router-link to="/reminders" class="sidebar-link">
           <el-icon><Bell /></el-icon> 提醒
         </router-link>

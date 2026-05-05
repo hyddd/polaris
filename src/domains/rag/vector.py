@@ -63,3 +63,26 @@ class RAGVectorStore:
             except Exception as e:
                 logger.warning(f"批量索引失败 ({note.get('filename', '?')}): {e}")
         logger.info(f"批量索引完成: {len(notes)} 条")
+
+    def index_chunks(self, doc_id: str, chunks: list[dict]) -> None:
+        """索引文档的所有分块。"""
+        from src.storage.vector import get_vector_store
+        col = get_vector_store(self._persist_dir, self._collection_name)
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{doc_id}_{i}"
+            col.upsert(
+                ids=[chunk_id],
+                documents=[chunk["content"]],
+                metadatas=[{**chunk.get("metadata", {}), "doc_id": doc_id, "chunk_index": i}],
+            )
+        logger.debug(f"文档分块已索引: {doc_id}, {len(chunks)} 块")
+
+    def remove_chunks(self, doc_id: str) -> None:
+        """删除文档的所有分块。"""
+        from src.storage.vector import get_vector_store
+        col = get_vector_store(self._persist_dir, self._collection_name)
+        # 查找该文档的所有 chunk
+        results = col.get(where={"doc_id": doc_id})
+        if results and results["ids"]:
+            col.delete(ids=results["ids"])
+            logger.debug(f"文档分块已删除: {doc_id}, {len(results['ids'])} 块")

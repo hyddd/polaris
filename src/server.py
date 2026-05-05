@@ -17,7 +17,7 @@ import re as _re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -853,6 +853,48 @@ def delete_note(filename: str):
     if not domain.delete_note(filename):
         raise HTTPException(404, f"笔记不存在: {filename}")
     return {"ok": True}
+
+
+# --- Admin API: Knowledge base management ---
+
+def _require_rag_domain():
+    from src.domains.rag import get_rag_domain
+    domain = get_rag_domain()
+    if not domain:
+        raise HTTPException(503, "知识库服务未就绪")
+    return domain
+
+
+@app.get("/api/knowledge")
+def list_knowledge():
+    domain = _require_rag_domain()
+    docs = domain.list_documents()
+    return {"items": docs}
+
+
+@app.post("/api/knowledge/upload")
+async def upload_knowledge(file: UploadFile):
+    domain = _require_rag_domain()
+    data = await file.read()
+    result = domain.upload_document(file_data=data, filename=file.filename)
+    if not result:
+        raise HTTPException(400, "文档解析失败")
+    return result
+
+
+@app.delete("/api/knowledge/{doc_id}")
+def delete_knowledge(doc_id: str):
+    domain = _require_rag_domain()
+    if not domain.delete_document(doc_id):
+        raise HTTPException(404, "文档不存在")
+    return {"ok": True}
+
+
+@app.get("/api/knowledge/search")
+def search_knowledge(q: str = "", top_k: int = 5):
+    domain = _require_rag_domain()
+    results = domain.search(q, top_k=top_k)
+    return {"items": [r.to_dict() for r in results]}
 
 
 # --- Admin API: Reminders management ---
