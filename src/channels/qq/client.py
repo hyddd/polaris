@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import re
-import time
 
 import botpy
 from botpy.message import GroupMessage, C2CMessage, Message, DirectMessage
@@ -156,31 +155,21 @@ class _PolarisQQClient(botpy.Client):
                 pass
 
     async def send_voice(self, message, audio_url: str) -> bool:
-        """发送语音消息。audio_url 需要是公网可访问的 WAV/MP3 URL。"""
+        """发送语音消息。使用 srv_send_msg=True 一步完成上传+发送。"""
         try:
-            msgseq = int(time.time() * 1000) % 1000000
             if hasattr(message, "group_openid") and message.group_openid:
-                media = await message._api.post_group_file(
+                await message._api.post_group_file(
                     group_openid=message.group_openid,
                     file_type=3,  # 语音
                     url=audio_url,
-                )
-                await message._api.post_group_message(
-                    group_openid=message.group_openid,
-                    msg_type=7,  # 富媒体
-                    media=media,
-                    msgseq=msgseq,
+                    srv_send_msg=True,  # 上传即发送，避免二次调用超时
                 )
             elif hasattr(message, "author") and getattr(message.author, "user_openid", None):
-                media = await message._api.post_c2c_file(
+                await message._api.post_c2c_file(
                     openid=message.author.user_openid,
                     file_type=3,
                     url=audio_url,
-                )
-                await message._api.post_c2c_message(
-                    openid=message.author.user_openid,
-                    msg_type=7,
-                    media=media,
+                    srv_send_msg=True,
                 )
             else:
                 return False
