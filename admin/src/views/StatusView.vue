@@ -105,9 +105,15 @@ const metrics = ref({})
 const reminders = ref([])
 const loading = ref(true)
 
-const activeReminders = computed(() =>
-  reminders.value.filter(r => r.status !== 'cancelled')
-)
+const activeReminders = computed(() => {
+  const now = new Date()
+  return reminders.value.filter(r => {
+    if (r.status === 'cancelled') return false
+    // 过期的一次性提醒不显示
+    if (r.repeat_rule === 'none' && new Date(r.trigger_time) < now) return false
+    return true
+  })
+})
 
 onMounted(refresh)
 
