@@ -64,6 +64,7 @@ storage:
 server:
   host: "0.0.0.0"
   port: 8000
+  public_url: ""            # 公网地址，用于 QQ 语音消息上传（如 https://example.com）
   admin_token: ""
   rate_limit_max_requests: 30
   rate_limit_window_seconds: 60
