@@ -379,7 +379,7 @@ async function deleteEvent(id) {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   margin-bottom: 24px;
 }
 
@@ -389,6 +389,8 @@ async function deleteEvent(id) {
   grid-template-columns: repeat(7, 1fr);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-primary);
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
 }
 
 .weekday-header {
@@ -405,6 +407,7 @@ async function deleteEvent(id) {
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
   background: var(--border-primary);
+  border-radius: 0 0 12px 12px;
 }
 
 .day-cell {
