@@ -27,7 +27,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import get_session_manager, SessionManager
-from src.core.registry import ToolRegistry
+from src.core.tools.registry import ToolRegistry
 from src.core.context import set_context as _set_ctx
 from src.core.config import config
 
@@ -958,7 +958,7 @@ def resume_reminder(reminder_id: str):
 
 @app.get("/api/status")
 def get_status():
-    from src.core.registry import ToolRegistry
+    from src.core.tools.registry import ToolRegistry
     from src.domains.scheduler import get_scheduler_domain
     from src.core.channel.loader import _discovered_channels
 
