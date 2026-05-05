@@ -35,6 +35,8 @@ def parse_file(attachment: Attachment) -> str | None:
         return _parse_pdf(content)
     elif "word" in mime or filename.endswith(".docx"):
         return _parse_docx(content)
+    elif mime.startswith("audio/") or filename.endswith((".webm", ".wav", ".mp3", ".ogg", ".m4a", ".flac")):
+        return _transcribe_audio(content)
     else:
         # 尝试作为文本读取
         try:
@@ -54,6 +56,22 @@ def _parse_pdf(content: bytes) -> str | None:
         return "[PDF 解析需要安装 pymupdf]"
     except Exception as e:
         logger.warning(f"PDF 解析失败: {e}")
+        return None
+
+
+def _transcribe_audio(content: bytes) -> str | None:
+    """使用 Whisper STT 将音频转为文本。"""
+    try:
+        from src.tools.voice.stt import speech_to_text
+        text = speech_to_text(content)
+        if text:
+            return text
+        return None
+    except ImportError:
+        logger.warning("STT 依赖未安装，无法转写语音")
+        return None
+    except Exception as e:
+        logger.warning(f"语音转写失败: {e}")
         return None
 
 

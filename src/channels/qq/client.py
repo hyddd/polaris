@@ -36,13 +36,15 @@ class _PolarisQQClient(botpy.Client):
 
         text = content.strip()
 
-        # 提取图片附件
+        # 提取图片附件 & 语音消息
         attachments = []
+        voice_texts = []
         msg_attachments = getattr(message, 'attachments', None) or []
         for att in msg_attachments:
             url = getattr(att, 'url', None)
             content_type = getattr(att, 'content_type', '')
             if url and content_type.startswith('image/'):
+                # 图片附件
                 try:
                     import httpx
                     async with httpx.AsyncClient() as client:
@@ -58,6 +60,25 @@ class _PolarisQQClient(botpy.Client):
                             ))
                 except Exception as e:
                     logger.warning(f"下载图片失败: {e}")
+            elif url and ('audio' in content_type or 'voice' in content_type):
+                # 语音消息：下载 → STT → 拼接到文本
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            from src.tools.voice.stt import speech_to_text
+                            recognized = speech_to_text(resp.content)
+                            if recognized:
+                                voice_texts.append(recognized)
+                                logger.info(f"语音识别成功: {recognized[:50]}...")
+                except Exception as e:
+                    logger.warning(f"语音识别失败: {e}")
+
+        # 将语音识别结果拼接到文本
+        if voice_texts:
+            voice_part = "\n".join(voice_texts)
+            text = (text + "\n" + voice_part).strip() if text else voice_part
 
         # 如果既没有文本也没有附件，忽略
         if not text and not attachments:

@@ -53,6 +53,20 @@
           style="display: none"
           @change="handleFileSelect"
         />
+        <button
+          class="mic-btn"
+          :class="{ 'recording': isRecording }"
+          @click="toggleRecording"
+          :disabled="store.loading"
+          :title="isRecording ? '停止录音' : '语音输入'"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
         <textarea
           v-model="input"
           placeholder="Message Polaris"
@@ -115,6 +129,9 @@ const editContent = ref('')
 const imagePreview = ref(null)
 const imageData = ref(null)
 const imageMimeType = ref('')
+const isRecording = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
 
 const suggestions = [
   '今天有什么安排？',
@@ -167,6 +184,50 @@ function removeImage() {
   imagePreview.value = null
   imageData.value = null
   imageMimeType.value = ''
+}
+
+async function toggleRecording() {
+  if (isRecording.value) {
+    // 停止录音
+    mediaRecorder.value.stop()
+    isRecording.value = false
+  } else {
+    // 开始录音
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      audioChunks.value = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.value.push(e.data)
+      }
+
+      recorder.onstop = async () => {
+        const blob = new Blob(audioChunks.value, { type: 'audio/webm' })
+        const reader = new FileReader()
+        reader.onload = async () => {
+          const base64 = reader.result.split(',')[1]
+          const attachments = [{
+            type: 'file',
+            data: base64,
+            mime_type: 'audio/webm',
+            filename: 'voice.webm',
+          }]
+          await store.sendMessage('', attachments)
+          await nextTick()
+          if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+        }
+        reader.readAsDataURL(blob)
+        stream.getTracks().forEach(t => t.stop())
+      }
+
+      recorder.start()
+      mediaRecorder.value = recorder
+      isRecording.value = true
+    } catch (e) {
+      console.error('录音失败:', e)
+    }
+  }
 }
 
 function onEnter(e) {
@@ -327,6 +388,20 @@ watch(() => {
 }
 .attach-btn:hover:not(:disabled) { color: var(--text-primary); }
 .attach-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.mic-btn {
+  background: transparent; border: none; color: var(--text-tertiary); cursor: pointer;
+  padding: 4px; border-radius: 8px; display: flex; align-items: center;
+  transition: color 0.2s; margin-right: 4px;
+}
+.mic-btn:hover:not(:disabled) { color: var(--text-primary); }
+.mic-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.mic-btn.recording {
+  color: #e53e3e; animation: mic-pulse 1.2s infinite ease-in-out;
+}
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
 .input-hint { text-align: center; font-size: 12px; color: var(--text-tertiary); margin-top: 8px; }
 
 /* Image preview */
