@@ -55,7 +55,6 @@ class VoiceConfig(BaseModel):
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
-    port: int = Field(default=8000, gt=0)
     public_url: str = ""  # 服务器公网地址，用于 QQ 语音消息上传
     admin_token: Optional[str] = None
     rate_limit_max_requests: int = 30

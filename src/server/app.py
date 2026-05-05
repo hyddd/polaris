@@ -1,14 +1,9 @@
 """Polaris Agent Server — unified backend for all channels.
 
-Start: python -m src.server  (or: uvicorn src.server:app)
+Start: python run.py  (or: uvicorn src.server:app)
 
-Endpoints:
-  POST /chat          — non-streaming reply (Feishu, QQ, etc.)
-  POST /chat/stream   — SSE streaming reply (Web)
-  POST /sessions      — create new session
-  GET  /sessions      — list all sessions
-  GET  /sessions/{id} — session detail + message history
-  POST /sessions/{id}/activate — switch active session
+Routes are split into modules under src/server/routes/:
+  chat, sessions, config, data, notes, knowledge, reminders, voice, status
 """
 
 import logging
