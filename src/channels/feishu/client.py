@@ -85,7 +85,7 @@ class PolarisFeishuBot:
             message_type = data.event.message.message_type
             sender_id = data.event.sender.sender_id.open_id if data.event.sender.sender_id else "unknown"
 
-            if message_type != "text":
+            if message_type not in ("text", "image"):
                 return
 
             if msg_id in self._seen_messages:
@@ -115,16 +115,41 @@ class PolarisFeishuBot:
 
             chat_id = data.event.message.chat_id
 
-            try:
-                text = json.loads(content_str).get("text", "")
-            except json.JSONDecodeError:
-                text = content_str
+            # 提取文本和附件
+            text = ""
+            attachments = []
 
-            if not text.strip():
+            if message_type == "text":
+                try:
+                    text = json.loads(content_str).get("text", "")
+                except json.JSONDecodeError:
+                    text = content_str
+            elif message_type == "image":
+                try:
+                    image_key = json.loads(content_str).get("image_key", "")
+                    if image_key:
+                        image_data = self._download_image(image_key)
+                        if image_data:
+                            from src.message.models import Attachment
+                            import base64
+
+                            b64 = base64.b64encode(image_data).decode()
+                            attachments.append(
+                                Attachment(
+                                    type="image",
+                                    data=b64,
+                                    mime_type="image/png",
+                                    filename=f"{image_key}.png",
+                                )
+                            )
+                except Exception as e:
+                    logger.warning(f"[feishu] 处理图片消息失败: {e}")
+
+            if not text.strip() and not attachments:
                 return
 
             reaction_id = self._send_typing(msg_id)
-            results = self._process_message(sender_id, text)
+            results = self._process_message(sender_id, text, attachments=attachments or None)
             if reaction_id:
                 self._delete_typing(msg_id, reaction_id)
             for response_text, tool_calls in results:
@@ -137,7 +162,34 @@ class PolarisFeishuBot:
         except Exception as e:
             logger.error(f"[feishu] 处理消息失败: {e}", exc_info=True)
 
-    def _process_message(self, user_id: str, text: str) -> list:
+    def _download_image(self, image_key: str) -> bytes | None:
+        """通过飞书 API 下载图片。"""
+        try:
+            import requests
+
+            # 获取 tenant_access_token
+            token_resp = requests.post(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json={"app_id": self.app_id, "app_secret": self.app_secret},
+            )
+            token = token_resp.json().get("tenant_access_token")
+            if not token:
+                logger.warning("[feishu] 获取 tenant_access_token 失败")
+                return None
+
+            # 下载图片
+            resp = requests.get(
+                f"https://open.feishu.cn/open-apis/im/v1/images/{image_key}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if resp.status_code == 200:
+                return resp.content
+            logger.warning(f"[feishu] 下载图片失败: HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[feishu] 下载飞书图片失败: {e}")
+        return None
+
+    def _process_message(self, user_id: str, text: str, attachments=None) -> list:
         import asyncio
         import threading
         from src.session.manager import get_session_manager
@@ -151,7 +203,7 @@ class PolarisFeishuBot:
         def _run():
             nonlocal result, error
             try:
-                result = asyncio.run(process_message(text, session_mgr, channel=f"feishu:{user_id}"))
+                result = asyncio.run(process_message(text, session_mgr, channel=f"feishu:{user_id}", attachments=attachments))
             except Exception as e:
                 error = e
 
