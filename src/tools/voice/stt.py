@@ -21,8 +21,8 @@ def speech_to_text(audio_data: bytes, language: str = "zh") -> str | None:
         from src.core.config import config
 
         client = openai.OpenAI(
-            api_key=config.get("llm.api_key", ""),
-            base_url=config.get("llm.base_url"),
+            api_key=config.get("voice.api_key") or config.get("llm.api_key", ""),
+            base_url=config.get("voice.base_url") or config.get("llm.base_url"),
         )
 
         # 创建临时文件（Whisper API 需要文件对象）
@@ -35,7 +35,7 @@ def speech_to_text(audio_data: bytes, language: str = "zh") -> str | None:
         try:
             with open(tmp_path, "rb") as f:
                 response = client.audio.transcriptions.create(
-                    model="whisper-1",
+                    model=config.get("voice.stt_model", "whisper-1"),
                     file=f,
                     language=language,
                 )

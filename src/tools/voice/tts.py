@@ -20,12 +20,12 @@ def text_to_speech(text: str, voice: str = "alloy") -> bytes | None:
         from src.core.config import config
 
         client = openai.OpenAI(
-            api_key=config.get("llm.api_key", ""),
-            base_url=config.get("llm.base_url"),
+            api_key=config.get("voice.api_key") or config.get("llm.api_key", ""),
+            base_url=config.get("voice.base_url") or config.get("llm.base_url"),
         )
 
         response = client.audio.speech.create(
-            model="tts-1",
+            model=config.get("voice.tts_model", "tts-1"),
             voice=voice,
             input=text[:4096],  # TTS 有长度限制
         )

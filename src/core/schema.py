@@ -44,10 +44,18 @@ class LoggingConfig(BaseModel):
     format: str = "text"
 
 
+class VoiceConfig(BaseModel):
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    stt_model: str = "whisper-1"
+    tts_model: str = "tts-1"
+
+
 class AppConfig(BaseModel):
     model_config = {"extra": "allow"}
 
     llm: LLMConfig
+    voice: VoiceConfig = VoiceConfig()
     storage: StorageConfig = StorageConfig()
     channels: dict[str, ChannelConfig] = {}
     heartbeat: HeartbeatConfig = HeartbeatConfig()
