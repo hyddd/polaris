@@ -28,12 +28,16 @@ class SchedulerDomain:
     # ------------------------------------------------------------------
 
     def start(self):
-        """启动 executor，从 store 恢复所有 enabled 的 job。"""
+        """启动 executor。"""
         self._executor.start()
+        logger.info("调度域已启动")
+
+    def restore_jobs(self):
+        """从 store 恢复所有 enabled 的 job。需在所有 handler 注册完成后调用。"""
         for job in self._store.list_all():
             if job.enabled:
                 self._register_job(job)
-        logger.info("调度域已启动，已恢复所有启用任务")
+        logger.info("已恢复所有启用任务")
 
     def shutdown(self):
         self._executor.shutdown()
@@ -235,4 +239,11 @@ def _on_startup(cron=None, **kwargs):
     domain.start()
 
 
+def _on_ready(**kwargs):
+    domain = get_scheduler_domain()
+    if domain:
+        domain.restore_jobs()
+
+
 event_bus.subscribe("app:startup", _on_startup)
+event_bus.subscribe("app:ready", _on_ready)

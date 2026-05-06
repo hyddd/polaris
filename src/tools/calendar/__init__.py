@@ -1,1 +1,1 @@
-from .tool import GoogleCalendarTool, create_default
+from .tool import CalendarTool, create_default

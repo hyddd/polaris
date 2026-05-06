@@ -27,10 +27,7 @@ channels:
     bot_secret: ""
 
 tools:
-  calendar:
-    use_mock: true
-    google_credentials: ""
-    google_calendar_id: "primary"
+  calendar: {}
   web_search:
     api_key: ""
     api_base: "https://api.tavily.com"

@@ -5,7 +5,7 @@ from . import calendar
 from . import todos
 from . import notes
 from . import persona
+from . import scheduler
 from . import reminder
 from . import rag
-from . import scheduler
 from . import voice

@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
 
     # 通知各模块：框架已就绪（各 tools/channels/heartbeat 可自初始化）
     from src.core.infra import event_bus
-    event_bus.publish("app:startup", cron=cron, channels=channels)
+    event_bus.publish("app:startup", _after="app:ready", cron=cron, channels=channels)
 
     app.state.cron = cron
 

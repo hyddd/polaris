@@ -23,8 +23,7 @@ channels:
     bot_secret: ""
 
 tools:
-  calendar:
-    use_mock: true
+  calendar: {}
   web_search:
     api_key: ""
 

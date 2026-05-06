@@ -4,17 +4,14 @@ from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, field_validator
 
-from src.core.config import config
-
 logger = logging.getLogger("polaris.tools.calendar")
 
 
-def create_default() -> "GoogleCalendarTool":
-    """Factory for auto-discovery. Creates a GoogleCalendarTool with default config."""
+def create_default() -> "CalendarTool":
+    """Factory for auto-discovery. Creates a CalendarTool with default config."""
     from src.core.config import config
-    return GoogleCalendarTool(
+    return CalendarTool(
         data_file=str(config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))),
-        use_mock=True,
     )
 
 
@@ -39,7 +36,7 @@ class CalendarInput(BaseModel):
         return v
 
 
-class GoogleCalendarTool(BaseTool):
+class CalendarTool(BaseTool):
     name: str = "calendar"
     description: str = """管理日历事件。
 
@@ -53,7 +50,6 @@ class GoogleCalendarTool(BaseTool):
 - "推迟会议1小时" → search(keyword="会议") → update(event_id="xxx", updates={"time":"原时间+1h"})"""
     args_schema: type[BaseModel] = CalendarInput
     data_file: str = ""
-    use_mock: bool = config.get("tools.calendar.use_mock", False)
 
     def _resolve_event_id(self, domain, event_id: str | None,
                           title: str | None, date: str | None) -> str | None:
