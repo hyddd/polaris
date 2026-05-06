@@ -29,7 +29,6 @@ tools:
     api_key: ""
 
 server:
-  port: 8000
   admin_token: ""
   max_sessions: 10
   rate_limit_max_requests: 30

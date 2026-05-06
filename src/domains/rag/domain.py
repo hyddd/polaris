@@ -85,6 +85,8 @@ class RAGDomain:
         # 保存元数据
         self._save_doc_meta(doc_id, filename, len(chunks), tags or [])
 
+        event_bus.publish("rag:document_indexed",
+                          doc_id=doc_id, filename=filename, chunk_count=len(chunks))
         return {"doc_id": doc_id, "filename": filename, "chunk_count": len(chunks)}
 
     def list_documents(self) -> list[dict]:
@@ -94,7 +96,10 @@ class RAGDomain:
     def delete_document(self, doc_id: str) -> bool:
         """删除文档及其向量索引。"""
         self._store.remove_chunks(doc_id)
-        return self._remove_doc_meta(doc_id)
+        removed = self._remove_doc_meta(doc_id)
+        if removed:
+            event_bus.publish("rag:document_removed", doc_id=doc_id)
+        return removed
 
     # ------------------------------------------------------------------
     # 文档元数据管理

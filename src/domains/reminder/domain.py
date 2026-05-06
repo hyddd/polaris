@@ -157,6 +157,9 @@ class ReminderDomain:
             logger.warning(f"触发失败，提醒不存在: {reminder_id}")
             return
         self._handler.handle(reminder)
+        event_bus.publish("reminder:triggered",
+                          reminder_id=reminder.id, title=reminder.title,
+                          channel=reminder.channel, session_id=reminder.session_id)
 
     # ------------------------------------------------------------------
     # 调度委托 SchedulerDomain

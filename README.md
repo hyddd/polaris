@@ -121,6 +121,8 @@ event_bus.publish("config:reload")              # 发布
 | `scheduler:job_*` | SchedulerDomain | — |
 | `reminder:reminder_*` | ReminderDomain | — |
 
+完整事件列表见 [EventBus 事件参考](docs/eventbus.md)。
+
 ### 新增工具
 
 1. 创建 `src/tools/weather/tool.py`，实现 `WeatherTool(BaseTool)` + `create_default()`
@@ -169,7 +171,6 @@ python run.py
 
 # 公开试用实例（端口 8800，独立数据，每IP每日50条消息）
 mkdir -p /opt/polaris-demo/data
-cp data/config.yaml /opt/polaris-demo/data/
 # 编辑 /opt/polaris-demo/data/config.local.yaml（API key 等）
 python run.py --home /opt/polaris-demo --port 8800 --demo 50
 ```

@@ -162,6 +162,9 @@ class SchedulerDomain:
                     logger.info(f"一次性任务已执行并清理: {job.id}")
             except Exception:
                 logger.exception(f"任务执行异常: {job.id}")
+                event_bus.publish("scheduler:job_missed",
+                                  job_id=job.id, name=job.name,
+                                  scheduled_time=datetime.now().isoformat())
 
         if job.trigger_type == "cron":
             self._executor.add_cron_job(
