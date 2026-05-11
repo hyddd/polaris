@@ -10,6 +10,7 @@ Commands:
   /reset          — Reset conversation memory
   /compact        — Manually trigger context compression
   /status         — Show session + token stats
+  /cache          — Show LLM prompt cache statistics
   /help           — Show available commands
 """
 
@@ -34,6 +35,9 @@ def handle_command(text: str, session_mgr: SessionManager, channel: str = "") ->
 
     if cmd == "/status":
         return _status(session_mgr, channel)
+
+    if cmd == "/cache":
+        return _cache(session_mgr, channel)
 
     if cmd == "/help":
         return _help()
@@ -200,6 +204,27 @@ def _status(session_mgr: SessionManager, channel: str = "default") -> str:
     return "\n".join(lines)
 
 
+def _cache(session_mgr: SessionManager, channel: str = "default") -> str:
+    session = session_mgr.active_session(channel)
+    stats = session.cache_stats
+    hit = stats.get("hit", 0)
+    miss = stats.get("miss", 0)
+    calls = stats.get("calls", 0)
+    total = hit + miss
+    hit_rate = (hit / total * 100) if total > 0 else 0
+
+    lines = [
+        f"📊 LLM 缓存统计",
+        "",
+        f"• 调用次数: {calls}",
+        f"• 命中 tokens: {hit}",
+        f"• 未命中 tokens: {miss}",
+        f"• 命中率: {hit_rate:.1f}%",
+    ]
+
+    return "\n".join(lines)
+
+
 def _reload() -> str:
     """Re-read YAML config files and publish config:reload event."""
     try:
@@ -236,6 +261,7 @@ def _help() -> str:
         "/session <id|名称> — 切换会话\n"
         "/rename <名称> — 重命名当前会话\n"
         "/status — 会话状态\n"
+        "/cache — 查看缓存命中率统计\n"
         "/compact — 压缩上下文\n"
         "/reset — 重置会话记忆\n"
         "/reload — 热重载配置\n"

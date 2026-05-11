@@ -32,6 +32,7 @@ class Session:
         "personality": "", "timezone": "Asia/Shanghai", "notes": "",
     })
     pending_action: dict | None = None
+    cache_stats: dict = field(default_factory=lambda: {"hit": 0, "miss": 0, "calls": 0})
 
     def get_message(self, message_id: str):
         """Get a message by ID from memory."""
@@ -73,6 +74,7 @@ class Session:
             "summary_tokens": self.compressor._summary_tokens,
             "persona": self.persona,
             "pending_action": self.pending_action,
+            "cache_stats": self.cache_stats,
         }
 
     @staticmethod
@@ -138,6 +140,7 @@ class Session:
             metadata={"message_count": data.get("message_count", 0)},
             persona=Session._parse_persona(data.get("persona", {})),
             pending_action=data.get("pending_action"),
+            cache_stats=data.get("cache_stats", {"hit": 0, "miss": 0, "calls": 0}),
         )
 
 
@@ -266,6 +269,7 @@ class SessionManager:
         session.compressor.summary = ""
         session.compressor._summary_tokens = 0
         session.metadata["message_count"] = 0
+        session.cache_stats = {"hit": 0, "miss": 0, "calls": 0}
         self.save()
 
     def record_message(self, user_msg: str, assistant_msg: str, channel: str = "default"):

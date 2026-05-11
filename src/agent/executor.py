@@ -71,6 +71,7 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 工具返回空结果时如实告知，不编造数据
 - 信任工具返回的结果。工具返回成功消息（如"已更新""已添加""已删除"）时，直接告知用户操作成功，不要说"遇到了问题""无法完成"等。工具结果就是事实，不需要质疑
 - 用中文回复，简洁直接
+- 如果你需要知道当前时间，请调用 `get_current_time` 工具获取
 """
 
 AGENT_PROMPT = ChatPromptTemplate.from_messages([
@@ -125,8 +126,8 @@ def agent_node(state: AgentState) -> dict:
         system_prompt += f"[对话摘要]\n{summary}\n\n"
     system_prompt += UNIFIED_SYSTEM_PROMPT
 
-    # Time goes at the end so the system prompt + history stay cacheable
-    llm_messages = list(recent) + [SystemMessage(content=f"当前时间：{now}")]
+    # Time removed from system prompt to maximize cache hit rate; LLM calls get_current_time tool when needed
+    llm_messages = list(recent)
 
     llm = _get_llm()
     if tools:

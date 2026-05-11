@@ -122,6 +122,9 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
 
     if result.get("final_response"):
         # 系统命令不残留记忆
+        if text.strip() == "/reset":
+            # /reset 已清除记忆，不要恢复旧消息
+            return (response_text, tool_calls)
         memory.set_messages(previous_messages)
         return (response_text, tool_calls)
 
