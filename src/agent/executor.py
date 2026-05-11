@@ -143,6 +143,22 @@ def agent_node(state: AgentState) -> dict:
     else:
         response = chain.invoke({"system_prompt": system_prompt, "messages": llm_messages})
 
+    # Update session cache stats from usage_metadata
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        usage = response.usage_metadata
+        input_tokens = usage.get("input_tokens", 0)
+        cache_read = usage.get("input_token_details", {}).get("cache_read", 0)
+        cache_miss = input_tokens - cache_read
+        channel = state.get("channel", "default")
+        try:
+            session_mgr = get_session_manager()
+            session = session_mgr.active_session(channel)
+            session.cache_stats["hit"] += cache_read
+            session.cache_stats["miss"] += cache_miss
+            session.cache_stats["calls"] += 1
+        except Exception:
+            pass
+
     return {"messages": [response]}
 
 
