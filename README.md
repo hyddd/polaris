@@ -30,6 +30,7 @@
 | persona | 会话独立人格（名称/身份/性格/称呼） |
 | rag | 笔记内容语义检索 |
 | voice | MiMo TTS 语音合成，支持预置音色、音频标签、自然语言风格控制 |
+| get_current_time | 获取当前精确时间，LLM 需要时自主调用 |
 
 **多通道，插件配置驱动。** 飞书 WebSocket Bot、QQ botpy SDK——所有通道共享会话记忆。新增通道只需写实现 + YAML 配置，不动框架代码。超长消息按段落/句子边界智能分段。Admin Web UI 由 FastAPI 直接托管。
 
@@ -40,6 +41,8 @@
 **心跳定时任务。** 可配置的间隔触发机制，读取提示词文件自动调用 LLM 处理，结果推送到绑定 channel。适合定时汇报、每日总结等场景。
 
 **Token 预算感知的上下文压缩。** 基于 tiktoken 精确计数，超出阈值时自动摘要压缩（LLM 摘要层 + 最近消息层），重启无损恢复。
+
+**LLM 提示词缓存优化。** 通过 `get_current_time` 工具按需调用提供动态时间戳，最大化 prompt cache 命中率。支持 `/cache` 命令实时查看会话级缓存统计。
 
 **多模态图片理解。** 支持发送图片，AI 自动识别内容并回复。飞书和 QQ 通道均支持图片消息解析。
 
@@ -186,6 +189,7 @@ python run.py --home /opt/polaris-demo --port 8800 --demo 50
 | `/session <id\|名称>` | 切换会话 |
 | `/rename <名称>` | 重命名当前会话 |
 | `/status` | 会话状态（消息数、Token 用量） |
+| `/cache` | LLM 缓存命中率统计 |
 | `/compact` | 手动触发上下文压缩 |
 | `/reset` | 重置当前会话记忆 |
 | `/reload` | 热重载配置（无需重启） |
