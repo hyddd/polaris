@@ -96,7 +96,10 @@ from .routes.status import router as status_router
 
 # --- Create app and register middleware ---
 
+from .middleware.access_log import AccessLogMiddleware
+
 app = FastAPI(title="Polaris Agent Server", lifespan=lifespan)
+app.add_middleware(AccessLogMiddleware)
 app.middleware("http")(demo_limit)
 app.middleware("http")(admin_auth)
 app.middleware("http")(rate_limit)

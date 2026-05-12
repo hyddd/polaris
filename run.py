@@ -55,6 +55,7 @@ def main():
         port=args.port,
         loop="asyncio",
         reload=args.dev,
+        access_log=False,
     )
 
 

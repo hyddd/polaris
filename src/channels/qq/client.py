@@ -270,6 +270,12 @@ class QQChannel(ChannelPlugin):
             direct_message=True,
         )
 
+        # botpy 自带 handler 格式不统一，清除后让它走 root logger 统一格式
+        for name in ("botpy", "botpy.gateway", "botpy.connection", "botpy.http"):
+            logging.getLogger(name).handlers.clear()
+            logging.getLogger(name).propagate = True
+        logging.getLogger("botpy.gateway").setLevel(logging.WARNING)
+
         logger.info(f"[qq] 启动 QQ Bot (appid={appid[:8]}...)")
         self._client = _PolarisQQClient(intents=intents, is_sandbox=False)
         self._client.run(appid=appid, secret=secret)

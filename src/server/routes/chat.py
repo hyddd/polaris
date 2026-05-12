@@ -1,6 +1,5 @@
 """Chat endpoints — non-streaming and SSE streaming."""
 import json
-import logging
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, Request
@@ -16,8 +15,6 @@ from src.core.infra import set_context as _set_ctx, get_session_lock
 from src.message import process_message
 from src.message.models import Attachment
 from src.message.router import _build_message
-
-logger = logging.getLogger("polaris.llm")
 
 router = APIRouter()
 
@@ -246,21 +243,6 @@ async def chat_stream(req: ChatRequest, request: Request):
                         output = event.get("data", {}).get("output", {})
                         if isinstance(output, dict) and "pending_action" in output:
                             new_pending_action = output["pending_action"]
-
-                # Log LLM cache statistics from chat model end event
-                elif kind == "on_chat_model_end":
-                    output = event.get("data", {}).get("output", None)
-                    if output and hasattr(output, "usage_metadata") and output.usage_metadata:
-                        usage = output.usage_metadata
-                        input_tokens = usage.get("input_tokens", 0)
-                        cache_read = usage.get("input_token_details", {}).get("cache_read", 0)
-                        cache_miss = input_tokens - cache_read
-                        total_prompt = input_tokens
-                        hit_rate = (cache_read / total_prompt * 100) if total_prompt > 0 else 0
-                        logger.info(
-                            f"[llm_cache] hit={cache_read} miss={cache_miss} "
-                            f"total_prompt={total_prompt} hit_rate={hit_rate:.1f}%"
-                        )
 
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 

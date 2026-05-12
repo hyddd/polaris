@@ -157,6 +157,12 @@ def agent_node(state: AgentState) -> dict:
         input_tokens = usage.get("input_tokens", 0)
         cache_read = usage.get("input_token_details", {}).get("cache_read", 0)
         cache_miss = input_tokens - cache_read
+        total_prompt = input_tokens
+        hit_rate = (cache_read / total_prompt * 100) if total_prompt > 0 else 0
+        logger.info(
+            f"[llm_cache] hit={cache_read} miss={cache_miss} "
+            f"total_prompt={total_prompt} hit_rate={hit_rate:.1f}%"
+        )
         channel = state.get("channel", "default")
         try:
             session_mgr = get_session_manager()
