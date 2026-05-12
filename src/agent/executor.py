@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import ToolMessage, AIMessage, SystemMessage
+from langchain_core.messages import ToolMessage, AIMessage, SystemMessage, HumanMessage
 from src.core.llm.openai import create_chat_model
 
 if TYPE_CHECKING:
@@ -71,7 +71,6 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 工具返回空结果时如实告知，不编造数据
 - 信任工具返回的结果。工具返回成功消息（如"已更新""已添加""已删除"）时，直接告知用户操作成功，不要说"遇到了问题""无法完成"等。工具结果就是事实，不需要质疑
 - 用中文回复，简洁直接
-- 如果你需要知道当前时间，请调用 `get_current_time` 工具获取
 """
 
 AGENT_PROMPT = ChatPromptTemplate.from_messages([
@@ -126,8 +125,17 @@ def agent_node(state: AgentState) -> dict:
         system_prompt += f"[对话摘要]\n{summary}\n\n"
     system_prompt += UNIFIED_SYSTEM_PROMPT
 
-    # Time removed from system prompt to maximize cache hit rate; LLM calls get_current_time tool when needed
-    llm_messages = list(recent)
+    # Time stamp at end of last human message to avoid cache breakage
+    # LLM understands time as context, not user intent
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if recent:
+        # Make a mutable copy and append time to last human message
+        recent = list(recent)
+        last_msg = recent[-1]
+        if isinstance(last_msg, HumanMessage):
+            recent[-1] = HumanMessage(content=f"{last_msg.content}\n\n[当前时间: {now}]")
+    
+    llm_messages = recent
 
     llm = _get_llm()
     if tools:
