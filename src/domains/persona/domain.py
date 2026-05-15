@@ -31,7 +31,7 @@ class PersonaDomain:
         persona = Persona.from_dict(session.persona)
         persona.update(kwargs)
         session.persona = persona.to_dict()
-        self._session_mgr.save()
+        self._session_mgr.save_session(session.session_id)
 
         event_bus.publish("persona:persona_changed",
                           session_id=session.session_id,

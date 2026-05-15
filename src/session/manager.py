@@ -43,7 +43,7 @@ class Session:
         return self.memory.update_message(message_id, new_content)
 
     def to_dict(self) -> dict:
-        """Serialize for persistence — compressed summary + recent messages only."""
+        """Serialize for persistence."""
         all_messages = self.memory.get_history()
 
         # Serialize what's in memory (already compacted if needed)
@@ -250,7 +250,7 @@ class SessionManager:
         if session_id not in self._sessions:
             return False
         self._sessions[session_id].name = name
-        self.save()
+        self.save_session(session_id)
         return True
 
     def delete(self, session_id: str) -> bool:
@@ -274,18 +274,28 @@ class SessionManager:
         session.compressor._summary_tokens = 0
         session.metadata["message_count"] = 0
         session.cache_stats = {"hit": 0, "miss": 0, "calls": 0}
-        self.save()
+        self.save_session(session.session_id)
 
     def record_message(self, user_msg: str, assistant_msg: str, channel: str = "default"):
         """Called after each agent interaction to update metadata."""
         session = self.active_session(channel)
         session.metadata["message_count"] = session.metadata.get("message_count", 0) + 2
         session.last_active = datetime.now(timezone.utc).isoformat()
-        self.save()
+        self.save_session(session.session_id)
+
+    def save_session(self, session_id: str) -> None:
+        """Save a single session to disk."""
+        session = self._sessions.get(session_id)
+        if not session:
+            return
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        path = SESSIONS_DIR / f"{session_id}.json"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(session.to_dict(), f, ensure_ascii=False, indent=2)
 
     def save(self):
+        """Save all sessions to disk."""
         SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-        # Save each session individually
         for session in self._sessions.values():
             path = SESSIONS_DIR / f"{session.session_id}.json"
             with open(path, "w", encoding="utf-8") as f:

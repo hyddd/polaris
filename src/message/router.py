@@ -65,10 +65,15 @@ async def process_message(text: str, session_mgr: SessionManager, channel: str =
 
 
 async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default", attachments: list[Attachment] | None = None) -> tuple[str, list[dict]]:
-    """统一消息处理入口。
+    """统一消息处理入口。系统命令提前处理，不进 agent graph。"""
+    # 系统命令提前处理，不进 agent graph、不残留记忆
+    stripped = text.strip()
+    if stripped.startswith("/"):
+        from src.session.commands import handle_command
+        response = handle_command(stripped, session_mgr, channel)
+        if response:
+            return (response, [])
 
-    系统命令由 Agent Graph 的 command_node 拦截，不经过 LLM，不残留记忆。
-    """
     session = session_mgr.active_session(channel)
     memory = session.memory
     agent = get_agent()
@@ -100,8 +105,9 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
         response_text = _extract_response(result)
         tool_calls = _extract_tool_calls(result)
     except Exception as e:
-        # Roll back memory and return error
-        memory.set_messages(previous_messages)
+        # 只在命令未修改内存时回滚（命令可能已清空/修改了内存）
+        if not (result and result.get("final_response")):
+            memory.set_messages(previous_messages)
         agent_logger = logging.getLogger("polaris.agent")
 
         # If agent.invoke succeeded (tools may have executed) but post-processing failed,
@@ -121,17 +127,12 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
     session.pending_action = result.get("pending_action")
 
     if result.get("final_response"):
-        # 系统命令不残留记忆
-        if text.strip() == "/reset":
-            # /reset 已清除记忆，不要恢复旧消息
-            return (response_text, tool_calls)
+        # confirm_node 返回的确认/取消结果，不残留记忆
         memory.set_messages(previous_messages)
         return (response_text, tool_calls)
 
     # result["messages"] is the full graph state (old + human + agent output)
     agent_messages = result.get("messages", []) if result else []
-    agent_logger = logging.getLogger("polaris.agent")
-    agent_logger.info(f"[msg] previous={len(previous_messages)} agent_result={len(agent_messages)}")
     if agent_messages:
         memory.set_messages(list(agent_messages))
     else:

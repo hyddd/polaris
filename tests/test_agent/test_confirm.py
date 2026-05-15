@@ -2,7 +2,7 @@
 from unittest.mock import patch, MagicMock
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from src.agent.executor import tool_node
-from src.agent.graph import command_node
+from src.agent.graph import confirm_node
 
 
 def test_tool_node_intercepts_delete():
@@ -33,8 +33,8 @@ def test_tool_node_intercepts_delete():
     assert "确认" in result["messages"][0].content
 
 
-def test_command_node_confirms_pending_action():
-    """command_node should execute pending action on '确认'."""
+def test_confirm_node_confirms_pending_action():
+    """confirm_node should execute pending action on '确认'."""
     state = {
         "messages": [HumanMessage(content="确认")],
         "pending_action": {
@@ -52,15 +52,15 @@ def test_command_node_confirms_pending_action():
         mock_tool.invoke.return_value = "已删除待办：完成设计文档"
         mock_registry_cls.get_instance.return_value.get.return_value = mock_tool
 
-        result = command_node(state)
+        result = confirm_node(state)
 
     assert result["pending_action"] is None
     assert "已删除" in result["final_response"]
     mock_tool.invoke.assert_called_once_with({"action": "delete", "todo_id": "todo-1"})
 
 
-def test_command_node_cancels_pending_action():
-    """command_node should clear pending action on '取消'."""
+def test_confirm_node_cancels_pending_action():
+    """confirm_node should clear pending action on '取消'."""
     state = {
         "messages": [HumanMessage(content="取消")],
         "pending_action": {
@@ -72,14 +72,14 @@ def test_command_node_cancels_pending_action():
         "final_response": "",
     }
 
-    result = command_node(state)
+    result = confirm_node(state)
 
     assert result["pending_action"] is None
     assert "已取消" in result["final_response"]
 
 
-def test_command_node_clears_pending_on_other_input():
-    """command_node should clear pending action when user says something else."""
+def test_confirm_node_clears_pending_on_other_input():
+    """confirm_node should clear pending action when user says something else."""
     state = {
         "messages": [HumanMessage(content="帮我看看明天的日程")],
         "pending_action": {
@@ -91,7 +91,7 @@ def test_command_node_clears_pending_on_other_input():
         "final_response": "",
     }
 
-    result = command_node(state)
+    result = confirm_node(state)
 
     assert result.get("pending_action") is None
     # Should not have final_response — pass through to agent

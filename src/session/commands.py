@@ -63,10 +63,6 @@ def handle_command(text: str, session_mgr: SessionManager, channel: str = "") ->
     return None
 
 
-def is_command(text: str) -> bool:
-    return text.strip().startswith("/")
-
-
 _WELCOME = (
     "\n\n你好！我是 Polaris，你的私人 AI 助手。我可以帮你：\n\n"
     "📅 **日程管理** — 「帮我建一个明天下午 3 点的会议」\n"
@@ -174,7 +170,7 @@ def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
     for msg in recent:
         session.memory.add_message(msg)
     session.metadata["message_count"] = len(recent)
-    session_mgr.save()
+    session_mgr.save_session(session.session_id)
 
     after = len(recent)
     return (
