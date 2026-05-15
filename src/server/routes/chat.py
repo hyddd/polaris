@@ -194,6 +194,7 @@ async def chat_stream(req: ChatRequest, request: Request):
     async def generate() -> AsyncGenerator[str, None]:
         full_response = ""
         new_pending_action = None
+        final_messages = None
 
         # Non-blocking try_lock: if another request is already processing
         # for this session, return an error instead of blocking the SSE stream.
@@ -236,13 +237,18 @@ async def chat_stream(req: ChatRequest, request: Request):
                         tool_output = tool_output.content
                     yield f"event: tool_result\ndata: {json.dumps({'tool': tool_name, 'result': str(tool_output), 'call_id': call_id}, ensure_ascii=False)}\n\n"
 
-                # Track pending_action changes from tool_node or command_node
+                # Track pending_action changes and capture final messages
                 elif kind == "on_chain_end":
                     node_name = event.get("name", "")
+                    output = event.get("data", {}).get("output", {})
                     if node_name in ("tool", "tools", "command"):
-                        output = event.get("data", {}).get("output", {})
                         if isinstance(output, dict) and "pending_action" in output:
                             new_pending_action = output["pending_action"]
+                    # Capture final graph state with full message history
+                    if node_name in ("agent", "__end__") and isinstance(output, dict):
+                        msgs = output.get("messages")
+                        if msgs:
+                            final_messages = msgs
 
             yield f"event: done\ndata: {json.dumps({'session_id': session.session_id}, ensure_ascii=False)}\n\n"
 
@@ -255,11 +261,18 @@ async def chat_stream(req: ChatRequest, request: Request):
             session_lock.release()
 
         if full_response:
-            # Strip intermediate tool messages, keep only user + final AI reply
-            memory.set_messages(old_messages + [
-                human_msg,
-                AIMessage(content=full_response),
-            ])
+            import logging as _log
+            _log.getLogger("polaris.agent").info(
+                f"[msg] old={len(old_messages)} final={len(final_messages) if final_messages else 'None'}"
+            )
+            if final_messages:
+                # final_messages is the full graph state (old + human + agent output)
+                memory.set_messages(list(final_messages))
+            else:
+                memory.set_messages(old_messages + [
+                    human_msg,
+                    AIMessage(content=full_response),
+                ])
             session_mgr.record_message(message_content, full_response, channel)
 
         # Save pending_action to session for next invocation

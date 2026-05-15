@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from src.core.memory import MemoryManager
 from src.session.compressor import ConversationCompressor
 from src.core.config import config
@@ -43,24 +43,21 @@ class Session:
         return self.memory.update_message(message_id, new_content)
 
     def to_dict(self) -> dict:
-        """Serialize for persistence. Only clean conversation messages (human + ai without tool_calls)."""
+        """Serialize for persistence — compressed summary + recent messages only."""
         all_messages = self.memory.get_history()
-        # Only keep clean conversation messages — no ToolMessage, no AIMessage with tool_calls
-        clean = [m for m in all_messages
-                 if m.type in ("human", "ai")
-                 and not (hasattr(m, "tool_calls") and m.tool_calls)]
-        if clean:
-            _, recent = self.compressor.process(list(clean))
-        else:
-            recent = []
 
+        # Serialize what's in memory (already compacted if needed)
         serialized = []
-        for m in recent:
+        for m in all_messages:
             msg_dict = {"type": m.type, "content": m.content if hasattr(m, "content") else ""}
             if hasattr(m, "tool_calls") and m.tool_calls:
                 msg_dict["tool_calls"] = m.tool_calls
-            elif hasattr(m, "tool_call_id") and m.tool_call_id:
+            if hasattr(m, "tool_call_id") and m.tool_call_id:
                 msg_dict["tool_call_id"] = m.tool_call_id
+            if hasattr(m, "tool_calls") and m.tool_calls:
+                rc = getattr(m, "additional_kwargs", {}).get("reasoning_content")
+                if rc:
+                    msg_dict["reasoning_content"] = rc
             serialized.append(msg_dict)
 
         return {
@@ -123,7 +120,14 @@ class Session:
                 kwargs = {}
                 if m.get("tool_calls"):
                     kwargs["tool_calls"] = m["tool_calls"]
+                if m.get("reasoning_content"):
+                    kwargs["additional_kwargs"] = {"reasoning_content": m["reasoning_content"]}
                 restored_messages.append(AIMessage(content=content, **kwargs))
+            elif msg_type == "tool":
+                restored_messages.append(ToolMessage(
+                    content=content,
+                    tool_call_id=m.get("tool_call_id", ""),
+                ))
         memory.set_messages(restored_messages)
 
         compressor = ConversationCompressor()

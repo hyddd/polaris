@@ -29,13 +29,13 @@ def _patch_reasoning_content(llm: ChatOpenAI) -> None:
 
         payload = orig_payload(input_, stop=stop, **kwargs)
 
-        # Inject reasoning_content into assistant message dicts
+        # Inject reasoning_content into assistant messages that have tool_calls
         if rc_map:
             for i, m in enumerate(messages):
                 rc = rc_map.get(id(m))
                 if rc and i < len(payload.get("messages", [])):
                     msg_dict = payload["messages"][i]
-                    if msg_dict.get("role") == "assistant":
+                    if msg_dict.get("role") == "assistant" and msg_dict.get("tool_calls"):
                         msg_dict["reasoning_content"] = rc
         return payload
 

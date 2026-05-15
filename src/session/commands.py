@@ -162,13 +162,20 @@ def _compact(session_mgr: SessionManager, channel: str = "default") -> str:
         return "当前没有对话内容需要压缩。"
 
     compressor = session.compressor
+    before = len(messages)
+
+    # Force compression: temporarily set threshold to 0
+    saved_trigger = compressor.compress_trigger
+    compressor.compress_trigger = 0
     summary, recent = compressor.process(list(messages))
+    compressor.compress_trigger = saved_trigger
 
     session.memory.clear_messages()
     for msg in recent:
         session.memory.add_message(msg)
+    session.metadata["message_count"] = len(recent)
+    session_mgr.save()
 
-    before = len(messages)
     after = len(recent)
     return (
         f"上下文已压缩。\n"

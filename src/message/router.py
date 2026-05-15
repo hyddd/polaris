@@ -128,12 +128,17 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
         memory.set_messages(previous_messages)
         return (response_text, tool_calls)
 
-    # Persist only user msg + final AI reply. Strip intermediate tool messages.
-    # Keep the original human message with its ID
-    memory.set_messages(previous_messages + [
-        human_msg,
-        AIMessage(content=response_text),
-    ])
+    # result["messages"] is the full graph state (old + human + agent output)
+    agent_messages = result.get("messages", []) if result else []
+    agent_logger = logging.getLogger("polaris.agent")
+    agent_logger.info(f"[msg] previous={len(previous_messages)} agent_result={len(agent_messages)}")
+    if agent_messages:
+        memory.set_messages(list(agent_messages))
+    else:
+        memory.set_messages(previous_messages + [
+            human_msg,
+            AIMessage(content=response_text),
+        ])
     session_mgr.record_message(text, response_text, channel)
 
     return (response_text, tool_calls)
