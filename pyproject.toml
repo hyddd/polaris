@@ -6,12 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "langgraph",
-    "langchain",
+    "langchain-core",
     "langchain-openai",
     "chromadb",
-    "google-auth",
-    "google-api-python-client",
-    "python-dotenv",
     "pyyaml",
     "tiktoken",
     "lark-oapi",

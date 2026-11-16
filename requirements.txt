@@ -1,21 +1,3 @@
-# Generated via: pip freeze > requirements.txt
-# Source of truth: pyproject.toml (install with: pip install -e ".[dev]")
-#
-langgraph
-langchain
-langchain-openai
-chromadb
-google-auth
-google-api-python-client
-python-dotenv
-pyyaml
-tiktoken
-lark-oapi
-fastapi
-uvicorn
-httpx
-PyMySQL>=1.1,<2
-qq-botpy
-apscheduler>=3.10,<4
-pytest
-pytest-asyncio
+# 依赖以 pyproject.toml 为准，本文件只是兼容 pip install -r requirements.txt 的写法，不要在这里单独添加依赖。
+# 等价于 pip install -e ".[cli]"；参与开发时改用 pip install -e ".[dev,cli]"
+-e .[cli]
