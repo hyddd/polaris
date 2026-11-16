@@ -14,6 +14,7 @@ lark-oapi
 fastapi
 uvicorn
 httpx
+PyMySQL>=1.1,<2
 qq-botpy
 apscheduler>=3.10,<4
 pytest

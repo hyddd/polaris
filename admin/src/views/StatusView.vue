@@ -9,6 +9,26 @@
 
     <div v-if="loading" class="empty">加载中...</div>
     <div v-else class="status-grid">
+      <!-- Instance -->
+      <div class="status-card" v-if="status.instance">
+        <h3>服务模式</h3>
+        <div class="status-list">
+          <div class="status-item">
+            <span class="status-name">{{ status.instance.mode_label }} · {{ status.instance.name }}</span>
+            <span :class="['badge', status.instance.mode === 'team' ? 'badge-warning' : 'badge-success']">
+              {{ status.instance.mode === 'team' ? '只有公共数据' : (status.instance.public ? '私人 + 公共' : '只有私人数据') }}
+            </span>
+          </div>
+          <div v-if="status.team" class="status-item">
+            <span class="status-name">团队服务 {{ status.team.url }}</span>
+            <span :class="['badge', status.team.ok ? 'badge-success' : 'badge-warning']">
+              {{ status.team.ok ? `已连接：${status.team.name}` : '连不上' }}
+            </span>
+          </div>
+          <div v-if="status.team && !status.team.ok" class="empty-hint">{{ status.team.error }}</div>
+        </div>
+      </div>
+
       <!-- Channels -->
       <div class="status-card">
         <h3>通道状态</h3>

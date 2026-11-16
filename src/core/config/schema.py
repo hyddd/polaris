@@ -19,6 +19,7 @@ class LLMConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
+    sessions_dir: str = "data/sessions"
     calendar_file: str = "data/calendar.json"
     todos_file: str = "data/todos.json"
     reminders_file: str = "data/reminders.json"
@@ -36,7 +37,7 @@ class HeartbeatConfig(BaseModel):
     enabled: bool = False
     interval_minutes: int = Field(default=60, gt=0)
     channel: str = ""
-    prompt_file: str = "data/heartbeat.md"
+    prompt_file: str = "config/heartbeat.md"
 
 
 class LoggingConfig(BaseModel):
@@ -59,7 +60,7 @@ class ServerConfig(BaseModel):
     admin_token: Optional[str] = None
     rate_limit_max_requests: int = 30
     rate_limit_window_seconds: int = 60
-    max_sessions: int = 10
+    max_sessions: int = 100
 
 
 class AppConfig(BaseModel):

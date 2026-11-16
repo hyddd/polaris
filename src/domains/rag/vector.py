@@ -25,7 +25,7 @@ def get_embedding_function():
 
     api_key = config.get("embedding.api_key", "")
     if not api_key:
-        raise RuntimeError("未配置 embedding.api_key，向量检索不可用。请在 config.yaml 中配置。")
+        raise RuntimeError("未配置 embedding.api_key，向量检索不可用。请在 config/config.local.yaml 中配置。")
     base_url = config.get("embedding.base_url", "")
     model = config.get("embedding.model", "netease-youdao/bce-embedding-base_v1")
     kwargs = {"api_key": api_key, "model_name": model}
@@ -96,7 +96,7 @@ def add_note_to_index(filename: str, title: str, content: str, tags: list[str],
     collection.upsert(
         ids=[note_id],
         documents=[content],
-        metadatas=[{"title": title, "tags": ",".join(tags)}],
+        metadatas=[{"filename": filename, "title": title, "tags": ",".join(tags)}],
     )
 
 

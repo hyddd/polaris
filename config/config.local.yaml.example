@@ -1,0 +1,77 @@
+# Polaris 实例配置示例（config.local.yaml）
+#
+# 用法：
+#   personal 模式：cp config/config.local.yaml.example config/config.local.yaml
+#                  chmod 600 config/config.local.yaml
+#   team 模式：    推荐 ./start-team.sh --init 生成；或手工复制到 instances/team/config/config.local.yaml
+#
+# config.local.yaml 含密钥和密码，已被 gitignore，不会提交到版本库。
+# 只需写出与默认值（config/config.yaml、config/config.<模式>.yaml）不同的项；未写出的项使用默认值。
+# 带【personal】【team】标记的段只在对应模式下生效，写在另一种模式的配置里会在启动时提示删除。
+
+# ---------------------------------------------------------------------------
+# 两种模式都需要
+# ---------------------------------------------------------------------------
+instance:
+  mode: "personal"               # personal（默认）或 team；team 模式必须明确写 team
+                                 # 运行模式只能在本文件中设置，写在 config.yaml 或 config.<模式>.yaml 里不生效
+  name: "张三的 Polaris"          # 显示名称，用于区分不同的服务
+
+llm:                             # 必填
+  api_key: "sk-your-key-here"
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o"
+
+# 笔记语义搜索和知识库使用；不配置时笔记退回关键词搜索，知识库无法上传
+embedding:
+  api_key: ""
+  base_url: ""                   # 只写到接口根路径，不要带 /embeddings
+  model: "netease-youdao/bce-embedding-base_v1"
+
+# ---------------------------------------------------------------------------
+# 【personal】团队服务地址；不写则为单机使用，只有私人数据
+# ---------------------------------------------------------------------------
+remote:
+  url: "http://10.0.0.8:8710"
+
+# 未指定范围时新数据存哪：public（默认）或 private
+# visibility:
+#   default_scope: "private"
+
+# ---------------------------------------------------------------------------
+# 【team】公共数据库（MySQL 5.6 及以上）。team 模式使用时取消注释，并删除上面的 remote 段
+# ---------------------------------------------------------------------------
+# database:
+#   host: "10.0.0.20"
+#   port: 3306
+#   name: "polaris"
+#   user: "polaris"
+#   password: "your-password"
+
+# 端口或监听地址与默认值（personal：127.0.0.1:8700；team：0.0.0.0:8710）不同时填写
+# server:
+#   port: 8710
+
+# ---------------------------------------------------------------------------
+# 可选功能
+# ---------------------------------------------------------------------------
+# 消息渠道
+# channels:
+#   feishu:
+#     enabled: true
+#     app_id: ""
+#     app_secret: ""
+#   qq:
+#     enabled: true
+#     bot_appid: ""
+#     bot_secret: ""
+
+# 联网搜索（Tavily）
+# tools:
+#   web_search:
+#     api_key: ""
+
+# 心跳定时任务（提示词文件默认 config/heartbeat.md）
+# heartbeat:
+#   enabled: true
+#   channel: "qq:<用户 ID>"

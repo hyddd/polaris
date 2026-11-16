@@ -15,7 +15,7 @@ class HeartbeatTask:
         self._interval = config.get("heartbeat.interval_minutes", 60)
         self._channel_name = config.get("heartbeat.channel", "")
         self._prompt_file = config.resolve_path(
-            config.get("heartbeat.prompt_file", "data/heartbeat.md")
+            config.get("heartbeat.prompt_file", "config/heartbeat.md")
         )
 
     def start(self):

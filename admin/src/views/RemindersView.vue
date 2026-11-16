@@ -67,10 +67,10 @@
               <el-icon><VideoPause /></el-icon>
             </button>
             <button
-              v-if="r.status === 'paused'"
+              v-if="r.status === 'paused' || r.status === 'failed'"
               class="btn btn-small"
               @click="resumeReminder(r.id)"
-              title="恢复"
+              :title="r.status === 'failed' ? '重新投递' : '恢复'"
             >
               <el-icon><VideoPlay /></el-icon>
             </button>
@@ -177,7 +177,7 @@ function repeatLabel(rule) {
 }
 
 function statusLabel(status) {
-  const map = { active: '活跃', paused: '已暂停', cancelled: '已取消' }
+  const map = { active: '活跃', paused: '已暂停', cancelled: '已取消', failed: '未送达' }
   return map[status] || status
 }
 </script>
@@ -240,6 +240,7 @@ function statusLabel(status) {
 .status-active { background: #14532d; color: #86efac; }
 .status-paused { background: #78350f; color: #fcd34d; }
 .status-cancelled { background: #3f3f46; color: #a1a1aa; }
+.status-failed { background: #7f1d1d; color: #fca5a5; }
 
 /* Empty */
 .empty { text-align: center; padding: 40px; color: var(--text-tertiary); font-size: 14px; }

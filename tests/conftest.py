@@ -1,9 +1,28 @@
 import os
+import tempfile
 import pytest
 from pathlib import Path
 
 os.environ["OPENAI_API_KEY"] = "sk-test"
 os.environ["LLM_MODEL"] = "gpt-4o"
+# 数据路径在模块 import 时按 POLARIS_HOME 算出；不覆盖的话测试会往项目正式的 data/ 里写会话文件
+os.environ["POLARIS_HOME"] = tempfile.mkdtemp(prefix="polaris-test-")
+
+
+@pytest.fixture
+def session_mgr(tmp_path, monkeypatch):
+    """每个测试一个全新的 SessionManager，会话文件落在 tmp_path，并替换全局单例。"""
+    import src.session.manager as manager_mod
+    import src.core.infra.lock as lock_mod
+
+    sessions_dir = tmp_path / "sessions"
+    monkeypatch.setattr(manager_mod, "SESSIONS_DIR", sessions_dir)
+    monkeypatch.setattr(manager_mod, "ACTIVE_FILE", sessions_dir / "active.json")
+    monkeypatch.setattr(manager_mod, "DATA_DIR", tmp_path)
+    lock_mod._message_locks.clear()
+    mgr = manager_mod.SessionManager()
+    monkeypatch.setattr(manager_mod, "_session_manager", mgr)
+    return mgr
 
 
 @pytest.fixture

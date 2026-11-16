@@ -4,6 +4,8 @@ from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, field_validator
 
+from src.core.db import SCOPE_FIELD_DESC, scope_tag, public_unavailable_note
+
 logger = logging.getLogger("polaris.tools.calendar")
 
 
@@ -27,6 +29,7 @@ class CalendarInput(BaseModel):
     duration: Optional[int] = Field(default=60, description="create 时的事件时长（分钟），默认 60")
     event_id: Optional[str] = Field(default=None, description="update 或 delete 时的事件 ID（优先级高于 title+date）")
     updates: Optional[dict | str] = Field(default=None, description='update 时要修改的字段')
+    scope: Optional[Literal["public", "private"]] = Field(default=None, description=SCOPE_FIELD_DESC)
 
     @field_validator("updates", mode="before")
     @classmethod
@@ -66,7 +69,15 @@ class CalendarTool(BaseTool):
 
     def _run(self, action: str, date: str | None = None, keyword: str | None = None,
              title: str | None = None, time: str | None = None, attendees: list[str] | None = None,
-             duration: int = 60, event_id: str | None = None, updates: dict | None = None) -> str:
+             duration: int = 60, event_id: str | None = None, updates: dict | None = None,
+             scope: str | None = None) -> str:
+        from src.core.db import ScopeError, DatabaseError
+        try:
+            return self._dispatch(action, date, keyword, title, time, attendees, duration, event_id, updates, scope)
+        except (ScopeError, DatabaseError) as e:
+            return f"操作失败：{e}"
+
+    def _dispatch(self, action, date, keyword, title, time, attendees, duration, event_id, updates, scope) -> str:
         from src.domains.calendar import get_calendar_domain
         from src.core.infra import get_channel, get_session_id
 
@@ -78,20 +89,22 @@ class CalendarTool(BaseTool):
             if not date:
                 return "请提供要查询的日期（YYYY-MM-DD）。"
             events = domain.list_events(date)
+            note = public_unavailable_note(domain.public_error)
             if not events:
-                return f"{date} 没有日程安排。"
+                return f"{date} 没有日程安排。" + note
             return "\n".join(
-                f"- [{ev.id}] {ev.time} {ev.title} ({ev.duration}分钟)"
+                f"- [{ev.id}] {scope_tag(ev.scope)} {ev.time} {ev.title} ({ev.duration}分钟)"
                 for ev in sorted(events, key=lambda e: e.time)
-            )
+            ) + note
 
         elif action == "search":
             if not keyword:
                 return "请提供搜索关键词。"
             matches = domain.search(keyword)
+            note = public_unavailable_note(domain.public_error)
             if not matches:
-                return f"没有找到包含「{keyword}」的日程。"
-            return "\n".join(f"- [{ev.id}] {d} {ev.time} {ev.title}" for d, ev in matches)
+                return f"没有找到包含「{keyword}」的日程。" + note
+            return "\n".join(f"- [{ev.id}] {scope_tag(ev.scope)} {d} {ev.time} {ev.title}" for d, ev in matches) + note
 
         elif action == "create":
             if not title or not date:
@@ -101,8 +114,9 @@ class CalendarTool(BaseTool):
                 duration=duration, attendees=attendees or [],
                 channel=get_channel() or "admin",
                 session_id=get_session_id() or "",
+                scope=scope,
             )
-            return f"已添加日程：{date} {ev.time} {title}"
+            return f"已添加{scope_tag(ev.scope)}日程：{date} {ev.time} {title}"
 
         elif action == "update":
             if not updates:

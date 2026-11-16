@@ -15,6 +15,11 @@ class TodoDomain:
     def __init__(self, store: TodoStore):
         self._store = store
 
+    @property
+    def public_error(self) -> str | None:
+        """最近一次读公共库失败的原因（列表里只剩私有数据时用来提示）。"""
+        return getattr(self._store, "public_error", None)
+
     # ------------------------------------------------------------------
     # 查询
     # ------------------------------------------------------------------
@@ -34,7 +39,10 @@ class TodoDomain:
 
     def create_todo(self, title: str, priority: str = "medium",
                     due: str = "", channel: str = "admin",
-                    session_id: str = "") -> TodoItem:
+                    session_id: str = "", scope: str | None = None) -> TodoItem:
+        """scope：public 存公共库、private 存本机；不传用默认（visibility.default_scope）。"""
+        from src.core.db import resolve_scope
+        scope = resolve_scope(scope)
         todo_id = f"todo-{uuid.uuid4().hex[:8]}"
         data = {
             "id": todo_id,
@@ -43,11 +51,13 @@ class TodoDomain:
             "status": "pending",
             "due": due,
             "tags": [],
+            "scope": scope,
         }
         todo = self._store.create_todo(data)
+        # personal 存公共待办时 ID 由 team 服务分配，以存储返回的为准
         event_bus.publish("todos:todo_created",
-                          todo_id=todo_id, title=title, priority=priority)
-        logger.info(f"已创建待办: {todo_id} ({title})")
+                          todo_id=todo.id, title=title, priority=priority, scope=scope)
+        logger.info(f"已创建{scope}待办: {todo.id} ({title})")
         return todo
 
     def update_todo(self, todo_id: str, updates: dict) -> TodoItem | None:
@@ -108,12 +118,19 @@ def set_todo_domain(domain: TodoDomain):
 # ---------------------------------------------------------------------------
 def _on_startup(**kwargs):
     from src.core.config import config
-    path = str(config.resolve_path(
-        config.get("storage.todos_file", "data/todos.json")))
-    store = TodoStore(path)
+    from src.core.db import is_team, public_enabled, instance_info
+    from src.core.db.public_store import NoPrivate
+    from .public_store import PublicTodoStore, RemoteTodoStore, ScopedTodoStore
+    if is_team():
+        # 团队服务：没有私人数据，公共数据直接读写 MySQL
+        store = ScopedTodoStore(NoPrivate(), PublicTodoStore() if public_enabled() else None)
+    else:
+        # 个人服务：私人存本机文件，公共数据通过 HTTP 调团队服务
+        path = str(config.resolve_path(config.get("storage.todos_file", "data/todos.json")))
+        store = ScopedTodoStore(TodoStore(path), RemoteTodoStore() if public_enabled() else None)
     domain = TodoDomain(store)
     set_todo_domain(domain)
-    logger.info("待办域已启动")
+    logger.info(f"待办域已启动（{instance_info()['mode_label']}，公共数据{'可用' if public_enabled() else '未启用'}）")
 
 
 def _on_cleanup_now(**kwargs):

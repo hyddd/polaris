@@ -10,7 +10,8 @@ class Note:
     content: str       # 正文（不含 frontmatter）
     tags: list[str] = field(default_factory=list)
     date: str = ""     # "YYYY-MM-DD"
-    path: str = ""     # 完整路径
+    path: str = ""     # 完整路径（公共笔记为 public:<key>）
+    scope: str = "private"   # "public"（公共库）/ "private"（本机 .md 文件）
 
     def to_dict(self) -> dict:
         return {
@@ -20,6 +21,7 @@ class Note:
             "tags": self.tags,
             "date": self.date,
             "path": self.path,
+            "scope": self.scope,
         }
 
     @classmethod
@@ -31,6 +33,7 @@ class Note:
             tags=data.get("tags", []),
             date=data.get("date", ""),
             path=data.get("path", ""),
+            scope=data.get("scope", "private"),
         )
 
 
@@ -41,6 +44,7 @@ class SearchResult:
     content: str
     score: float = 0.0
     tags: list[str] = field(default_factory=list)
+    scope: str = "private"
 
     def to_dict(self) -> dict:
         return {
@@ -49,4 +53,5 @@ class SearchResult:
             "content": self.content,
             "score": self.score,
             "tags": self.tags,
+            "scope": self.scope,
         }

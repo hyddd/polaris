@@ -1,3 +1,4 @@
+import threading
 import uuid
 from langchain_core.messages import BaseMessage
 from pathlib import Path
@@ -10,6 +11,8 @@ class MemoryManager:
         self._message_ids: dict[str, int] = {}  # message_id -> index
         self.profile_path = Path(profile_path) if profile_path else None
         self._profile: dict = {}
+        # 提醒推送在 APScheduler 线程里追加消息，与对话线程并发；读改写必须互斥
+        self._lock = threading.RLock()
 
     def add_message(self, message: BaseMessage, message_id: str | None = None) -> str:
         """Add a message and return its ID."""
@@ -17,8 +20,9 @@ class MemoryManager:
         # Store ID as metadata on the message
         if not hasattr(message, '_polaris_id'):
             message._polaris_id = mid
-        self._message_ids[mid] = len(self._messages)
-        self._messages.append(message)
+        with self._lock:
+            self._message_ids[mid] = len(self._messages)
+            self._messages.append(message)
         return mid
 
     def get_message_by_id(self, message_id: str) -> BaseMessage | None:
@@ -45,18 +49,32 @@ class MemoryManager:
 
     def get_messages(self) -> list[BaseMessage]:
         """Return a copy of all messages."""
-        return list(self._messages)
+        with self._lock:
+            return list(self._messages)
 
     # Backward-compatible alias
     get_history = get_messages
 
     def set_messages(self, messages: list[BaseMessage]) -> None:
         """Replace all messages with the given list."""
-        self._messages = list(messages)
+        with self._lock:
+            self._messages = list(messages)
+
+    def replace_keeping_appended(self, start: int, messages: list[BaseMessage]) -> None:
+        """用 messages 替换历史，但保留第 start 条之后由其他写入方追加的消息。
+
+        一轮对话持有会话锁运行期间，提醒推送这类不走会话锁的写入方仍可能往内存追加消息。
+        本轮结束时如果直接 set_messages，这些消息会被整体覆盖掉。
+        start 是本轮开始时自己写入的最后一条之后的位置（即 len(历史) + 1 条用户消息）。
+        """
+        with self._lock:
+            appended = self._messages[start:]
+            self._messages = list(messages) + appended
 
     def clear_messages(self) -> None:
         """Remove all messages."""
-        self._messages.clear()
+        with self._lock:
+            self._messages.clear()
 
     def get_profile(self) -> dict:
         if not self._profile and self.profile_path and self.profile_path.exists():

@@ -1,0 +1,22 @@
+# Polaris 个人服务（personal）默认配置
+#
+# 运行模式为 personal（默认）时，在 config/config.yaml 之后、config.local.yaml 之前加载。
+# 个人服务的私人数据存本机；公共数据通过 remote.url 调用团队服务的接口读写，不连接 MySQL。
+# 请不要修改本文件；team 模式地址等写在项目的 config/config.local.yaml。
+
+# 这里的 mode 只标明本文件属于 personal 模式，修改它不能切换模式。
+# 选择模式：在实例的 config.local.yaml 里写 instance.mode（personal 可省略），并用 start-personal.sh 启动。
+instance:
+  mode: "personal"
+
+server:
+  host: "127.0.0.1"            # 只监听本机（start-personal.sh 固定使用 127.0.0.1）
+  port: 8700                   # start-personal.sh 使用的端口
+
+# 团队服务地址。为空时为单机使用，只有私人数据
+remote:
+  url: ""                      # 如 http://10.0.0.8:8710
+  timeout: 10                  # 请求团队服务的超时时间（秒），超时后本次只显示私人数据
+
+visibility:
+  default_scope: "public"      # 未指定范围时新数据存哪：public 或 private（未配置 remote.url 时固定为 private）

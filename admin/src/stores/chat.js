@@ -113,6 +113,8 @@ export const useChatStore = defineStore('chat', {
       let thinking = ''
       let response = ''
       let hasToolCalls = false
+      // 每次都带上当前页面的会话：团队服务上多人共用网页时，不能依赖服务端的"当前激活会话"
+      if (this.sessionId) data = { ...data, session_id: this.sessionId }
 
       try {
         await streamSSE(
@@ -146,7 +148,7 @@ export const useChatStore = defineStore('chat', {
               const step = this.toolSteps.find(s => s.call_id === data.call_id)
               if (step) step.result = data.result
             } else if (eventType === 'done') {
-              // done
+              if (data.session_id) this.sessionId = data.session_id
             } else if (eventType === 'error') {
               response = `错误: ${data.error}`
             }

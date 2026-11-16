@@ -11,6 +11,7 @@ class TodoItem:
     status: str                # "pending" / "in_progress" / "done"
     due: str                   # "YYYY-MM-DD" 或 ""
     tags: list[str] = field(default_factory=list)
+    scope: str = "private"     # "public"（公共库）/ "private"（本机文件）
 
     def to_dict(self) -> dict:
         return {
@@ -20,6 +21,7 @@ class TodoItem:
             "status": self.status,
             "due": self.due,
             "tags": self.tags,
+            "scope": self.scope,
         }
 
     @classmethod
@@ -31,4 +33,5 @@ class TodoItem:
             status=data.get("status", "pending"),
             due=data.get("due", ""),
             tags=data.get("tags", []),
+            scope=data.get("scope", "private"),
         )

@@ -2,6 +2,8 @@ from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from src.core.db import SCOPE_FIELD_DESC, scope_tag, public_unavailable_note
+
 
 def create_default() -> "NoteTool":
     """Factory for auto-discovery. Creates a NoteTool with default config."""
@@ -23,6 +25,7 @@ class NoteInput(BaseModel):
     title: Optional[str] = Field(default=None, description="create 时的笔记标题")
     content: Optional[str] = Field(default=None, description="create 时的笔记正文")
     tags: Optional[list[str]] = Field(default=None, description="create 时的标签")
+    scope: Optional[Literal["public", "private"]] = Field(default=None, description=SCOPE_FIELD_DESC)
 
 
 class NoteTool(BaseTool):
@@ -35,7 +38,14 @@ class NoteTool(BaseTool):
     collection_name: str = "notes"
 
     def _run(self, action: str, filename: str | None = None, title: str | None = None,
-             content: str | None = None, tags: list[str] | None = None) -> str:
+             content: str | None = None, tags: list[str] | None = None, scope: str | None = None) -> str:
+        from src.core.db import ScopeError, DatabaseError
+        try:
+            return self._dispatch(action, filename, title, content, tags, scope)
+        except (ScopeError, DatabaseError) as e:
+            return f"操作失败：{e}"
+
+    def _dispatch(self, action, filename, title, content, tags, scope) -> str:
         from src.domains.notes import get_notes_domain
 
         domain = get_notes_domain()
@@ -44,12 +54,13 @@ class NoteTool(BaseTool):
 
         if action == "list":
             notes = domain.list_notes()
+            note = public_unavailable_note(domain.public_error)
             if not notes:
-                return "没有笔记。"
+                return "没有笔记。" + note
             return "\n".join(
-                f"- {n.title or n.filename} ({n.filename})"
+                f"- {scope_tag(n.scope)} {n.title or n.filename} ({n.filename})"
                 for n in notes
-            )
+            ) + note
 
         elif action == "read":
             if not filename:
@@ -62,8 +73,8 @@ class NoteTool(BaseTool):
         elif action == "create":
             if not title:
                 return "创建笔记需要提供标题。"
-            note = domain.create_note(title=title, content=content or "", tags=tags)
-            return f"已记录笔记：{title} ({note.filename})"
+            note = domain.create_note(title=title, content=content or "", tags=tags, scope=scope)
+            return f"已记录{scope_tag(note.scope)}笔记：{title} ({note.filename})"
 
         elif action == "archive":
             if not filename:

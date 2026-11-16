@@ -1,0 +1,30 @@
+# Polaris 终端客户端（TUI）配置示例（cli.yaml）
+#
+# 用法：cp config/cli.yaml.example config/cli.yaml && chmod 600 config/cli.yaml
+# 本文件可选：不创建 cli.yaml 时全部使用下面的默认值（连接本机 personal 模式 http://127.0.0.1:8700）。
+# 只需写出与默认值不同的项。config/cli.yaml 已被 gitignore，不会提交到版本库。
+#
+# 优先级：命令行参数（--url、--profile、--theme 等）> 环境变量（POLARIS_URL、POLARIS_PROFILE）> 本文件 > 默认值。
+# TUI 只读取本文件，不读取服务端的 config.local.yaml，因此不会接触模型密钥。
+# 访问令牌不能写在本文件里：使用环境变量 POLARIS_ADMIN_TOKEN，或用 token_file 指向权限 600 的文件。
+
+# 不指定 --profile 时使用的连接配置
+default_profile: local
+
+# 连接配置：用 ./cli.sh --profile <名称> 切换
+profiles:
+  local:
+    url: "http://127.0.0.1:8700"        # 本机 personal 模式（私人数据 + 公共数据）
+  team:
+    url: "http://127.0.0.1:8710"        # team 模式（仅公共数据）。非本机地址必须使用 https，
+                                        # 内网没有 https 时可用 SSH 端口转发到本机后连接
+    # token_file: "~/.config/polaris/token"   # 服务端设置了 server.admin_token 时使用
+
+ui:
+  theme: auto              # auto 跟随终端配色 / dark 深色 / light 浅色；也可用 --theme 或 /theme 临时切换
+  color: auto              # auto 自动判断 / always 始终输出颜色 / never 不输出颜色
+  persist_history: false   # true 时把输入历史保存到 data/cli/history（权限 600）
+
+network:
+  connect_timeout: 5       # 连接超时（秒）
+  read_timeout: 300        # 等待回复的超时（秒）；工具执行时间较长时可以调大

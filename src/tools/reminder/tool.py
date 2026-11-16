@@ -4,6 +4,8 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+from src.core.db import SCOPE_FIELD_DESC, scope_tag, public_unavailable_note
+
 logger = logging.getLogger("polaris.tools.reminder")
 
 
@@ -22,6 +24,7 @@ class ReminderInput(BaseModel):
     trigger_time: Optional[str] = Field(default=None, description="create/update 时的触发时间，格式 ISO 8601")
     repeat_rule: Optional[str] = Field(default=None, description="create/update 时的重复规则：none/daily/weekly/monthly")
     event_id: Optional[str] = Field(default=None, description="create 时关联的日程 ID（可选）")
+    scope: Optional[Literal["public", "private"]] = Field(default=None, description=SCOPE_FIELD_DESC)
 
 
 class ReminderTool(BaseTool):
@@ -31,7 +34,14 @@ class ReminderTool(BaseTool):
 
     def _run(self, action: str, reminder_id: str | None = None, title: str | None = None,
              description: str | None = None, trigger_time: str | None = None,
-             repeat_rule: str | None = None, event_id: str | None = None) -> str:
+             repeat_rule: str | None = None, event_id: str | None = None, scope: str | None = None) -> str:
+        from src.core.db import ScopeError, DatabaseError
+        try:
+            return self._dispatch(action, reminder_id, title, description, trigger_time, repeat_rule, event_id, scope)
+        except (ScopeError, DatabaseError) as e:
+            return f"操作失败：{e}"
+
+    def _dispatch(self, action, reminder_id, title, description, trigger_time, repeat_rule, event_id, scope) -> str:
         from src.domains.reminder import get_reminder_domain
         from src.core.infra import get_channel, get_session_id
 
@@ -41,15 +51,16 @@ class ReminderTool(BaseTool):
 
         if action == "list":
             reminders = domain.list_active()
+            note = public_unavailable_note(domain.public_error)
             if not reminders:
-                return "没有活跃的提醒。"
+                return "没有活跃的提醒。" + note
             lines = []
             for r in reminders:
-                line = f"- [{r.id}] {r.title} @ {r.trigger_time.strftime('%Y-%m-%d %H:%M')}"
+                line = f"- [{r.id}] {scope_tag(r.scope)} {r.title} @ {r.trigger_time.strftime('%Y-%m-%d %H:%M')}"
                 if r.repeat_rule.value != "none":
                     line += f" ({r.repeat_rule.value})"
                 lines.append(line)
-            return "\n".join(lines)
+            return "\n".join(lines) + note
 
         elif action == "create":
             if not title or not trigger_time:
@@ -69,8 +80,9 @@ class ReminderTool(BaseTool):
                 event_id=event_id,
                 channel=get_channel() or "admin",
                 session_id=get_session_id() or "",
+                scope=scope,
             )
-            return f"已创建提醒：{r.title} @ {dt.strftime('%Y-%m-%d %H:%M')} [{r.id}]"
+            return f"已创建{scope_tag(r.scope)}提醒：{r.title} @ {dt.strftime('%Y-%m-%d %H:%M')} [{r.id}]"
 
         elif action == "update":
             if not reminder_id:

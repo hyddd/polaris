@@ -2,6 +2,10 @@
   <div class="app-layout">
     <!-- Sidebar -->
     <aside class="sidebar">
+      <div v-if="instance" class="instance-badge" :title="instanceTitle">
+        <span :class="['instance-mode', instance.mode]">{{ instance.mode_label }}</span>
+        <span class="instance-name">{{ instance.name }}</span>
+      </div>
       <button class="new-chat-btn" @click="newChat">
         <el-icon><Plus /></el-icon> 新对话
       </button>
@@ -63,11 +67,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useSessionsStore } from './stores/sessions.js'
 import { useChatStore } from './stores/chat.js'
 import { useThemeStore } from './stores/theme.js'
 import { useRouter, useRoute } from 'vue-router'
+import { get } from './api.js'
 
 const store = useSessionsStore()
 const chatStore = useChatStore()
@@ -76,6 +81,13 @@ const router = useRouter()
 const route = useRoute()
 
 const sessions = computed(() => store.sessions)
+const instance = ref(null)
+const instanceTitle = computed(() => {
+  const i = instance.value
+  if (!i) return ''
+  if (i.mode === 'team') return '团队服务：只读写公共数据'
+  return i.public ? `个人服务：私人 + 公共数据（团队服务 ${i.remote}）` : '个人服务：只有私人数据（没连团队服务）'
+})
 const activeId = computed(() => store.activeId)
 
 const sliderIndex = computed(() => {
@@ -89,6 +101,7 @@ const sliderStyle = computed(() => ({
 
 onMounted(async () => {
   theme.init()
+  get('/api/instance').then(d => { instance.value = d }).catch(() => {})
   await store.fetch()
   if (store.activeId) chatStore.loadSession(store.activeId)
 })
@@ -103,6 +116,7 @@ async function newChat() {
   try {
     await store.create(`对话 ${store.sessions.length + 1}`)
     chatStore.clearMessages()
+    chatStore.sessionId = store.activeId
     if (route.path !== '/') router.push('/')
   } catch {
     // error already alerted in store
@@ -176,6 +190,30 @@ body {
 .history-item:hover { background: var(--bg-secondary); color: var(--text-primary); }
 .history-item.active { background: var(--bg-secondary); color: var(--text-primary); }
 
+.instance-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary, #999);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.instance-mode {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(64, 158, 255, 0.15);
+  color: #409eff;
+}
+.instance-mode.team {
+  background: rgba(230, 162, 60, 0.15);
+  color: #e6a23c;
+}
+.instance-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sidebar-bottom {
   padding: 8px; border-top: 1px solid var(--border-primary);
 }

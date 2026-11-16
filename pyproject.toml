@@ -16,11 +16,13 @@ dependencies = [
     "tiktoken",
     "lark-oapi",
     "fastapi",
+    "python-multipart",
     "uvicorn",
     "httpx",
     "qq-botpy",
     "apscheduler>=3.10,<4",
     "pydantic>=2.0",
+    "PyMySQL>=1.1,<2",      # team 模式的公共库（MySQL 5.6+）
 ]
 
 [project.optional-dependencies]
@@ -28,6 +30,14 @@ dev = [
     "pytest",
     "pytest-asyncio",
 ]
+# 终端客户端（polaris 命令）；httpx 已是主依赖
+cli = [
+    "prompt_toolkit>=3.0.53,<4",
+    "rich>=13,<16",
+]
+
+[project.scripts]
+polaris = "src.cli.main:main"
 
 [build-system]
 requires = ["setuptools"]

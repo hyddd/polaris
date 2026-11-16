@@ -7,10 +7,15 @@ from src.agent.graph import get_agent
 from src.agent.state import AgentState
 from src.session.manager import SessionManager
 from src.core.infra import set_context as _set_ctx
-from src.core.infra import get_session_lock
+from src.core.infra import hold_session_lock, SessionBusyError
 from src.session.commands import _SEPARATOR
 from src.message.models import Attachment
 from src.message.file_parser import parse_file
+from src.message.turn import TurnRecorder
+
+# 等同一会话上一条消息处理完的最长时间。QQ/飞书消息会在这里排队。
+LOCK_WAIT_SECONDS = 120
+BUSY_REPLY = "该会话正在处理上一条消息，请稍后再试。"
 
 
 def _build_message(text: str, attachments: list[Attachment] | None) -> HumanMessage:
@@ -41,31 +46,45 @@ def _build_message(text: str, attachments: list[Attachment] | None) -> HumanMess
 
 
 async def process_message(text: str, session_mgr: SessionManager, channel: str = "default", attachments: list[Attachment] | None = None) -> list[tuple[str, list[dict]]]:
-    """统一消息处理入口。返回消息列表（可能多条）。per-session 锁保证同一会话串行处理，不同会话可并发。"""
+    """统一消息处理入口。返回消息列表（可能多条）。per-session 锁保证同一会话串行处理，不同会话可并发。
+
+    锁用 hold_session_lock 异步等待：这里跑在事件循环里，阻塞式 acquire 会卡死整个循环，
+    而持锁的流式请求正需要这个循环才能结束并释放锁。
+    """
     session, switched = session_mgr.resolve_session(channel)
     session_id = session.session_id
-    with get_session_lock(channel, session_id):
-        # 在锁内设置 context，防止并发覆盖
-        user_id = channel.split(":", 1)[-1] if ":" in channel else ""
-        _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
+    try:
+        async with hold_session_lock(session_id, timeout=LOCK_WAIT_SECONDS):
+            # 在锁内设置 context，防止并发覆盖
+            user_id = channel.split(":", 1)[-1] if ":" in channel else ""
+            _set_ctx(channel=channel, session_id=session_id, user_id=user_id)
 
-        results = []
-        if switched:
-            results.append(("⚠️ 你之前绑定的会话已被删除，已自动切换到 default 会话。", []))
+            results = []
+            if switched:
+                results.append(("⚠️ 你之前绑定的会话已被删除，已自动切换到 default 会话。", []))
 
-        response_text, tool_calls = await _process_message_impl(text, session_mgr, channel, attachments)
+            response_text, tool_calls = await _process_message_impl(
+                text, session_mgr, channel, attachments, session_id=session_id)
 
-        if _SEPARATOR in response_text:
-            parts = response_text.split(_SEPARATOR, 1)
-            results.append((parts[0], []))
-            results.append((parts[1], []))
-        else:
-            results.append((response_text, tool_calls))
-        return results
+            if _SEPARATOR in response_text:
+                parts = response_text.split(_SEPARATOR, 1)
+                results.append((parts[0], []))
+                results.append((parts[1], []))
+            else:
+                results.append((response_text, tool_calls))
+            return results
+    except SessionBusyError:
+        return [(BUSY_REPLY, [])]
 
 
-async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default", attachments: list[Attachment] | None = None) -> tuple[str, list[dict]]:
-    """统一消息处理入口。系统命令提前处理，不进 agent graph。"""
+async def _process_message_impl(text: str, session_mgr: SessionManager, channel: str = "default",
+                                attachments: list[Attachment] | None = None,
+                                session_id: str | None = None) -> tuple[str, list[dict]]:
+    """统一消息处理入口。系统命令提前处理，不进 agent graph。
+
+    session_id 是调用方已经加锁的会话。等锁期间 channel 的激活会话可能被切走，
+    必须用它而不是重新按 channel 解析，否则会在没加锁的会话上读写。
+    """
     # 系统命令提前处理，不进 agent graph、不残留记忆
     stripped = text.strip()
     if stripped.startswith("/"):
@@ -74,7 +93,9 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
         if response:
             return (response, [])
 
-    session = session_mgr.active_session(channel)
+    session = session_mgr.get(session_id) if session_id else None
+    if session is None:
+        session = session_mgr.active_session(channel)
     memory = session.memory
     agent = get_agent()
 
@@ -85,6 +106,7 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
     human_msg = _build_message(text, attachments)
     memory.add_message(human_msg)
     human_msg_id = memory.get_message_id(human_msg)
+    turn_start = len(previous_messages) + 1
 
     state_messages = previous_messages + [human_msg]
 
@@ -97,17 +119,19 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
         needs_clarification=False,
         pending_action=session.pending_action,
         channel=channel,
+        session_id=session.session_id,
     )
 
     result = None
     try:
-        result = agent.invoke(state)
+        # ainvoke：同步节点由 LangGraph 放进线程池跑，不阻塞事件循环
+        result = await agent.ainvoke(state)
         response_text = _extract_response(result)
         tool_calls = _extract_tool_calls(result)
     except Exception as e:
         # 只在命令未修改内存时回滚（命令可能已清空/修改了内存）
         if not (result and result.get("final_response")):
-            memory.set_messages(previous_messages)
+            memory.replace_keeping_appended(turn_start, previous_messages)
         agent_logger = logging.getLogger("polaris.agent")
 
         # If agent.invoke succeeded (tools may have executed) but post-processing failed,
@@ -121,26 +145,20 @@ async def _process_message_impl(text: str, session_mgr: SessionManager, channel:
             )
         else:
             agent_logger.error(f"Agent 调用失败: {e}", exc_info=True)
+        session_mgr.save_session(session.session_id)
         return (f"抱歉，处理请求时出错：{e}", [])
 
-    # Save pending_action from result
-    session.pending_action = result.get("pending_action")
+    turn = TurnRecorder(previous_messages, human_msg)
+    turn.final_state = result
+    session.pending_action = turn.pending_action()
+    memory.replace_keeping_appended(turn_start, turn.history())
 
-    if result.get("final_response"):
-        # confirm_node 返回的确认/取消结果，不残留记忆
-        memory.set_messages(previous_messages)
+    if turn.notice:
+        # confirm_node 返回的确认/取消结果，不残留记忆；pending_action 已清空，需要落盘
+        session_mgr.save_session(session.session_id)
         return (response_text, tool_calls)
 
-    # result["messages"] is the full graph state (old + human + agent output)
-    agent_messages = result.get("messages", []) if result else []
-    if agent_messages:
-        memory.set_messages(list(agent_messages))
-    else:
-        memory.set_messages(previous_messages + [
-            human_msg,
-            AIMessage(content=response_text),
-        ])
-    session_mgr.record_message(text, response_text, channel)
+    session_mgr.record_message(text, response_text, channel, session_id=session.session_id)
 
     return (response_text, tool_calls)
 

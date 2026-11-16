@@ -11,6 +11,7 @@ class CalendarEvent:
     duration: int                        # 分钟
     attendees: list[str] = field(default_factory=list)
     date: str = ""                       # "YYYY-MM-DD" — 所属日期
+    scope: str = "private"               # "public"（公共库）/ "private"（本机文件）
 
     def to_dict(self) -> dict:
         return {
@@ -20,6 +21,7 @@ class CalendarEvent:
             "time": self.time,
             "duration": self.duration,
             "attendees": self.attendees,
+            "scope": self.scope,
         }
 
     @classmethod
@@ -31,4 +33,5 @@ class CalendarEvent:
             duration=data.get("duration", 60),
             attendees=data.get("attendees", []),
             date=date or data.get("date", ""),
+            scope=data.get("scope", "private"),
         )

@@ -81,7 +81,7 @@ _SEPARATOR = '\n---WELCOME---\n'
 
 def _new(session_mgr: SessionManager, arg: str, channel: str = "default") -> str:
     from src.core.config import config
-    max_sessions = config.get("server.max_sessions", 10)
+    max_sessions = config.get("server.max_sessions", 100)
     if len(session_mgr._sessions) >= max_sessions:
         return (
             f"会话数已达上限（{max_sessions}），请先删除旧会话。\n"

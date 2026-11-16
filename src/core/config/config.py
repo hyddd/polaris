@@ -1,7 +1,9 @@
 """Application configuration — loaded from YAML files.
 
-Default: data/config.yaml (tracked in git)
-Override: data/config.local.yaml (gitignored, for local secrets)
+配置在 config/，运行数据在 data/。三层配置，后加载的按配置项逐项覆盖先加载的（规则见 layers.py）：
+  1. config/config.yaml                       通用默认值（随代码提交）
+  2. config/config.<模式>.yaml                 模式默认值：config.team.yaml / config.personal.yaml（随代码提交）
+  3. <POLARIS_HOME>/config/config.local.yaml   本实例的设置（gitignore，放密钥）
 
 Usage:
     from src.core.config import config
@@ -10,19 +12,20 @@ Usage:
     path = config.resolve_path(config.get("storage.calendar_file", "data/calendar.json"))
 """
 
-import yaml
+import logging
+import os
 from pathlib import Path
 
-import os
+from . import layers
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-# 多实例部署：POLARIS_HOME 指向独立数据目录
+# 多实例部署：POLARIS_HOME 指向实例目录（其下 config/ 放实例配置，data/ 放运行数据）
 _HOME = Path(os.environ.get("POLARIS_HOME", PROJECT_ROOT))
-_DATA_DIR = _HOME / "data"
 
-_CONFIG_FILE = PROJECT_ROOT / "data/config.yaml"
-_LOCAL_CONFIG_FILE = _DATA_DIR / "config.local.yaml"
+# 网页"配置"页修改配置时写入的文件；仍在旧位置（data/）时写旧文件，避免出现两份
+_LOCAL_CONFIG_FILE = layers.local_config_path(_HOME)[0]
+
 
 def _coerce(value):
     """将字符串转为合适的类型：bool / int / float / str。"""
@@ -44,45 +47,28 @@ def _coerce(value):
     return value
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
-    """Recursively merge override into base dict."""
-    for key, val in override.items():
-        if isinstance(val, dict) and isinstance(base.get(key), dict):
-            base[key] = _deep_merge(base[key], val)
-        else:
-            base[key] = val
-    return base
-
-
-def _load_yaml_config() -> dict:
-    """Load config from YAML files (default + local override)."""
-    config = {}
-    if _CONFIG_FILE.exists():
-        with open(_CONFIG_FILE) as f:
-            config = yaml.safe_load(f) or {}
-    if _LOCAL_CONFIG_FILE.exists():
-        with open(_LOCAL_CONFIG_FILE) as f:
-            local = yaml.safe_load(f) or {}
-        config = _deep_merge(config, local)
-    return config
-
-
 class Config:
     """Configuration manager — loads from YAML, supports dot-separated access."""
 
     def __init__(self):
         self._data: dict = {}
+        self.mode: str = layers.DEFAULT_MODE
+        self.warnings: list[str] = []     # 放错模式、已废弃的配置项等，服务启动时写进日志
 
     def load(self) -> None:
         """Load (or reload) configuration from YAML files."""
-        self._data = _load_yaml_config()
+        try:
+            self._data, self.mode, self.warnings = layers.load_layers(
+                PROJECT_ROOT, _HOME, os.environ.get("POLARIS_MODE", ""), local_file=_LOCAL_CONFIG_FILE)
+        except ValueError as e:
+            logging.getLogger("polaris.config").error(str(e))
+            raise
         # 校验（仅在有 llm 配置时，避免测试环境报错）
         if "llm" in self._data:
             from .schema import AppConfig
             try:
                 AppConfig(**self._data)
             except Exception as e:
-                import logging
                 logging.getLogger("polaris.config").warning(f"配置校验警告: {e}")
 
     def as_dict(self) -> dict:

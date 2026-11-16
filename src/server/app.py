@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     from src.core.config import config
     if not config.get("llm.api_key", ""):
         raise RuntimeError(
-            "LLM API Key 未配置。请在 data/config.local.yaml 中设置 llm.api_key。"
+            "LLM API Key 未配置。请在 config/config.local.yaml 中设置 llm.api_key。"
         )
 
     global _tools_registered

@@ -3,6 +3,8 @@ from typing import Optional, Literal
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, field_validator
 
+from src.core.db import SCOPE_FIELD_DESC, scope_tag, public_unavailable_note
+
 
 def create_default() -> "TodoTool":
     """Factory for auto-discovery. Creates a TodoTool with default config."""
@@ -27,6 +29,7 @@ class TodoInput(BaseModel):
     due: Optional[str] = Field(default=None, description="create/update 时的截止日期，格式 YYYY-MM-DD")
     todo_id: Optional[str] = Field(default=None, description="update/done/delete 时的待办 ID（优先级高于 title）")
     updates: Optional[dict | str] = Field(default=None, description="update 时要修改的字段")
+    scope: Optional[Literal["public", "private"]] = Field(default=None, description=SCOPE_FIELD_DESC)
 
     @field_validator("updates", mode="before")
     @classmethod
@@ -44,7 +47,7 @@ def _format_todo(t) -> str:
     """格式化单条待办为文本。"""
     st = _STATUS_MAP.get(t.status, "未知")
     pr = _PRIORITY_MAP.get(t.priority, "-")
-    return f"- [{t.id}] [{st}] 优先级{pr} {t.title} (截止: {t.due or '无'})"
+    return f"- [{t.id}] {scope_tag(t.scope)} [{st}] 优先级{pr} {t.title} (截止: {t.due or '无'})"
 
 
 class TodoTool(BaseTool):
@@ -75,7 +78,14 @@ class TodoTool(BaseTool):
 
     def _run(self, action: str, status: str | None = None, keyword: str | None = None,
              title: str | None = None, priority: str | None = None, due: str | None = None,
-             todo_id: str | None = None, updates: dict | None = None) -> str:
+             todo_id: str | None = None, updates: dict | None = None, scope: str | None = None) -> str:
+        from src.core.db import ScopeError, DatabaseError
+        try:
+            return self._dispatch(action, status, keyword, title, priority, due, todo_id, updates, scope)
+        except (ScopeError, DatabaseError) as e:
+            return f"操作失败：{e}"
+
+    def _dispatch(self, action, status, keyword, title, priority, due, todo_id, updates, scope) -> str:
         from src.domains.todos import get_todo_domain
 
         domain = get_todo_domain()
@@ -84,24 +94,26 @@ class TodoTool(BaseTool):
 
         if action == "list":
             todos = domain.list_todos(status or "active")
+            note = public_unavailable_note(domain.public_error)
             if not todos:
-                return "没有待办事项。"
-            return "\n".join(_format_todo(t) for t in todos)
+                return "没有待办事项。" + note
+            return "\n".join(_format_todo(t) for t in todos) + note
 
         elif action == "search":
             if not keyword:
                 return "请提供搜索关键词。"
             matches = domain.search(keyword)
+            note = public_unavailable_note(domain.public_error)
             if not matches:
-                return f"没有找到包含「{keyword}」的待办。"
-            return "\n".join(_format_todo(t) for t in matches)
+                return f"没有找到包含「{keyword}」的待办。" + note
+            return "\n".join(_format_todo(t) for t in matches) + note
 
         elif action == "create":
             if not title:
                 return "创建待办需要提供标题。"
-            t = domain.create_todo(title=title, priority=priority or "medium", due=due or "")
+            t = domain.create_todo(title=title, priority=priority or "medium", due=due or "", scope=scope)
             pr = _PRIORITY_MAP.get(t.priority, "-")
-            return f"已添加待办（优先级{pr}）：{title}，截止 {due or '未设'}"
+            return f"已添加{scope_tag(t.scope)}待办（优先级{pr}）：{title}，截止 {due or '未设'}"
 
         elif action == "update":
             if not updates and not priority and not due:

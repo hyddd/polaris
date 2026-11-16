@@ -1,0 +1,102 @@
+# Polaris 通用默认配置（team 和 personal 两种模式共用）
+#
+# 配置和运行数据分开存放：配置在 config/，运行数据在 data/。
+# 配置分三层，后加载的按配置项逐项覆盖先加载的：
+#   1. config/config.yaml                      通用默认值（本文件）
+#   2. config/config.team.yaml 或 config/config.personal.yaml
+#                                              模式默认值，按运行模式只加载其中一个
+#   3. <实例目录>/config/config.local.yaml      本实例的设置：密钥、名称、team 模式地址或数据库账号（不提交到 git）
+#
+# 第 1、2 层随代码更新，请不要修改；需要调整的值写进 config.local.yaml，只写与默认值不同的项即可。
+# 配置说明见项目 README.md 的"配置文件"一节。
+
+# ---------------------------------------------------------------------------
+# 模型接口
+# ---------------------------------------------------------------------------
+llm:
+  api_key: ""                  # 必填，写在 config.local.yaml
+  model: "gpt-4o"
+  base_url: "https://api.openai.com/v1"
+  # 温度和输出长度目前不可配置：对话固定 temperature 0.3，上下文压缩固定 0，输出长度使用模型默认值
+
+# 笔记语义搜索和知识库使用的向量模型。未配置 api_key 时，笔记退回关键词搜索，知识库无法上传
+embedding:
+  api_key: ""
+  base_url: ""                 # 只写到接口根路径（如 https://example.com/v1），不要带 /embeddings
+  model: "netease-youdao/bce-embedding-base_v1"
+
+# ---------------------------------------------------------------------------
+# 实例
+# ---------------------------------------------------------------------------
+# 注意：运行模式 instance.mode 不能写在本文件，只能写在各实例自己的 config.local.yaml（写在这里不生效）。
+# 用启停脚本启动时，模式由脚本决定：start-team.sh 为 team，start-personal.sh 为 personal。
+instance:
+  name: "Polaris"                     # 显示名称，用于区分不同的服务（如"产品组团队服务"、"张三的 Polaris"），为空时显示 Polaris
+
+sync:
+  interval_seconds: 60         # 拉取公共提醒并更新本地调度的间隔（秒）
+
+server:
+  public_url: ""               # 公网地址，用于 QQ 语音消息上传（如 https://example.com）
+  admin_token: ""              # 接口访问令牌；team 模式必须为空（个人服务调用团队服务时不带令牌）
+  rate_limit_max_requests: 30
+  rate_limit_window_seconds: 60
+  max_sessions: 100            # TUI 每次启动都会新建会话，上限要够用
+  # host、port 见模式默认值文件
+
+# ---------------------------------------------------------------------------
+# 消息渠道
+# ---------------------------------------------------------------------------
+channels:
+  feishu:
+    plugin: "src.channels.feishu"
+    enabled: false
+    app_id: ""
+    app_secret: ""
+  qq:
+    plugin: "src.channels.qq"
+    enabled: false
+    bot_appid: ""
+    bot_secret: ""
+
+# 语音（MiMo TTS 合成、语音识别）。不配置时使用下列默认值；api_key 为空时使用 llm.api_key
+# voice:
+#   api_key: ""
+#   base_url: "https://api.xiaomimimo.com/v1"   # 语音识别未配置 base_url 时使用 llm.base_url
+#   tts_model: "mimo-v2.5-tts"
+#   stt_model: "whisper-1"
+#   voice: "冰糖"                               # 预置音色
+#   context: ""                                 # 自然语言风格控制
+
+logging:
+  level: "INFO"                # DEBUG / INFO / WARNING / ERROR
+  format: "text"               # text 或 json
+
+tools:
+  web_search:
+    api_key: ""
+    api_base: "https://api.tavily.com"
+
+# ---------------------------------------------------------------------------
+# 定时任务与数据维护
+# ---------------------------------------------------------------------------
+heartbeat:
+  enabled: false
+  interval_minutes: 60
+  channel: ""                  # 心跳消息发往的渠道会话，如 "qq:<用户 ID>"；启用前必须填写
+  prompt_file: "config/heartbeat.md"   # 心跳提示词，相对于实例目录
+
+cleanup:
+  enabled: true                # 每天 03:00 清理过期的私人数据（公共数据不由任何实例自动清理）
+  reminders_retention_days: 7  # 已送达的一次性提醒保留天数
+
+storage:                       # 运行数据的存放位置，相对路径相对于实例目录
+  sessions_dir: "data/sessions"
+  calendar_file: "data/calendar.json"
+  todos_file: "data/todos.json"
+  reminders_file: "data/reminders.json"
+  scheduler_file: "data/scheduler.json"   # 定时任务（提醒调度、每日清理等）的持久化文件
+  notes_dir: "data/notes"
+  vector_db_dir: "data/chroma"
+
+  

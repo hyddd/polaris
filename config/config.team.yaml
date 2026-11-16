@@ -1,0 +1,24 @@
+# Polaris 团队服务（team）默认配置
+#
+# 运行模式为 team 时，在 config/config.yaml 之后、config.local.yaml 之前加载。
+# 团队服务只保存公共数据：结构化数据存 MySQL（database），笔记和文档向量存本实例 data/ 目录下的 Chroma。
+# 请不要修改本文件；数据库地址、账号、密码写在team 模式实例的 config.local.yaml（默认 instances/team/config/config.local.yaml）。
+
+# 这里的 mode 只标明本文件属于 team 模式，修改它不能切换模式。
+# 选择模式：在实例的 config.local.yaml 里写 instance.mode，并用 start-team.sh 启动。
+instance:
+  mode: "team"
+
+server:
+  host: "0.0.0.0"              # 必须监听外部可访问的地址，个人服务和其他成员的浏览器才能连接
+  port: 8710                   # start-team.sh 使用的端口
+
+# 公共数据库（MySQL 5.6 及以上，字符集 utf8mb4）。host 为空时 start-team.sh 拒绝启动
+database:
+  host: ""
+  port: 3306
+  name: ""
+  user: ""
+  password: ""                 # 写在 config.local.yaml
+  connect_timeout: 5           # 秒
+  read_timeout: 15             # 秒

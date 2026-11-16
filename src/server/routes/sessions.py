@@ -21,6 +21,10 @@ class CreateSessionRequest(BaseModel):
     name: str | None = None
 
 
+class RenameSessionRequest(BaseModel):
+    name: str
+
+
 @router.get("/api/sessions")
 def list_sessions(channel: str = "default"):
     session_mgr = get_session_manager()
@@ -64,6 +68,25 @@ def create_session(req: CreateSessionRequest):
         "name": session.name,
         "created_at": session.created_at,
     }
+
+
+@router.put("/api/sessions/{session_id}")
+def rename_session(session_id: str, req: RenameSessionRequest):
+    """按 ID 重命名指定会话。
+
+    以前网页通过聊天命令 `/rename` 改名，而该命令改的是当前激活的会话，
+    不是页面上点的那个；而且走聊天入口要拿会话锁，回复进行中时会卡住。
+    """
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="名称不能为空")
+    session_mgr = get_session_manager()
+    if session_mgr.get(session_id) is None:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+    if any(s.name == name and s.session_id != session_id for s in session_mgr.list_sessions()):
+        raise HTTPException(status_code=400, detail=f"已存在同名会话「{name}」")
+    session_mgr.rename(session_id, name)
+    return {"ok": True, "session_id": session_id, "name": name}
 
 
 @router.get("/api/sessions/{session_id}")

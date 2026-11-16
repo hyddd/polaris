@@ -10,6 +10,7 @@ class RAGSearchResult:
     content: str
     score: float = 0.0
     tags: list[str] = field(default_factory=list)
+    scope: str = "private"   # 本机 Chroma 的结果是 local_scope；personal 从团队服务查到的是 public
 
     def to_dict(self) -> dict:
         return {
@@ -18,4 +19,5 @@ class RAGSearchResult:
             "content": self.content,
             "score": self.score,
             "tags": self.tags,
+            "scope": self.scope,
         }

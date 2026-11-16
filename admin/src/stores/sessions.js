@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { get, post, del } from '../api.js'
+import { get, post, put, del } from '../api.js'
 import { ElMessage } from 'element-plus'
 
 export const useSessionsStore = defineStore('sessions', {
@@ -31,8 +31,14 @@ export const useSessionsStore = defineStore('sessions', {
       await this.fetch()
     },
     async rename(sid, name) {
-      await post('/api/chat', { message: `/rename ${name}`, channel: 'admin' })
-      await this.fetch()
+      // 按 ID 改名；以前发聊天命令 /rename，改的是当前激活会话而不是 sid
+      try {
+        await put(`/api/sessions/${sid}`, { name })
+        await this.fetch()
+      } catch (e) {
+        ElMessage.error(e.message)
+        throw e
+      }
     },
   },
 })

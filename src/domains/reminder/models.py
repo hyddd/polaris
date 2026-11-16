@@ -14,7 +14,8 @@ class RepeatRule(str, Enum):
 class ReminderStatus(str, Enum):
     ACTIVE = "active"
     PAUSED = "paused"
-    CANCELLED = "cancelled"
+    CANCELLED = "cancelled"  # 一次性提醒已送达（历史上沿用了这个名字）
+    FAILED = "failed"        # 一次性提醒到点但没送达；resume 会立即重投
 
 
 @dataclass
@@ -30,6 +31,7 @@ class Reminder:
     user_id: str = ""
     created_at: datetime = field(default_factory=datetime.now)
     status: ReminderStatus = ReminderStatus.ACTIVE
+    scope: str = "private"     # "public"（公共库，每个实例都推送给自己的用户）/ "private"
 
     def to_dict(self) -> dict:
         return {
@@ -44,6 +46,7 @@ class Reminder:
             "user_id": self.user_id,
             "created_at": self.created_at.isoformat(),
             "status": self.status.value,
+            "scope": self.scope,
         }
 
     @classmethod
@@ -60,4 +63,5 @@ class Reminder:
             user_id=data.get("user_id", ""),
             created_at=datetime.fromisoformat(data.get("created_at", datetime.now().isoformat())),
             status=ReminderStatus(data.get("status", "active")),
+            scope=data.get("scope", "private"),
         )

@@ -17,6 +17,11 @@ class CalendarDomain:
     def __init__(self, store: CalendarStore):
         self._store = store
 
+    @property
+    def public_error(self) -> str | None:
+        """最近一次读公共库失败的原因（列表里只剩私有数据时用来提示）。"""
+        return getattr(self._store, "public_error", None)
+
     # ------------------------------------------------------------------
     # 查询
     # ------------------------------------------------------------------
@@ -39,8 +44,11 @@ class CalendarDomain:
 
     def create_event(self, date: str, title: str, time: str = "09:00",
                      duration: int = 60, attendees: list | None = None,
-                     channel: str = "admin", session_id: str = "") -> CalendarEvent:
-        """创建日程事件。"""
+                     channel: str = "admin", session_id: str = "",
+                     scope: str | None = None) -> CalendarEvent:
+        """创建日程事件。scope：public 存公共库、private 存本机；不传用默认。"""
+        from src.core.db import resolve_scope
+        scope = resolve_scope(scope)
         event = CalendarEvent(
             id=f"evt-{uuid.uuid4().hex[:8]}",
             title=title,
@@ -48,13 +56,16 @@ class CalendarDomain:
             duration=duration,
             attendees=attendees or [],
             date=date,
+            scope=scope,
         )
-        self._store.create_event(date, event)
+        # personal 存公共日程时 ID 由 team 服务分配，以存储返回的为准
+        event = self._store.create_event(date, event)
         event_time_str = f"{date} {event.time}"
+        # 关联提醒跟随日程的 scope：公共日程的提醒也是公共的（由 team 服务创建，见 reminder 域）
         event_bus.publish("calendar:event_created",
                           event_id=event.id, title=event.title,
                           event_time_str=event_time_str,
-                          channel=channel, session_id=session_id)
+                          channel=channel, session_id=session_id, scope=scope)
         return event
 
     def update_event(self, event_id: str, updates: dict,
@@ -69,14 +80,16 @@ class CalendarDomain:
             event_time_str = f"{result.date} {result.time}"
             event_bus.publish("calendar:event_updated",
                               event_id=result.id, title=result.title,
-                              event_time_str=event_time_str)
+                              event_time_str=event_time_str, scope=result.scope)
         return result
 
     def delete_event(self, event_id: str) -> bool:
         """删除事件。"""
+        existing = self._store.get_event(event_id)
         deleted = self._store.delete_event(event_id)
         if deleted:
-            event_bus.publish("calendar:event_deleted", event_id=event_id)
+            event_bus.publish("calendar:event_deleted", event_id=event_id,
+                              scope=existing.scope if existing else None)
         return deleted
 
     # ------------------------------------------------------------------
@@ -108,12 +121,17 @@ def set_calendar_domain(domain: CalendarDomain | None):
 # ---------------------------------------------------------------------------
 def _on_startup(**kwargs):
     from src.core.config import config
-    path = str(config.resolve_path(
-        config.get("storage.calendar_file", "data/calendar.json")))
-    store = CalendarStore(path)
+    from src.core.db import is_team, public_enabled, instance_info
+    from src.core.db.public_store import NoPrivate
+    from .public_store import PublicCalendarStore, RemoteCalendarStore, ScopedCalendarStore
+    if is_team():
+        store = ScopedCalendarStore(NoPrivate(), PublicCalendarStore() if public_enabled() else None)
+    else:
+        path = str(config.resolve_path(config.get("storage.calendar_file", "data/calendar.json")))
+        store = ScopedCalendarStore(CalendarStore(path), RemoteCalendarStore() if public_enabled() else None)
     global _domain
     _domain = CalendarDomain(store)
-    logger.info("日程域已初始化")
+    logger.info(f"日程域已初始化（{instance_info()['mode_label']}，公共数据{'可用' if public_enabled() else '未启用'}）")
 
 
 event_bus.subscribe("app:startup", _on_startup)

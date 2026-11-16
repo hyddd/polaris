@@ -70,6 +70,7 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 删除操作先确认再执行
 - 工具返回空结果时如实告知，不编造数据
 - 信任工具返回的结果。工具返回成功消息（如"已更新""已添加""已删除"）时，直接告知用户操作成功，不要说"遇到了问题""无法完成"等。工具结果就是事实，不需要质疑
+- 向用户列出或提到日程、待办、提醒、笔记、知识库文档时，每一条前面都要带上工具结果里的范围标签【公共】或【私人】，原样保留，不要省略或改写；新建成功时也说明存成了【公共】还是【私人】
 - 用中文回复，简洁直接
 """
 
@@ -105,17 +106,24 @@ def _get_all_tools() -> list:
     return ToolRegistry.get_instance().list_tools()
 
 
+def _run_session(state: AgentState):
+    """本轮执行的会话：优先用 state 里固定的 session_id，没有才退回 channel 的激活会话。"""
+    session_mgr = get_session_manager()
+    session = session_mgr.get(state.get("session_id") or "")
+    if session is None:
+        session = session_mgr.active_session(state.get("channel", "default"))
+    return session
+
+
 def agent_node(state: AgentState) -> dict:
     tools = _get_all_tools()
     messages = state.get("messages", [])
 
-    session_mgr = get_session_manager()
-    channel = state.get("channel", "default")
-    compressor = session_mgr.active_session(channel).compressor
+    session = _run_session(state)
+    compressor = session.compressor
     summary, recent = compressor.process(list(messages))
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    session = session_mgr.active_session(channel)
     persona = session.persona
     system_prompt = ""
     persona_line = _format_persona(persona)
@@ -165,8 +173,7 @@ def agent_node(state: AgentState) -> dict:
         )
         channel = state.get("channel", "default")
         try:
-            session_mgr = get_session_manager()
-            session = session_mgr.active_session(channel)
+            session = _run_session(state)
             session.cache_stats["hit"] += cache_read
             session.cache_stats["miss"] += cache_miss
             session.cache_stats["calls"] += 1
@@ -228,9 +235,8 @@ def tool_node(state: AgentState) -> dict:
     results = []
     pending_action = None
 
-    session_mgr = get_session_manager()
     channel = state.get("channel", "default")
-    current_session_id = session_mgr.active_session(channel).session_id
+    current_session_id = _run_session(state).session_id
 
     parsed = []
     for i, tc in enumerate(last_message.tool_calls):

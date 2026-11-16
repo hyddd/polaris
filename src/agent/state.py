@@ -21,3 +21,4 @@ class AgentState(TypedDict):
     pending_action: Optional[dict]
     streaming: bool  # True = chain.stream() for token events; False = chain.invoke()
     channel: str  # "admin" | "feishu" | "qq" | "default"
+    session_id: str  # 本轮固定执行的会话；运行中 channel 的激活会话可能被切走
