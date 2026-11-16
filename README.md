@@ -205,7 +205,7 @@ chmod 600 config/config.local.yaml
 
 | 层次 | 文件 | 位置 | 纳入版本库 | 内容 |
 |---|---|---|---|---|
-| 通用默认值 | `config.yaml` | 项目目录 `config/` | 是 | 两种模式共用的配置项：`llm`、`embedding`、`channels`、`heartbeat`、`cleanup`、`storage`、`server` 的通用部分等 |
+| 通用默认值 | `config.yaml` | 项目目录 `config/` | 是 | 两种模式共用的配置项：`llm`、`embedding`、`channels`、`tools`、`voice`、`logging`、`heartbeat`、`cleanup`、`storage`、`server` 的通用部分等 |
 | 模式默认值 | `config.team.yaml` | 项目目录 `config/` | 是 | team 模式专用：`database`，以及监听地址 `0.0.0.0`、端口 `8710` |
 | | `config.personal.yaml` | 项目目录 `config/` | 是 | personal 模式专用：`remote`、`visibility`，以及监听地址 `127.0.0.1`、端口 `8700` |
 | 实例配置 | `config.local.yaml` | 实例目录下的 `config/` | 否 | 本实例的设置：密钥、显示名称、team 模式地址（personal）或数据库连接（team） |
@@ -306,11 +306,12 @@ polaris/                          项目目录，同时是 personal 模式的实
 
 | 旧位置 | 新位置 |
 |---|---|
-| `config/config.local.yaml` | `config/config.local.yaml` |
-| `instances/team/config/config.local.yaml` | `instances/team/config/config.local.yaml` |
+| `data/config.local.yaml` | `config/config.local.yaml` |
+| `instances/team/data/config.local.yaml` | `instances/team/config/config.local.yaml` |
 | `data/heartbeat.md` | `config/heartbeat.md` |
+| `data/cli/config.toml` | `config/cli.yaml`（格式由 TOML 改为 YAML，需按 [8.2](#82-配置文件) 重写） |
 
-新位置没有文件时，服务仍会读取旧位置的 `config.local.yaml`，并给出迁移提示。
+新位置没有文件时，服务仍会读取旧位置的 `config.local.yaml`，并给出迁移提示；`heartbeat.md` 和 TUI 配置不会读取旧位置，必须移动。
 
 ### 5.6 配置项参考
 
@@ -321,7 +322,7 @@ polaris/                          项目目录，同时是 personal 模式的实
 | 配置项 | 类型 | 默认值 | 默认值位置 | 适用模式 | 说明 |
 |---|---|---|---|---|---|
 | `instance.mode` | 字符串 | `personal` | —（只能写在 `config.local.yaml`） | 全部 | `team` 或 `personal`，决定加载哪个模式默认值文件（优先级见 [5.2](#52-加载顺序)）。其他取值按 `personal` 处理，并给出配置提示 |
-| `instance.name` | 字符串 | 空（显示为 `Polaris`） | `config.yaml` | 全部 | 显示名称，出现在网页、TUI 和诊断信息中，用于区分不同的服务 |
+| `instance.name` | 字符串 | `Polaris` | `config.yaml` | 全部 | 显示名称，出现在网页、TUI 和诊断信息中，用于区分不同的服务 |
 
 **remote：team 模式地址**
 
@@ -608,7 +609,7 @@ profiles:
   local:
     url: "http://127.0.0.1:8700"
   team:
-    url: "https://polaris.example.internal"
+    url: "http://127.0.0.1:8710"   # 非本机地址必须使用 https，见 8.5
     # token_file: "~/.config/polaris/token"   # 服务端开启 admin_token 时使用
 
 ui:
@@ -721,7 +722,10 @@ mkdir -p /opt/polaris-demo/config
 python run.py --home /opt/polaris-demo --port 8800 --demo 50
 ```
 
-不同实例的数据（会话、提醒、日程等）完全隔离。直接运行 `run.py` 时，运行模式取实例 `config.local.yaml` 中的 `instance.mode`，也可以用环境变量 `POLARIS_MODE` 指定。
+不同实例的数据（会话、提醒、日程等）完全隔离。直接运行 `run.py` 时：
+
+- 运行模式取实例 `config.local.yaml` 中的 `instance.mode`，也可以用环境变量 `POLARIS_MODE` 指定；
+- 端口只由 `--port` 决定（默认 8700），**不读取** `server.port`；监听地址取 `--host`，未指定时读取 `server.host`。
 
 ### 9.5 在同一台机器上运行两种模式
 
@@ -740,6 +744,8 @@ python run.py --home /opt/polaris-demo --port 8800 --demo 50
 
 ## 10. 系统命令
 
+在网页、QQ、飞书的对话中可以使用以下命令：
+
 | 命令 | 功能 |
 |------|------|
 | `/new <名称>` | 创建新会话 |
@@ -753,6 +759,20 @@ python run.py --home /opt/polaris-demo --port 8800 --demo 50
 | `/reload` | 热重载配置（无需重启） |
 | `/cleanup` | 手动清理过期数据 |
 | `/help` | 显示帮助 |
+
+TUI 的命令与上表不同，会话管理方式与 Claude Code 一致：
+
+| 命令 | 功能 |
+|------|------|
+| `/resume [名称或ID]` | 打开会话选择器，或直接恢复指定会话 |
+| `/clear` | 开始新会话（旧会话保留） |
+| `/rename <名称>` | 重命名当前会话 |
+| `/history`、`/view` | 查看当前会话的历史消息、某次回答的详情 |
+| `/todos`、`/calendar`、`/reminders` | 直接查询待办、日程、提醒，不调用模型 |
+| `/status`、`/tools`、`/cache`、`/compact` | 连接与会话状态、工具列表、缓存统计、手动压缩 |
+| `/theme`、`/help`、`/quit` | 切换配色、帮助、退出 |
+
+`/reset`、`/cleanup`、`/reload` 在 TUI 中不开放，需要时请在网页上操作。
 
 ---
 
@@ -769,6 +789,9 @@ python run.py --home /opt/polaris-demo --port 8800 --demo 50
 | L7 | 不支持修改已有数据的范围 | 如需将私人数据改为公共数据，只能新建一条公共数据后删除原数据。升级前已有的数据不会自动迁移 |
 | L8 | MySQL 连接未启用 SSL | 账号和数据以明文传输，仅应在内网中使用 |
 | L9 | 知识库不保存原始文件 | Chroma 目录丢失后须重新上传文档 |
+| L10 | 模型上下文窗口固定按 200K token 计算 | 会话超过 160K token 才压缩。若所用模型的上下文窗口更小（如 128K），长会话可能因超出上限而请求失败 |
+| L11 | 请求不携带 `max_tokens`，也不检测输出截断 | 输出上限取决于模型服务的默认值；回答因达到上限被截断时没有提示 |
+| L12 | `temperature` 不可配置 | 对话固定为 0.3、上下文压缩固定为 0；网页上"重新生成"的结果与原回答差别很小 |
 
 ---
 
@@ -894,7 +917,11 @@ event_bus.publish("config:reload")              # 发布
 | `calendar:event_*` | CalendarDomain | ReminderDomain 自动关联提醒 |
 | `notes:note_*` | NotesDomain | RAGDomain 自动向量索引 |
 | `scheduler:job_*` | SchedulerDomain | — |
-| `reminder:reminder_*` | ReminderDomain | — |
+| `reminder:reminder_*`、`reminder:triggered` | ReminderDomain | — |
+| `todos:todo_*` | TodoDomain | — |
+| `rag:document_*` | RAGDomain | — |
+| `persona:persona_changed` | PersonaDomain | — |
+| `public:sync` | 公共数据同步线程，每 `sync.interval_seconds` 秒 | ReminderDomain 拉取公共提醒并更新调度 |
 
 完整事件列表见 [EventBus 事件参考](docs/eventbus.md)。
 
@@ -907,14 +934,14 @@ event_bus.publish("config:reload")              # 发布
 ### 14.3 新增通道
 
 1. 创建 `src/channels/wechat/`，实现 `WechatChannel(ChannelPlugin)`
-2. 在 `config/config.yaml` 的 `channels` 下增加配置：
+2. 在 `config/config.yaml` 的 `channels` 下登记插件入口，默认关闭：
    ```yaml
    channels:
      wechat:
        plugin: "src.channels.wechat"
-       enabled: true
+       enabled: false
    ```
-3. 完成。不碰框架代码。
+3. 使用者在自己的 `config.local.yaml` 中启用并填写凭据（`channels.wechat.enabled: true` 等）。不需要修改框架代码。
 
 ---
 
