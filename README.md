@@ -6,8 +6,10 @@
 
 Polaris（V2）版本是基于 Polaris（V1）： https://github.com/yan-kang/polaris 改版，增加功能：
 - TUI：一个简单实用的terminal ui。
-- team模式：团队合作模式，多人共同管理日程、待办。
-- personal模式：V1功能。personal模式既可以和team模式一起使用，也可以分开使用。具体关系见：3. [部署方式](#3-部署方式)
+- team模式：团队合作模式，多人共同管理日程、待办。配置运行：[team 模式配置](#6-team-模式配置)
+- personal模式：V1功能。personal模式既可以和team模式一起使用，也可以分开使用。具体关系见：3. [部署方式](#3-部署方式)，配置运行：[personal 模式配置](#7-personal-模式配置)
+
+建议：**一台服务器，只运行一种实例模式**！
 
 ---
 
