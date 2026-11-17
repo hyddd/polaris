@@ -77,6 +77,20 @@ tools:
     api_key: ""
     api_base: "https://api.tavily.com"
 
+# 通知：提醒到点时转发，以及主动发送通知（接口 / 网页"通知"页面 / AI 工具）。
+# 通知目标写在 config.local.yaml（webhook 地址含 key，相当于密码）；只能发给这里列出的目标。
+notify:
+  api_token: ""                # 通知接口令牌；为空时通知接口不单独鉴权
+  webhooks: []                 # 企业微信群机器人
+  # - name: 团队群                 # 目标名称，接口和 AI 按名称发送
+  #   type: wecom
+  #   url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>"
+  #   scopes: [public]             # 转发哪些提醒：public 公共、private 私人；不写则都转发
+  recipients: []               # QQ / 飞书接收人（需要启用对应渠道）
+  # - name: 张三QQ
+  #   channel: "qq:<openid>"       # QQ 私聊；飞书私聊 "feishu:<open_id>"，飞书群聊 "feishu-chat:<chat_id>"
+  #   scopes: [private]
+
 # ---------------------------------------------------------------------------
 # 定时任务与数据维护
 # ---------------------------------------------------------------------------

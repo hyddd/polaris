@@ -37,7 +37,7 @@ Polaris（V2）版本是基于 Polaris（V1）： https://github.com/yan-kang/po
 
 **团队与个人两种运行模式。** team 模式集中保存公共数据，供团队成员共享；personal 模式部署在成员各自的电脑上，管理私人数据，并通过 HTTP 读写 team 模式的公共数据。数据逐条标注【公共】/【私人】。详见 [运行模式](#2-运行模式)。
 
-**定时提醒，主动推送。** 到点自动推送到你所在的渠道。支持一次性/每天/每周/每月重复，日程创建自动关联提前 15 分钟提醒，服务重启后自动恢复。
+**定时提醒，主动推送。** 到点自动推送到你所在的渠道，含企业微信群、QQ、飞书；也可以通过接口、网页或 AI 主动发送通知（见 [9.6](#96-通知提醒转发与主动发送)）。支持一次性/周期性重复，日程创建自动关联提前 15 分钟提醒，服务重启后自动恢复。
 
 ```
 用户："明天上午 9 点提醒我开会"
@@ -47,7 +47,7 @@ Polaris（V2）版本是基于 Polaris（V1）： https://github.com/yan-kang/po
 → 创建日程 → 自动关联 14:45 的提前提醒
 ```
 
-**8 个内置工具，插件化自动发现。** 每个工具独立子目录，`ToolRegistry` 启动时扫描注册，新增工具只需创建目录和实现 `create_default()` 工厂函数。
+**9 个内置工具，插件化自动发现。** 每个工具独立子目录，`ToolRegistry` 启动时扫描注册，新增工具只需创建目录和实现 `create_default()` 工厂函数。
 
 | 工具 | 能力 |
 |------|------|
@@ -59,6 +59,7 @@ Polaris（V2）版本是基于 Polaris（V1）： https://github.com/yan-kang/po
 | persona | 会话独立人格（名称/身份/性格/称呼） |
 | rag | 笔记内容语义检索 |
 | voice | MiMo TTS 语音合成，支持预置音色、音频标签、自然语言风格控制 |
+| notify | 主动发送通知到企业微信群、QQ、飞书（预先配置的目标） |
 
 **多通道，插件配置驱动。** 飞书 WebSocket Bot、QQ botpy SDK——所有通道共享会话记忆。新增通道只需写实现 + YAML 配置，不动框架代码。超长消息按段落/句子边界智能分段。Admin Web UI 由 FastAPI 直接托管。
 
@@ -205,7 +206,7 @@ chmod 600 config/config.local.yaml
 
 | 层次 | 文件 | 位置 | 纳入版本库 | 内容 |
 |---|---|---|---|---|
-| 通用默认值 | `config.yaml` | 项目目录 `config/` | 是 | 两种模式共用的配置项：`llm`、`embedding`、`channels`、`tools`、`voice`、`logging`、`heartbeat`、`cleanup`、`storage`、`server` 的通用部分等 |
+| 通用默认值 | `config.yaml` | 项目目录 `config/` | 是 | 两种模式共用的配置项：`llm`、`embedding`、`channels`、`tools`、`voice`、`logging`、`notify`、`heartbeat`、`cleanup`、`storage`、`server` 的通用部分等 |
 | 模式默认值 | `config.team.yaml` | 项目目录 `config/` | 是 | team 模式专用：`database`，以及监听地址 `0.0.0.0`、端口 `8710` |
 | | `config.personal.yaml` | 项目目录 `config/` | 是 | personal 模式专用：`remote`、`visibility`，以及监听地址 `127.0.0.1`、端口 `8700` |
 | 实例配置 | `config.local.yaml` | 实例目录下的 `config/` | 否 | 本实例的设置：密钥、显示名称、team 模式地址（personal）或数据库连接（team） |
@@ -370,7 +371,7 @@ polaris/                          项目目录，同时是 personal 模式的实
 | `embedding.base_url` | 字符串 | 空 | `config.yaml` | 全部 | Embedding 接口的根路径，例如 `https://example.com/v1`。**不要带 `/embeddings`**，调用时会自动拼接 |
 | `embedding.model` | 字符串 | `netease-youdao/bce-embedding-base_v1` | `config.yaml` | 全部 | Embedding 模型 |
 
-其余配置项（`channels`、`tools`、`voice`、`logging`、`heartbeat`、`cleanup`、`storage`）与运行模式无关，含义见 `config/config.yaml` 中的注释。`llm.temperature`、`llm.max_tokens` 目前不可配置：对话固定使用 temperature 0.3，输出长度使用模型默认值。
+`notify.*` 见 [9.6](#96-通知提醒转发与主动发送)。其余配置项（`channels`、`tools`、`voice`、`logging`、`heartbeat`、`cleanup`、`storage`）与运行模式无关，含义见 `config/config.yaml` 中的注释。`llm.temperature`、`llm.max_tokens` 目前不可配置：对话固定使用 temperature 0.3，输出长度使用模型默认值。
 
 ### 5.7 文件权限
 
@@ -740,6 +741,97 @@ python run.py --home /opt/polaris-demo --port 8800 --demo 50
 ./cli.sh --url http://127.0.0.1:8710    # 连接 team 模式：仅公共数据
 ```
 
+### 9.6 通知：提醒转发与主动发送
+
+通知目标有三类，地位相同：
+
+| 类型 | 配置 | 说明 |
+|---|---|---|
+| 企业微信群机器人 | `notify.webhooks` | 群里"添加群机器人"后获得 webhook 地址；单向，只发不收 |
+| QQ 私聊 | `notify.recipients`，`channel: "qq:<openid>"` | 需要启用并连上 QQ 渠道 |
+| 飞书私聊、飞书群聊 | `notify.recipients`，`channel: "feishu:<open_id>"` 或 `"feishu-chat:<chat_id>"` | 需要启用并连上飞书渠道 |
+
+通知目标有两种用途：
+
+| 用途 | 何时发送 | 发给谁 |
+|---|---|---|
+| **提醒转发** | 提醒到点时自动发送（一次性提醒、周期提醒的每一次、日程"开始前 15 分钟"提醒） | 所有 `scopes` 包含该提醒范围（公共/私人）的目标 |
+| **主动通知** | 通过接口、网页"通知"页面或 AI 工具发送 | 调用时按名称指定的目标，不受 `scopes` 限制 |
+
+只能发给配置中列出的目标：接口和 AI 只能按名称选择，不能临时指定 webhook 地址或账号。
+
+#### 配置
+
+写在实例的 `config.local.yaml` 中。webhook 地址里的 `key` 相当于密码，不能写进入库的文件：
+
+```yaml
+notify:
+  api_token: ""                    # 通知接口令牌，见下文"鉴权"
+  webhooks:
+    - name: 团队群                 # 目标名称，接口和 AI 按名称发送；所有目标的名称不能重复
+      type: wecom
+      url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>"
+      scopes: [public]             # 转发哪些提醒：public、private；不写则都转发
+  recipients:
+    - name: 张三QQ
+      channel: "qq:<openid>"
+      scopes: [private]
+    - name: 项目飞书群
+      channel: "feishu-chat:<chat_id>"
+```
+
+- QQ 的 openid 只有用户先给机器人发过消息后才能获得，可以在会话列表的渠道名（`qq:<openid>`）中查到；飞书的 open_id、chat_id 同理，也可以从飞书开放平台查询；
+- 修改后重启服务生效；`start-*.sh --check` 会列出生效的目标，并提示配置错误、渠道未启用等问题。
+
+#### 主动通知的三个入口
+
+**1. HTTP 接口（CI、脚本）**
+
+```bash
+curl -X POST http://10.0.0.8:8710/api/notify/send \
+  -H "Authorization: Bearer $POLARIS_NOTIFY_TOKEN" -H "Content-Type: application/json" \
+  -d '{"targets":["团队群","张三QQ"],"title":"构建失败：polaris#128","content":"main 分支测试未通过","source":"CI"}'
+```
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/notify/targets` | 列出目标名称、类型、`scopes`、当前是否可用及原因；不返回地址和账号 |
+| `POST /api/notify/send` | 参数：`targets`（名称列表）、`title`、`content`、`source`（来源，写在消息末尾）。返回每个目标的结果：`{"results": [{"target": "团队群", "ok": true}, {"target": "张三QQ", "ok": false, "error": "…"}]}` |
+
+返回码：`200` 已逐个尝试发送（部分失败也是 200，需看每个目标的 `ok`）；`400` 目标不存在、内容为空或过长；`401` 令牌错误；`429` 所有目标都超过频率限制。
+
+**2. 网页"通知"页面**
+
+侧边栏"通知"：勾选目标、填写标题和正文后发送，页面显示每个目标的结果。不可用的目标会显示原因。服务设置了 `notify.api_token` 时，页面会要求输入令牌，令牌只保存在当前浏览器中。
+
+**3. AI 工具 `notify`**
+
+在对话（网页、TUI、QQ、飞书）中直接要求，例如"把目前未完成的待办和今天的提醒整理一下，发到团队群和张三的 QQ"。AI 会先查询待办、提醒等数据，整理成正文，再发送，并回复每个目标的结果。
+
+- AI 只在用户明确要求发送时才调用该工具，发送前不会再确认；
+- 消息内容由 AI 根据你的要求组织。在 personal 模式下，查询结果可能同时包含【公共】和【私人】数据，系统不会自动过滤，发到群里前请在要求中说明范围（例如"只发公共的待办"）。
+
+#### 鉴权
+
+| `notify.api_token` | 通知接口的鉴权 |
+|---|---|
+| 已设置 | 请求头必须带 `Authorization: Bearer <api_token>`；此时通知接口不再要求 `server.admin_token`，CI 只需持有通知令牌 |
+| 为空（默认） | 通知接口不单独鉴权，与其他接口一样只受 `server.admin_token` 约束；`admin_token` 也为空时不鉴权 |
+
+team 模式的 `server.admin_token` 目前必须为空（见 [第 11 节](#11-已知限制) L1），因此在 team 模式上开放给 CI 使用时，建议设置 `notify.api_token`，否则能访问服务端口的人都可以调用通知接口。AI 工具在服务进程内调用，不需要令牌。
+
+#### 限制与失败处理
+
+| 项目 | 规则 |
+|---|---|
+| 频率 | 每个目标每分钟最多 20 条（与企业微信群机器人的官方上限一致），提醒转发和主动通知合计 |
+| 长度 | 标题最多 200 字，正文最多 4000 字；企业微信消息超过 4096 字节时截断，QQ、飞书按渠道规则分段 |
+| 格式 | 企业微信使用 markdown；QQ、飞书使用纯文本。消息末尾标注来源和服务名称（`instance.name`） |
+| 失败 | 不重试。主动通知把每个目标的结果返回给调用方；提醒转发只写日志，不影响提醒原有的推送方式 |
+| 日志 | 只记录目标名称；请求地址中的 `key` 会被遮盖 |
+
+**避免重复的提醒转发**：一条公共提醒会在 team 模式和每个 personal 模式上各触发一次。多人都把公共提醒转发到同一个群时，群里会收到多条。建议 team 模式的目标用 `scopes: [public]`，personal 模式的目标用 `scopes: [private]`；personal 模式转发公共提醒时，`--check` 会给出提示。
+
 ---
 
 ## 10. 系统命令
@@ -792,6 +884,7 @@ TUI 的命令与上表不同，会话管理方式与 Claude Code 一致：
 | L10 | 模型上下文窗口固定按 200K token 计算 | 会话超过 160K token 才压缩。若所用模型的上下文窗口更小（如 128K），长会话可能因超出上限而请求失败 |
 | L11 | 请求不携带 `max_tokens`，也不检测输出截断 | 输出上限取决于模型服务的默认值；回答因达到上限被截断时没有提示 |
 | L12 | `temperature` 不可配置 | 对话固定为 0.3、上下文压缩固定为 0；网页上"重新生成"的结果与原回答差别很小 |
+| L13 | 通知能力有限 | 企业微信只支持群机器人（只能发到机器人所在的群）；QQ 只支持私聊；发送失败不重试；心跳任务的结果不会转发；AI 发送前不确认，也不会自动过滤私人数据 |
 
 ---
 
@@ -824,6 +917,8 @@ TUI 的命令与上表不同，会话管理方式与 Claude Code 一致：
 | 语义搜索或知识库上传报 `404` | `embedding.base_url` 末尾带了 `/embeddings`，实际请求的是 `…/embeddings/embeddings` | 去掉末尾的 `/embeddings` |
 | 知识库上传提示`未配置 embedding.api_key` | 保存该文档的服务未配置 Embedding | 公共文档在 team 模式上配置，私人文档在 personal 模式上配置 |
 | TUI 提示`远程地址必须使用 https` | TUI 不允许对非本机地址使用 http | 见 [8.5](#85-连接其他机器上的服务) |
+| 通知目标没有收到消息 | 企业微信：地址或 `key` 错误、机器不能访问外网；QQ / 飞书：渠道未启用或未连接、账号 ID 错误；提醒转发：`scopes` 不包含该提醒的范围；或超过频率限制 | 主动通知直接看返回的 `error`；提醒转发看日志中的 `提醒转发失败` 记录；执行 `start-*.sh --check` 检查配置 |
+| 调用通知接口返回 401 | 设置了 `notify.api_token` 但请求未携带或携带错误；或未设置 `api_token` 而设置了 `server.admin_token` | 请求头加 `Authorization: Bearer <令牌>` |
 | 公共提醒在其他服务上已触发，本机未触发 | personal 模式尚未完成下一次同步，或时区不一致 | 新建的公共提醒最多延迟 `sync.interval_seconds` 秒才会被调度；检查各机器的时区设置 |
 
 修改 `config.local.yaml` 后须重启对应服务：
@@ -865,6 +960,7 @@ src/
     scheduler/               #   统一任务调度（APScheduler + JSON 持久化 + 重启恢复）
     rag/                     #   向量存储 + 分块 + 文档解析
     voice/                   #   MiMo TTS + STT + WAV→silk/mp3 转换
+    notify/                  #   通知：提醒转发、主动发送（企业微信群机器人 / QQ / 飞书）
 
   tools/                     # LLM 工具适配层（薄适配器，~40行/个）
     calendar/                #   调用 CalendarDomain
@@ -874,6 +970,7 @@ src/
     persona/                 #   调用 PersonaDomain
     rag/                     #   调用 RAGDomain
     voice/                   #   调用 VoiceDomain
+    notify/                  #   调用 notify（主动发送通知）
     web_search/              #   Tavily API
 
   channels/                  # 通道插件（YAML 驱动 + 动态 import）
@@ -917,7 +1014,8 @@ event_bus.publish("config:reload")              # 发布
 | `calendar:event_*` | CalendarDomain | ReminderDomain 自动关联提醒 |
 | `notes:note_*` | NotesDomain | RAGDomain 自动向量索引 |
 | `scheduler:job_*` | SchedulerDomain | — |
-| `reminder:reminder_*`、`reminder:triggered` | ReminderDomain | — |
+| `reminder:reminder_*` | ReminderDomain | — |
+| `reminder:triggered` | ReminderDomain（提醒推送后） | notify：转发给 `scopes` 匹配的通知目标 |
 | `todos:todo_*` | TodoDomain | — |
 | `rag:document_*` | RAGDomain | — |
 | `persona:persona_changed` | PersonaDomain | — |

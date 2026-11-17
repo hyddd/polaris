@@ -41,6 +41,9 @@
         <router-link to="/reminders" class="sidebar-link">
           <el-icon><Bell /></el-icon> 提醒
         </router-link>
+        <router-link to="/notify" class="sidebar-link">
+          <el-icon><Promotion /></el-icon> 通知
+        </router-link>
         <router-link to="/status" class="sidebar-link">
           <el-icon><Monitor /></el-icon> 状态
         </router-link>

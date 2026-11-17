@@ -93,6 +93,7 @@ from .routes.knowledge import router as knowledge_router
 from .routes.reminders import router as reminders_router
 from .routes.voice import router as voice_router
 from .routes.status import router as status_router
+from .routes.notify import router as notify_router
 
 # --- Create app and register middleware ---
 
@@ -115,6 +116,7 @@ app.include_router(knowledge_router)
 app.include_router(reminders_router)
 app.include_router(voice_router)
 app.include_router(status_router)
+app.include_router(notify_router)
 
 # --- Admin frontend catch-all (must be LAST) ---
 

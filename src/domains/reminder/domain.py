@@ -229,11 +229,19 @@ class ReminderDomain:
         if not reminder:
             logger.warning(f"触发失败，提醒不存在: {reminder_id}")
             return
+        self._deliver(reminder)
+
+    def _deliver(self, reminder: Reminder) -> bool:
+        """推送提醒，并发布 reminder:triggered（webhook 通知等订阅者据此转发）。"""
         delivered = self._handler.handle(reminder)
         event_bus.publish("reminder:triggered",
                           reminder_id=reminder.id, title=reminder.title,
+                          description=reminder.description,
+                          trigger_time=reminder.trigger_time.isoformat(),
+                          scope=reminder.scope,
                           channel=reminder.channel, session_id=reminder.session_id,
                           delivered=delivered)
+        return delivered
 
     # ------------------------------------------------------------------
     # 调度委托 SchedulerDomain
@@ -251,7 +259,7 @@ class ReminderDomain:
             if reminder.trigger_time <= datetime.now():
                 # 过期的一次性提醒直接触发
                 logger.info(f"提醒时间已过，立即触发: {reminder.id} - {reminder.title}")
-                self._handler.handle(reminder)
+                self._deliver(reminder)
                 return
             scheduler.add_date_job(
                 job_id=f"reminder:{reminder.id}",

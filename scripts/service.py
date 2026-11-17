@@ -43,6 +43,17 @@ def _load_layers_module():
 
 layers = _load_layers_module()
 
+
+def _load_notify_targets_module():
+    """通知目标的校验规则，与服务端共用（该文件不依赖项目其他模块）。"""
+    spec = importlib.util.spec_from_file_location("polaris_notify_targets", ROOT / "src/domains/notify/targets.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+notify_targets = _load_notify_targets_module()
+
 MODES = {
     "team": {"label": "团队服务", "port": 8710, "prefix": "local.polaris-team."},
     # 个人服务沿用原 start.sh 的 launchd 名称、日志位置，原来启动的服务也能用 stop-personal.sh 停掉
@@ -175,10 +186,31 @@ class Service:
         else:
             if not str(self.section("remote").get("url") or "").strip():
                 warnings.append("没有配置 remote.url：这是单机版，只有私人数据（要用公共数据，请填团队服务地址）")
+        warnings.extend(self.check_webhooks())
         for file in (ROOT / "run.py", ROOT / "admin/dist/index.html", PYTHON):
             if not file.exists():
                 problems.append(f"缺少运行文件：{file}")
         return problems, warnings
+
+    def check_webhooks(self) -> list[str]:
+        """notify.webhooks / notify.recipients 的校验，规则与服务端相同（src/domains/notify/targets.py）。"""
+        notify = self.section("notify")
+        targets, notes = notify_targets.load_targets(notify.get("webhooks"), notify.get("recipients"))
+        notes = [f"{n}，该条将被跳过" if "第" in n else n for n in notes]
+        channels = self.section("channels")
+        for t in targets:
+            if t.plugin and not (channels.get(t.plugin) or {}).get("enabled"):
+                notes.append(f"通知目标 {t.name} 需要启用 {t.plugin} 渠道（channels.{t.plugin}.enabled），否则发送会失败")
+            if self.mode == "personal" and "public" in t.scopes:
+                notes.append(f"通知目标 {t.name} 会转发公共提醒：同一条公共提醒在 team 模式和每个 personal 模式都会触发，"
+                             f"多人都这样配置时会收到重复通知（建议 personal 模式只转发 private）")
+        if targets:
+            print("✓ 通知目标：" + "、".join(f"{t.name}（{t.type}，提醒转发 {'/'.join(t.scopes)}）" for t in targets))
+        if notify.get("api_token"):
+            print("✓ 通知接口：已设置 notify.api_token")
+        elif targets and self.mode == "team":
+            notes.append("没有设置 notify.api_token：能访问团队服务端口的人都可以调用通知接口发消息")
+        return notes
 
     def check_connections(self) -> list[str]:
         """连数据库 / 团队服务试一下。只是提醒：对方晚点起来也没关系，服务会在每次使用时重连。"""

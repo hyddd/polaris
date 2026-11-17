@@ -71,6 +71,20 @@ remote:
 #   web_search:
 #     api_key: ""
 
+# 通知目标：提醒到点时按 scopes 转发；也可以主动发送（接口 /api/notify/send、网页"通知"页面、AI 工具 notify）
+# team 模式建议只转发公共提醒，personal 模式只转发私人提醒，避免同一条公共提醒被多人重复推到同一个群
+# notify:
+#   api_token: ""                # 通知接口令牌，CI 调用时放在 Authorization: Bearer <令牌>；为空时不单独鉴权
+#   webhooks:                    # 企业微信群机器人（群里"添加群机器人"后获得地址）
+#     - name: 我的企微群
+#       type: wecom
+#       url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>"
+#       scopes: [private]
+#   recipients:                  # QQ / 飞书接收人，需要先启用对应渠道
+#     - name: 我的QQ
+#       channel: "qq:<openid>"     # 飞书私聊 "feishu:<open_id>"；飞书群聊 "feishu-chat:<chat_id>"
+#       scopes: [private]
+
 # 心跳定时任务（提示词文件默认 config/heartbeat.md）
 # heartbeat:
 #   enabled: true

@@ -247,7 +247,7 @@ class PolarisFeishuBot:
             pass
 
     def _do_send(self, receive_id: str, receive_id_type: str, content: str) -> None:
-        """Send a single message via Feishu API."""
+        """Send a single message via Feishu API. 飞书返回失败时抛 RuntimeError（附错误码）。"""
         from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
         content_json = json.dumps({"text": content}, ensure_ascii=False)
         request = CreateMessageRequest.builder() \
@@ -258,35 +258,32 @@ class PolarisFeishuBot:
                 .content(content_json)
                 .build()) \
             .build()
-        self.client.im.v1.message.create(request)
+        resp = self.client.im.v1.message.create(request)
+        if resp is not None and hasattr(resp, "success") and not resp.success():
+            raise RuntimeError(f"飞书返回错误 code={getattr(resp, 'code', '?')}，{getattr(resp, 'msg', '')}")
 
-    def _send_message(self, chat_id: str, content: str) -> None:
+    def _send_message(self, chat_id: str, content: str) -> bool:
+        return self._send(chat_id, "chat_id", content)
+
+    def _send(self, receive_id: str, receive_id_type: str, content: str) -> bool:
+        """发送（过长时分段），返回是否全部成功。"""
         try:
             if len(content.encode('utf-8')) <= MAX_MESSAGE_LENGTH:
-                self._do_send(chat_id, "chat_id", content)
+                self._do_send(receive_id, receive_id_type, content)
             else:
                 chunks = ChannelPlugin._split_message(content, _CHAR_LIMIT)
                 logger.info(f"[feishu] 消息过长，分 {len(chunks)} 段发送")
                 for i, chunk in enumerate(chunks):
                     if i > 0:
                         time.sleep(0.5)
-                    self._do_send(chat_id, "chat_id", chunk)
+                    self._do_send(receive_id, receive_id_type, chunk)
+            return True
         except Exception as e:
             logger.error(f"[feishu] 发送消息异常: {e}")
+            return False
 
-    def _send_message_by_user(self, user_id: str, content: str) -> None:
-        try:
-            if len(content.encode('utf-8')) <= MAX_MESSAGE_LENGTH:
-                self._do_send(user_id, "open_id", content)
-            else:
-                chunks = ChannelPlugin._split_message(content, _CHAR_LIMIT)
-                logger.info(f"[feishu] 消息过长，分 {len(chunks)} 段发送")
-                for i, chunk in enumerate(chunks):
-                    if i > 0:
-                        time.sleep(0.5)
-                    self._do_send(user_id, "open_id", chunk)
-        except Exception as e:
-            logger.error(f"[feishu] 发送消息异常: {e}")
+    def _send_message_by_user(self, user_id: str, content: str) -> bool:
+        return self._send(user_id, "open_id", content)
 
 
 class FeishuChannel(ChannelPlugin):
@@ -325,10 +322,8 @@ class FeishuChannel(ChannelPlugin):
                 # channel 格式 "feishu:ou_xxx"，提取用户 ID 发私聊
                 if channel and ":" in channel:
                     user_id = channel.split(":", 1)[1]
-                    self._bot._send_message_by_user(user_id, message)
-                else:
-                    self._bot._send_message(session_id, message)
-                return True
+                    return self._bot._send_message_by_user(user_id, message)
+                return self._bot._send_message(session_id, message)
             logger.warning("飞书 bot 未初始化，无法发送消息")
             return False
         except Exception as e:

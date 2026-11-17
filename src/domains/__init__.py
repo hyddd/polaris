@@ -10,3 +10,4 @@ from . import scheduler
 from . import reminder
 from . import rag
 from . import voice
+from . import notify
