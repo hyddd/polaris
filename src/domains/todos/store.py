@@ -79,7 +79,7 @@ class TodoStore:
             if not todo:
                 return None
             for k, v in updates.items():
-                if hasattr(todo, k):
+                if hasattr(todo, k) and k not in ("id", "scope"):
                     setattr(todo, k, v)
             self._save()
         return todo

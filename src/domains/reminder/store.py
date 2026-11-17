@@ -49,7 +49,7 @@ class ReminderStore:
             if not r:
                 return None
             for k, v in kwargs.items():
-                if hasattr(r, k):
+                if hasattr(r, k) and k not in ("id", "scope"):
                     setattr(r, k, v)
             self._save()
         return r

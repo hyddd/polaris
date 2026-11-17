@@ -146,3 +146,51 @@ def test_schema_uses_plain_table_names_and_db_t():
     temp = _Temp()
     ensure_schema(temp)
     assert all(f"`tmp_{name}`" in s for name, s in zip(TABLES, temp.sql))
+
+
+# --- 本机私人数据的范围不能被改成公共 ---
+
+def test_local_data_always_private_even_if_file_says_public(tmp_path):
+    """历史数据：本机文件里 scope 被写成 public（数据其实没进公共库），读出来仍是私人。"""
+    import json
+    from src.domains.calendar.public_store import ScopedCalendarStore
+    from src.domains.calendar.store import CalendarStore
+    f = tmp_path / "cal.json"
+    f.write_text(json.dumps([{"date": "2026-11-10", "events": [
+        {"id": "evt-1", "title": "CFL 会议", "time": "14:00", "duration": 60, "scope": "public"}]}]))
+    store = ScopedCalendarStore(CalendarStore(str(f)), None)
+    assert [e.scope for e in store.list_events()] == [PRIVATE]
+    assert store.get_event("evt-1").scope == PRIVATE
+    assert [ev.scope for _, ev in store.search("CFL")] == [PRIVATE]
+
+
+def test_update_cannot_change_scope(tmp_path, monkeypatch):
+    from src.domains.calendar.domain import CalendarDomain
+    from src.domains.calendar.public_store import ScopedCalendarStore
+    from src.domains.calendar.store import CalendarStore
+    from src.domains.todos.domain import TodoDomain
+    from src.domains.reminder.store import ReminderStore
+    from src.domains.reminder.models import Reminder
+    from src.tools.calendar.tool import CalendarTool
+    import src.domains.calendar.domain as cal_mod
+    from datetime import datetime
+
+    cal = CalendarDomain(ScopedCalendarStore(CalendarStore(str(tmp_path / "cal.json")), None))
+    ev = cal.create_event(date="2026-11-10", title="开会", scope="private")
+    with pytest.raises(ScopeError, match="不支持修改公共/私人范围"):
+        cal.update_event(ev.id, {"scope": "public"})
+    assert cal.get_event(ev.id).scope == PRIVATE
+
+    monkeypatch.setattr(cal_mod, "_domain", cal)
+    out = CalendarTool()._run(action="update", event_id=ev.id, updates={"scope": "public"})
+    assert out.startswith("操作失败") and "不支持修改公共/私人范围" in out
+
+    todos = TodoDomain(ScopedTodoStore(TodoStore(str(tmp_path / "t.json")), None))
+    t = todos.create_todo(title="x", scope="private")
+    with pytest.raises(ScopeError):
+        todos.update_todo(t.id, {"scope": "public"})
+
+    # 存储层兜底：即使绕过领域层，也不会改 id / scope
+    rs = ReminderStore(str(tmp_path / "r.json"))
+    r = rs.create(Reminder(title="x", trigger_time=datetime(2026, 12, 1), scope="private"))
+    assert rs.update(r.id, scope="public", id="hack").scope == PRIVATE and rs.get(r.id) is not None

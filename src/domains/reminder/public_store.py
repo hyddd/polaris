@@ -14,7 +14,7 @@ import logging
 from datetime import datetime
 
 from src.core.db import PUBLIC, PRIVATE
-from src.core.db.public_store import PublicStoreBase, MergedReadMixin, now
+from src.core.db.public_store import PrivateOnly, PublicStoreBase, MergedReadMixin, now
 from src.core.db.remote import RemoteError, get_remote
 from .models import Reminder, ReminderStatus, RepeatRule
 from .store import ReminderStore
@@ -161,7 +161,7 @@ class PublicReminderStore(PublicStoreBase):
 
 class ScopedReminderStore(MergedReadMixin):
     def __init__(self, private: ReminderStore, public: PublicReminderStore | None):
-        self._private = private
+        self._private = PrivateOnly(private)
         self._public = public
 
     @property

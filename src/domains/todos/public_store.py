@@ -9,7 +9,7 @@
 import logging
 
 from src.core.db import PUBLIC, PRIVATE
-from src.core.db.public_store import (PublicStoreBase, MergedReadMixin, dump_list, load_list,
+from src.core.db.public_store import (PrivateOnly, PublicStoreBase, MergedReadMixin, dump_list, load_list,
                                       date_str, now)
 from src.core.db.remote import RemoteError, get_remote
 from .models import TodoItem
@@ -149,7 +149,7 @@ class PublicTodoStore(PublicStoreBase):
 
 class ScopedTodoStore(MergedReadMixin):
     def __init__(self, private: TodoStore, public: PublicTodoStore | None):
-        self._private = private
+        self._private = PrivateOnly(private)
         self._public = public
 
     def list_todos(self, status: str | None = None) -> list[TodoItem]:

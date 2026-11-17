@@ -66,6 +66,36 @@ class MergedReadMixin:
             return default
 
 
+def _force_private(value):
+    if isinstance(value, list):
+        return [_force_private(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_force_private(v) for v in value)
+    if hasattr(value, "scope"):
+        value.scope = "private"
+    return value
+
+
+class PrivateOnly:
+    """包住本机的私人存储：读出来的数据一律标为私人。
+
+    本机文件里存的只能是私人数据；历史上曾有修改操作把文件里的 scope 改成了 public（数据并没有挪到公共库），
+    这里统一纠正，避免把私人数据显示成【公共】。
+    """
+
+    def __init__(self, store):
+        self._store = store
+
+    def __getattr__(self, name):
+        attr = getattr(self._store, name)
+        if not callable(attr):
+            return attr
+
+        def call(*args, **kwargs):
+            return _force_private(attr(*args, **kwargs))
+        return call
+
+
 class NoPrivate:
     """team 模式没有私人数据：组合存储的私人一侧用它占位。
 

@@ -61,6 +61,9 @@ class TodoDomain:
         return todo
 
     def update_todo(self, todo_id: str, updates: dict) -> TodoItem | None:
+        if "scope" in updates:
+            from src.core.db import ScopeError
+            raise ScopeError("不支持修改公共/私人范围。如需改为另一种范围，请按新范围新建一条，再删除原来的")
         todo = self._store.update_todo(todo_id, updates)
         if todo:
             event_bus.publish("todos:todo_updated",

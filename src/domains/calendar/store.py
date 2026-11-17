@@ -114,7 +114,7 @@ class CalendarStore:
                 for i, ev in enumerate(events):
                     if ev.get("id") == event_id:
                         # 应用更新（排除 date 键，date 由 new_date 控制）
-                        ev.update({k: v for k, v in updates.items() if k != "date"})
+                        ev.update({k: v for k, v in updates.items() if k not in ("date", "id", "scope")})
 
                         if new_date and new_date != day.get("date"):
                             # 跨日期移动：从原日期移除，插入新日期

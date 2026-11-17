@@ -109,6 +109,9 @@ class ReminderDomain:
 
     def update(self, reminder_id: str, **kwargs) -> Reminder | None:
         """更新提醒，如涉及时间/重复规则则重新调度。"""
+        if "scope" in kwargs:
+            from src.core.db import ScopeError
+            raise ScopeError("不支持修改公共/私人范围。如需改为另一种范围，请按新范围新建一条，再删除原来的")
         need_reschedule = "trigger_time" in kwargs or "repeat_rule" in kwargs
         r = self._store.update(reminder_id, **kwargs)
         if not r:

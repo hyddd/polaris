@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 
 from src.core.db import PUBLIC, PRIVATE
-from src.core.db.public_store import PublicStoreBase, MergedReadMixin, dump_list, load_list, date_str, now
+from src.core.db.public_store import PrivateOnly, PublicStoreBase, MergedReadMixin, dump_list, load_list, date_str, now
 from src.core.db.remote import RemoteError, get_remote
 from .models import CalendarEvent
 from .store import CalendarStore
@@ -138,7 +138,7 @@ class PublicCalendarStore(PublicStoreBase):
 
 class ScopedCalendarStore(MergedReadMixin):
     def __init__(self, private: CalendarStore, public: PublicCalendarStore | None):
-        self._private = private
+        self._private = PrivateOnly(private)
         self._public = public
 
     def list_events(self, date: str | None = None) -> list[CalendarEvent]:

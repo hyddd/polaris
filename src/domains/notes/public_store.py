@@ -10,7 +10,7 @@ import uuid
 from datetime import date
 
 from src.core.db import PUBLIC, PRIVATE
-from src.core.db.public_store import PublicStoreBase, MergedReadMixin, dump_list, load_list, date_str, now
+from src.core.db.public_store import PrivateOnly, PublicStoreBase, MergedReadMixin, dump_list, load_list, date_str, now
 from src.core.db.remote import RemoteError, get_remote
 from .models import Note, SearchResult
 from .store import NoteStore
@@ -135,7 +135,7 @@ class PublicNoteStore(PublicStoreBase):
 
 class ScopedNoteStore(MergedReadMixin):
     def __init__(self, private: NoteStore, public: PublicNoteStore | None):
-        self._private = private
+        self._private = PrivateOnly(private)
         self._public = public
 
     def list_notes(self, tag: str | None = None) -> list[Note]:
