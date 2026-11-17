@@ -1,6 +1,6 @@
 #!/bin/bash
 # 停止 start-team.sh 启动的团队服务；保留配置、数据和日志。
-# 用法：./stop-team.sh [--status] [--home 目录]
+# 用法：./stop-team.sh [--status]
 # macOS 用 launchd 托管；其他系统用后台进程（不会开机自启，正式部署请用 systemd 托管 run.py）。
 set -euo pipefail
 umask 077

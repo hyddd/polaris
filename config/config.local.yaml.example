@@ -3,7 +3,9 @@
 # 用法：
 #   personal 模式：cp config/config.local.yaml.example config/config.local.yaml
 #                  chmod 600 config/config.local.yaml
-#   team 模式：    推荐 ./start-team.sh --init 生成；或手工复制到 instances/team/config/config.local.yaml
+#   team 模式：    同样复制为 config/config.local.yaml，把 instance.mode 改为 team 并填写 database；
+#                  或执行 ./start-team.sh --init 生成
+#   一台机器只运行一种模式；单机使用请直接用 personal 模式
 #
 # config.local.yaml 含密钥和密码，已被 gitignore，不会提交到版本库。
 # 只需写出与默认值（config/config.yaml、config/config.<模式>.yaml）不同的项；未写出的项使用默认值。

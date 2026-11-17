@@ -2,7 +2,7 @@
 #
 # 运行模式为 team 时，在 config/config.yaml 之后、config.local.yaml 之前加载。
 # 团队服务只保存公共数据：结构化数据存 MySQL（database），笔记和文档向量存本实例 data/ 目录下的 Chroma。
-# 请不要修改本文件；数据库地址、账号、密码写在team 模式实例的 config.local.yaml（默认 instances/team/config/config.local.yaml）。
+# 请不要修改本文件；数据库地址、账号、密码写在 config/config.local.yaml。
 
 # 这里的 mode 只标明本文件属于 team 模式，修改它不能切换模式。
 # 选择模式：在实例的 config.local.yaml 里写 instance.mode，并用 start-team.sh 启动。

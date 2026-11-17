@@ -91,6 +91,8 @@ Polaris 有两种运行模式，二者的关系类似 Git 的远程仓库与本�
 
 personal 模式通过 team 模式读写公共数据，界面中每条数据都标注【公共】或【私人】。部署组合见 [第 3 节](#3-部署方式)，配置方法见 [第 6 节](#6-team-模式配置) 和 [第 7 节](#7-personal-模式配置)。
 
+> **一台机器只部署一种模式。** 两种模式使用同一套目录（`config/`、`data/`、`logs/`），由 `config/config.local.yaml` 中的 `instance.mode` 决定运行哪一种。不建议在同一台机器上同时部署两种模式；只有自己使用时，直接部署 personal 模式即可，不需要 team 模式。
+
 ---
 
 ## 3. 部署方式
@@ -209,7 +211,7 @@ chmod 600 config/config.local.yaml
 | 通用默认值 | `config.yaml` | 项目目录 `config/` | 是 | 两种模式共用的配置项：`llm`、`embedding`、`channels`、`tools`、`voice`、`logging`、`notify`、`heartbeat`、`cleanup`、`storage`、`server` 的通用部分等 |
 | 模式默认值 | `config.team.yaml` | 项目目录 `config/` | 是 | team 模式专用：`database`，以及监听地址 `0.0.0.0`、端口 `8710` |
 | | `config.personal.yaml` | 项目目录 `config/` | 是 | personal 模式专用：`remote`、`visibility`，以及监听地址 `127.0.0.1`、端口 `8700` |
-| 实例配置 | `config.local.yaml` | 实例目录下的 `config/` | 否 | 本实例的设置：密钥、显示名称、team 模式地址（personal）或数据库连接（team） |
+| 实例配置 | `config.local.yaml` | 项目目录 `config/` | 否 | 本实例的设置：密钥、显示名称、team 模式地址（personal）或数据库连接（team） |
 
 实例配置的示例为 `config/config.local.yaml.example`（纳入版本库），列出了实例配置需要填写的全部配置项：两种模式共用的项在前，只属于 personal 模式（`remote`）或 team 模式（`database`）的段分别标注。personal 模式复制为 `config/config.local.yaml` 后填写；team 模式通常使用 `./start-team.sh --init` 生成，见 [6.2](#62-生成配置)。
 
@@ -222,14 +224,14 @@ flowchart LR
     A["config/config.yaml<br/>通用默认值"] --> B{"运行模式"}
     B -- team --> T["config/config.team.yaml"]
     B -- personal --> P["config/config.personal.yaml"]
-    T --> L["实例目录/config/config.local.yaml<br/>实例配置"]
+    T --> L["config/config.local.yaml<br/>实例配置"]
     P --> L
     L --> R["生效的配置"]
 ```
 
 1. 读取 `config/config.yaml`；
 2. 确定运行模式，读取对应的模式默认值文件；
-3. 读取实例目录下的 `config/config.local.yaml`；
+3. 读取 `config/config.local.yaml`；
 4. 后读取的文件**按配置项逐项覆盖**先读取的文件，未写出的配置项保持前一层的值；
 5. 修改任一文件后，须重启服务才会生效。
 
@@ -260,35 +262,26 @@ flowchart LR
 
 ### 5.4 目录结构
 
-配置与运行数据分开存放：`config/` 只放配置，`data/` 只放运行数据，`logs/` 放日志。
+两种模式使用同一套目录，配置与运行数据分开存放：`config/` 只放配置，`data/` 只放运行数据，`logs/` 放日志。
 
 ```text
-polaris/                          项目目录，同时是 personal 模式的实例目录
+polaris/
 ├── config/
 │   ├── config.yaml               通用默认值（纳入版本库）
 │   ├── config.team.yaml          team 模式默认值（纳入版本库）
 │   ├── config.personal.yaml      personal 模式默认值（纳入版本库）
 │   ├── config.local.yaml.example 实例配置示例（纳入版本库）
-│   ├── config.local.yaml         personal 模式的实例配置（不纳入版本库）
+│   ├── config.local.yaml         本机的实例配置，决定运行哪种模式（不纳入版本库）
 │   ├── cli.yaml.example          TUI 配置示例（纳入版本库）
 │   ├── cli.yaml                  TUI 配置，可选（不纳入版本库）
 │   └── heartbeat.md              心跳提示词，可选（不纳入版本库）
-├── data/                         personal 模式的运行数据（不纳入版本库）
-├── logs/                         personal 模式的日志（不纳入版本库）
-└── instances/team/               team 模式的实例目录（不纳入版本库）
-    ├── config/config.local.yaml  team 模式的实例配置
-    ├── data/                     team 模式的运行数据
-    └── logs/                     team 模式的日志
+├── data/                         运行数据（不纳入版本库）
+├── logs/                         日志（不纳入版本库）
+└── deploy/mysql/schema.sql       team 模式公共库的建表语句
 ```
 
-| 实例 | 实例目录 | 实例配置 | 运行数据 |
-|---|---|---|---|
-| personal 模式 | 项目根目录 | `config/config.local.yaml` | `data/` |
-| team 模式 | `instances/team/`（可通过 `--home` 或环境变量 `POLARIS_TEAM_HOME` 修改） | `instances/team/config/config.local.yaml` | `instances/team/data/` |
-
-- 实例目录对应环境变量 `POLARIS_HOME`；`storage.*`、`heartbeat.prompt_file` 等相对路径均相对于实例目录解析；
-- 默认值文件（`config.yaml`、`config.<模式>.yaml`）始终从项目目录的 `config/` 读取，由所有实例共用；
-- 两个实例的目录相互独立，因此可以在同一台机器上同时运行。
+- `storage.*`、`heartbeat.prompt_file` 等相对路径均相对于项目目录解析；
+- 同一台机器只运行一种模式。启停脚本会拒绝在另一种模式运行时启动，因为两者会共用 `data/` 和 `logs/`。
 
 各类数据的存放位置：
 
@@ -297,7 +290,7 @@ polaris/                          项目目录，同时是 personal 模式的实
 | 待办、日程、提醒 | MySQL：`todos`、`calendar_events`、`reminders` | 私人：`data/todos.json`、`data/calendar.json`、`data/reminders.json`；公共：存储于 team 模式 |
 | 笔记 | 正文：MySQL `notes`；向量：本机 Chroma，集合 `public` | 私人：`data/notes/*.md`，向量在本机 Chroma 集合 `notes`；公共：存储于 team 模式 |
 | 知识库文档 | 文档记录：MySQL `knowledge_documents`；向量：本机 Chroma，集合 `public` | 私人：`data/knowledge_meta.json`，向量在本机 Chroma 集合 `notes`；公共：存储于 team 模式 |
-| 会话记录、定时任务 | `instances/team/data/` | `data/` |
+| 会话记录、定时任务 | `data/` | `data/` |
 
 知识库只保存解析后的文本向量和文档记录，不保存上传的原始文件。
 
@@ -308,7 +301,6 @@ polaris/                          项目目录，同时是 personal 模式的实
 | 旧位置 | 新位置 |
 |---|---|
 | `data/config.local.yaml` | `config/config.local.yaml` |
-| `instances/team/data/config.local.yaml` | `instances/team/config/config.local.yaml` |
 | `data/heartbeat.md` | `config/heartbeat.md` |
 | `data/cli/config.toml` | `config/cli.yaml`（格式由 TOML 改为 YAML，需按 [8.2](#82-配置文件) 重写） |
 
@@ -378,7 +370,7 @@ polaris/                          项目目录，同时是 personal 模式的实
 `config.local.yaml` 中包含模型密钥和数据库密码，应满足以下要求：
 
 - 文件权限设为 `600`：`chmod 600 config/config.local.yaml`；
-- 不得提交到版本库（`config/config.local.yaml`、`config/cli.yaml`、`data/`、`instances/` 已在 `.gitignore` 中）；
+- 不得提交到版本库（`config/config.local.yaml`、`config/cli.yaml`、`data/`、`logs/` 已在 `.gitignore` 中）；
 - personal 模式不需要数据库配置，**不应将 MySQL 账号分发给成员**。
 
 ---
@@ -395,24 +387,35 @@ CREATE USER 'polaris'@'%' IDENTIFIED BY '<密码>';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE ON polaris.* TO 'polaris'@'%';
 ```
 
-- team 模式首次使用数据库时自动执行 `CREATE TABLE IF NOT EXISTS`，创建 5 张表：`todos`、`calendar_events`、`reminders`、`notes`、`knowledge_documents`。不会修改或删除已有的表；
-- 建表语句定义在 `src/core/db/schema.py`，如需由 DBA 手工建表可参考该文件；
+- 表不需要手工创建：team 模式首次使用数据库时自动执行 `CREATE TABLE IF NOT EXISTS`，创建 5 张表：`todos`、`calendar_events`、`reminders`、`notes`、`knowledge_documents`。不会修改或删除已有的表；
+- 如需由 DBA 预先建表或审核表结构，使用 `deploy/mysql/schema.sql`，见下文；
 - 表名不加前缀，**请为 Polaris 单独建库**，不要与其他项目共用一个库，以免表名冲突；
 - 连接时会强制使用 `utf8mb4` 字符集和严格 SQL 模式，超长数据会报错，不会被静默截断。
 
+**建表 SQL 文件 `deploy/mysql/schema.sql`**
+
+| 项目 | 说明 |
+|---|---|
+| 内容 | 5 张表的建表语句（`CREATE TABLE`），从实际运行的库导出；不含数据、账号和密码 |
+| 用途 | DBA 预先建表、审核表结构。正常部署不需要执行，服务会自动建表 |
+| 执行 | 先用上面的语句建库和用户，再执行 `mysql -h <地址> -u polaris -p polaris < deploy/mysql/schema.sql` |
+| 注意 | 语句不带 `IF NOT EXISTS`，表已存在时会报错，不会覆盖已有的表；预先建表时，授权中的 `CREATE` 可以去掉 |
+| 一致性 | 表结构以代码 `src/core/db/schema.py` 为准。修改表结构时须同步更新本文件，测试 `tests/test_db/test_schema_sql.py` 会检查两者是否一致 |
+
 ### 6.2 生成配置
 
+team 模式的配置和 personal 模式一样，写在项目的 `config/config.local.yaml` 中，只是 `instance.mode` 为 `team`。两种方式任选：
+
 ```bash
+# 方式一：从示例复制，把 instance.mode 改为 team，填写 database
+cp config/config.local.yaml.example config/config.local.yaml
+chmod 600 config/config.local.yaml
+
+# 方式二：生成一份 team 模式的最小配置
 ./start-team.sh --init
 ```
 
-此命令执行以下操作：
-
-1. 创建 `instances/team/config/config.local.yaml`，权限 `600`；
-2. 如果项目的 `config/config.local.yaml` 中已有 `llm`、`embedding`、`database` 配置，则复制到新文件中。输出只列出复制了哪几段，不显示内容；
-3. 写入 `instance.mode: team`。监听地址、端口等 team 模式默认值已在 `config/config.team.yaml` 中，不再写入实例配置。
-
-目标文件已存在时，命令不会覆盖并直接退出。如需使用其他实例目录，请指定 `--home <目录>`，之后启停时也须带上相同的 `--home`。
+`--init` 会创建 `config/config.local.yaml`（权限 `600`），写入 `instance.mode: team` 以及待填写的 `llm`、`database`。文件已存在时不会覆盖，并提示改用编辑的方式。
 
 ### 6.3 配置示例
 
@@ -457,7 +460,7 @@ database:
 | 检查项 | 方法 | 预期结果 |
 |---|---|---|
 | 服务模式 | `curl http://10.0.0.8:8710/api/instance` | 返回 `"mode":"team"`、`"public":true`、`"private":false` |
-| 数据库连接 | 查看 `instances/team/logs/polaris.log` | 包含 `公共库已连接：…/polaris` |
+| 数据库连接 | 查看 `logs/polaris.log` | 包含 `公共库已连接：…/polaris` |
 | 网页 | 浏览器访问 `http://10.0.0.8:8710/` | 侧边栏顶部显示"团队服务 · 产品组团队服务" |
 | 网络 | 在成员电脑上执行上述 `curl` | 返回相同结果。如失败，请检查服务器防火墙是否放行 8710 端口 |
 
@@ -472,10 +475,9 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/polaris
-Environment=POLARIS_HOME=/opt/polaris/instances/team
 Environment=POLARIS_MODE=team
 Environment=TZ=Asia/Shanghai
-ExecStart=/opt/polaris/venv/bin/python -u run.py --home /opt/polaris/instances/team --host 0.0.0.0 --port 8710
+ExecStart=/opt/polaris/venv/bin/python -u run.py --host 0.0.0.0 --port 8710
 Restart=on-failure
 
 [Install]
@@ -496,9 +498,9 @@ sudo systemctl enable --now polaris-team
 | 对象 | 位置 | 内容 | 丢失的影响 |
 |---|---|---|---|
 | MySQL 数据库 | `database.name` 指定的库 | 公共待办、日程、提醒、笔记正文、知识库文档记录 | 公共数据丢失 |
-| Chroma 目录 | `instances/team/data/chroma/` | 公共笔记和知识库文档的向量 | 无法语义检索。公共文档须重新上传，因为原始文件不保存 |
-| 配置文件 | `instances/team/config/config.local.yaml` | team 模式配置 | 需重新配置 |
-| 会话目录 | `instances/team/data/sessions/` | team 模式网页上的会话记录 | 不影响业务数据 |
+| Chroma 目录 | `data/chroma/` | 公共笔记和知识库文档的向量 | 无法语义检索。公共文档须重新上传，因为原始文件不保存 |
+| 配置文件 | `config/config.local.yaml` | team 模式配置 | 需重新配置 |
+| 会话目录 | `data/sessions/` | team 模式网页上的会话记录 | 不影响业务数据 |
 
 ---
 
@@ -680,11 +682,11 @@ ssh -N -L 8711:127.0.0.1:8710 user@10.0.0.8   # 保持该会话运行
 
 ### 9.1 启停脚本
 
-| 脚本 | 作用 | 实例目录 | 默认地址 |
+| 脚本 | 作用 | 要求 | 默认地址 |
 |---|---|---|---|
-| `start-team.sh` | 启动 team 模式 | `instances/team/` | `0.0.0.0:8710` |
+| `start-team.sh` | 启动 team 模式 | `config/config.local.yaml` 中 `instance.mode: team` | `0.0.0.0:8710` |
 | `stop-team.sh` | 停止 team 模式 | 同上 | — |
-| `start-personal.sh` | 启动 personal 模式 | 项目根目录 | `127.0.0.1:8700` |
+| `start-personal.sh` | 启动 personal 模式 | `instance.mode` 为 `personal` 或不写 | `127.0.0.1:8700` |
 | `stop-personal.sh` | 停止 personal 模式 | 同上 | — |
 
 ### 9.2 参数
@@ -695,7 +697,6 @@ ssh -N -L 8711:127.0.0.1:8710 user@10.0.0.8   # 保持该会话运行
 | `--init` | `start-team.sh` | 生成 team 模式配置模板，见 [6.2](#62-生成配置) |
 | `--port <端口>` | `start-*.sh` | 本次启动使用的端口，优先于 `server.port` |
 | `--host <地址>` | `start-team.sh` | 本次启动的监听地址，优先于 `server.host` |
-| `--home <目录>` | `start-team.sh`、`stop-team.sh` | team 模式的实例目录 |
 | `--status` | `stop-*.sh` | 只查看运行状态，不停止 |
 
 ### 9.3 脚本行为
@@ -703,15 +704,16 @@ ssh -N -L 8711:127.0.0.1:8710 user@10.0.0.8   # 保持该会话运行
 - **模式校验**：启动前核对 `config.local.yaml` 中的 `instance.mode` 与脚本是否一致，不一致时拒绝启动。team 模式的配置必须明确写出 `instance.mode: team`；personal 模式的配置可以省略；
 - **加载模式默认值**：为服务进程设置环境变量 `POLARIS_MODE`，使其加载对应的模式默认值文件；
 - **启动检查**：缺少必填配置时拒绝启动，例如 `llm.*`，或 team 模式的 `database.host`；
+- **一台机器一种模式**：另一种模式正在运行时拒绝启动，提示先停止它；
 - **端口占用**：端口已被占用时拒绝启动，不会停止占用端口的进程；
-- **托管方式**：macOS 上注册为 launchd 用户级服务，不加入登录自启动；其他系统上以后台进程运行。启动信息（托管方式、进程号、端口）记录在实例目录的 `logs/polaris.service.json`，停止时按记录的方式处理；
+- **托管方式**：macOS 上注册为 launchd 用户级服务，不加入登录自启动；其他系统上以后台进程运行。启动信息（托管方式、进程号、端口）记录在 `logs/polaris.service.json`，停止时按记录的方式处理；
 - **停止**：只发送正常退出信号，最多等待 30 秒，不强制终止进程；
 - **数据安全**：启停脚本不会删除配置、数据或日志；
-- **日志**：`<实例目录>/logs/polaris.log`。
+- **日志**：`logs/polaris.log`。
 
 ### 9.4 直接使用 run.py
 
-不使用启停脚本时，可以直接运行 `run.py`，并用 `--home` 为每个实例指定独立的实例目录，例如在同一台服务器上运行自用实例和公开试用实例：
+不使用启停脚本时，可以直接运行 `run.py`。`--home` 指定另一个目录（其下同样有 `config/`、`data/`、`logs/`），用于在同一台服务器上运行多个**同一模式**的独立实例，例如自用实例和公开试用实例：
 
 ```bash
 # 自用实例（默认端口 8700）
@@ -725,21 +727,18 @@ python run.py --home /opt/polaris-demo --port 8800 --demo 50
 
 不同实例的数据（会话、提醒、日程等）完全隔离。直接运行 `run.py` 时：
 
-- 运行模式取实例 `config.local.yaml` 中的 `instance.mode`，也可以用环境变量 `POLARIS_MODE` 指定；
+- 运行模式取 `config.local.yaml` 中的 `instance.mode`，也可以用环境变量 `POLARIS_MODE` 指定；
 - 端口只由 `--port` 决定（默认 8700），**不读取** `server.port`；监听地址取 `--host`，未指定时读取 `server.host`。
 
-### 9.5 在同一台机器上运行两种模式
+### 9.5 不要在同一台机器上部署两种模式
 
-两种模式的实例目录和默认端口互不冲突，可以在同一台机器上同时运行，用于试用或开发：
+两种模式共用 `config/`、`data/`、`logs/`，一台机器只运行其中一种。按使用场景选择：
 
-```bash
-./start-team.sh --init                  # 首次运行：生成 team 模式配置，按 6.3 检查
-./start-team.sh                         # team 模式：0.0.0.0:8710
-# 在项目的 config/config.local.yaml 中设置 remote.url: "http://127.0.0.1:8710"
-./start-personal.sh                     # personal 模式：127.0.0.1:8700
-./cli.sh                                # 连接 personal 模式：私人数据 + 公共数据
-./cli.sh --url http://127.0.0.1:8710    # 连接 team 模式：仅公共数据
-```
+| 场景 | 部署 |
+|---|---|
+| 只有自己使用 | 只部署 personal 模式，不配置 `remote.url`（[方式 B](#33-方式-b单机使用)）。不需要 team 模式 |
+| 团队协作 | team 模式部署在服务器上；成员在各自电脑上部署 personal 模式并配置 `remote.url`（[方式 A](#32-方式-a团队协作)） |
+| 从 personal 切换为 team | 先 `./stop-personal.sh`，在 `config/config.local.yaml` 中把 `instance.mode` 改为 `team` 并填写 `database`，再 `./start-team.sh`。原有私人数据不会迁移到 MySQL |
 
 ### 9.6 通知：提醒转发与主动发送
 
@@ -894,14 +893,15 @@ TUI 的命令与上表不同，会话管理方式与 Claude Code 一致：
 
 | 现象 | 可能原因 | 处理方法 |
 |---|---|---|
-| `缺少配置文件：…/instances/team/config/config.local.yaml` | 尚未生成 team 模式配置 | 执行 `./start-team.sh --init` |
-| `配置里的 instance.mode 是 'personal'，和团队服务（team）不一致` | team 模式配置中的模式不是 `team`，或者修改的是项目的 `config/config.local.yaml` | team 模式的配置位于 `instances/team/config/config.local.yaml`，请在该文件中设置 `instance.mode: team` |
+| `缺少配置文件：…/config/config.local.yaml` | 尚未创建配置 | 从 `config/config.local.yaml.example` 复制，或执行 `./start-team.sh --init`（team 模式） |
+| `配置里的 instance.mode 是 'personal'，和团队服务（team）不一致` | 用 `start-team.sh` 启动了 personal 模式的配置 | 本机作 team 模式使用时，在 `config/config.local.yaml` 中设置 `instance.mode: team`；否则改用 `./start-personal.sh` |
+| `本机已在运行…不能同时运行` | 另一种模式正在运行 | 一台机器只运行一种模式，见 [9.5](#95-不要在同一台机器上部署两种模式)；要切换时先停止正在运行的模式 |
 | `… 里没有写 instance.mode` | team 模式的 `config.local.yaml` 未写模式 | 写入 `instance.mode: team` |
 | `没有配置 database.host` | team 模式未配置数据库 | 填写 `database` 配置 |
 | `缺少默认配置：…/config.team.yaml` | 项目文件不完整 | 从版本库恢复 `config/config.yaml`、`config/config.team.yaml`、`config/config.personal.yaml` |
 | `实例配置仍在旧位置 …` | 从旧版本升级后未移动配置文件 | 按 [5.5](#55-从旧版本升级) 移动文件 |
 | `… 已被占用` | 端口被其他进程占用 | 使用 `--port` 或 `server.port` 更换端口，并同步修改各 personal 模式的 `remote.url` |
-| `未确认服务就绪` | 服务进程启动失败 | 查看 `<实例目录>/logs/polaris.log` |
+| `未确认服务就绪` | 服务进程启动失败 | 查看 `logs/polaris.log` |
 | `数据库连接失败` | 地址、端口、账号或密码错误，网络不通，或未授权 | 检查 `database` 配置，并与 DBA 确认授权 |
 
 ### 12.2 运行阶段
@@ -984,6 +984,7 @@ src/
   cron/                      # 心跳 + 每日清理
 
 scripts/service.py           # 启停脚本 start-*.sh / stop-*.sh 的实现
+deploy/mysql/schema.sql      # team 模式公共库的建表语句
 config/                      # 默认配置与示例（实例配置也放在这里，不纳入版本库）
 data/                        # 运行数据（不纳入版本库）
 ```

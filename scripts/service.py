@@ -1,16 +1,16 @@
 """Polaris 服务启停。由 start-team.sh / stop-team.sh / start-personal.sh / stop-personal.sh 调用。
 
-- personal（个人服务）：实例目录是项目根目录（config/、data/、logs/），只监听 127.0.0.1，默认端口 8700。
-- team（团队服务）：实例目录默认 instances/team（--home 或环境变量 POLARIS_TEAM_HOME 可改），
-  默认监听 0.0.0.0:8710，让别人的个人服务和网页能连上。两种服务可以在同一台机器上同时运行。
-- 实例目录下：config/ 放实例配置，data/ 放运行数据，logs/ 放日志。
+- 两种模式都使用项目根目录：config/ 放配置，data/ 放运行数据，logs/ 放日志。运行哪种模式由
+  config/config.local.yaml 的 instance.mode 决定，一台机器只运行其中一种（单机使用请直接用 personal）。
+- personal（个人服务）：只监听 127.0.0.1，默认端口 8700。
+- team（团队服务）：默认监听 0.0.0.0:8710，让别人的个人服务和网页能连上。
 - 配置按三层合并：config/config.yaml → config/config.<模式>.yaml → <实例目录>/config/config.local.yaml
   （规则见 src/core/config/layers.py，与服务端完全一致）。端口和监听地址取 server.port / server.host。
 - 启动的服务进程带环境变量 POLARIS_MODE=<模式>，保证按脚本对应的模式加载配置。
 
 - macOS：用 launchd 用户级服务托管（不放进登录自启目录）；
   其他系统：后台进程 + 状态文件，不会开机自启、崩溃也不会自动拉起，正式部署请用 systemd 托管 run.py。
-- 启动前核对配置里的 instance.mode 和脚本一致，避免把个人服务的实例目录当团队服务跑（或者反过来）。
+- 启动前核对配置里的 instance.mode 和脚本一致；另一种模式正在运行时拒绝启动（两者会共用 data/ 和 logs/）。
 - 只停止本脚本启动的那个服务；不强制杀进程，不删除任何数据。
 """
 import argparse
@@ -59,7 +59,6 @@ MODES = {
     # 个人服务沿用原 start.sh 的 launchd 名称、日志位置，原来启动的服务也能用 stop-personal.sh 停掉
     "personal": {"label": "个人服务", "port": 8700, "prefix": "local.polaris."},
 }
-DB_KEYS = ("host", "port", "name", "user", "password", "connect_timeout", "read_timeout")
 WILDCARD_HOSTS = ("", "0.0.0.0", "::")
 
 
@@ -76,24 +75,17 @@ def load_yaml(path: Path) -> dict:
 
 
 class Service:
-    def __init__(self, mode: str, home: str | None = None, port: int | None = None, host: str | None = None):
+    def __init__(self, mode: str, port: int | None = None, host: str | None = None):
         self.mode = mode
         self.name = MODES[mode]["label"]
-        if mode == "team":
-            home = home or os.environ.get("POLARIS_TEAM_HOME") or ROOT / "instances" / "team"
-        else:
-            home = home or ROOT
-        self.home = Path(home).expanduser().resolve()
+        self.home = ROOT.resolve()
         self.local_config, self.legacy_config = layers.local_config_path(self.home)
         self.logs = self.home / "logs"
         self.log_file = self.logs / "polaris.log"
         self.state_file = self.logs / "polaris.service.json"
         self.label = MODES[mode]["prefix"] + hashlib.sha256(os.fsencode(str(self.home))).hexdigest()[:12]
         self._port_arg, self._host_arg = port, host
-        # 提示里的命令：用了非默认实例目录时带上 --home，照着执行才能找到同一个服务
-        default_home = (ROOT / "instances" / "team") if mode == "team" else ROOT
-        suffix = f" --home {self.home}" if self.home != default_home.resolve() else ""
-        self.stop_cmd = f"./stop-{mode}.sh{suffix}"
+        self.stop_cmd = f"./stop-{mode}.sh"
         self.use_state = False     # 停止/查看状态时按上次启动记下的端口找服务；启动时按配置
         self.config: dict = {}
         self.local: dict = {}      # 只有 config.local.yaml 本身的内容（核对模式用）
@@ -283,10 +275,22 @@ class Service:
                 return False
 
     def read_state(self) -> dict:
+        """本模式的启动记录。两种模式共用 logs/，记录属于另一种模式时视为没有。"""
         try:
-            return json.loads(self.state_file.read_text())
+            data = json.loads(self.state_file.read_text())
         except (OSError, ValueError):
             return {}
+        return data if data.get("mode", self.mode) == self.mode else {}
+
+    def clear_state(self) -> None:
+        if self.read_state():
+            self.state_file.unlink(missing_ok=True)
+
+    def other_mode_running(self) -> "Service | None":
+        """另一种模式是否正在本目录运行（两者会共用 data/ 和 logs/，不能同时运行）。"""
+        other = Service("personal" if self.mode == "team" else "team")
+        other.use_state = True
+        return other if backend(other).running_pid() else None
 
     def write_state(self, **values) -> None:
         self.logs.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -351,6 +355,9 @@ class Launchd:
         self.target = f"{self.domain}/{svc.label}"
         if launchctl("print", self.domain).returncode:
             fail("无法访问当前 macOS 图形登录会话，请在本机登录后的终端运行。")
+
+    def running_pid(self) -> str | None:
+        return pid_of(self.state())
 
     def state(self) -> str | None:
         result = launchctl("print", self.target)
@@ -430,7 +437,7 @@ class Launchd:
                 fail("进程已退出，但解除服务注册失败：" + result.stderr.strip())
         if self.state() is not None:
             fail(f"尚未确认服务注册已解除，请稍后用 {svc.stop_cmd} --status 查看。")
-        svc.state_file.unlink(missing_ok=True)
+        svc.clear_state()
         print(f"Polaris {svc.name}已停止，服务注册已解除。")
 
     def status(self) -> None:
@@ -503,8 +510,7 @@ class Background:
         svc = self.svc
         pid = self.running_pid()
         if not pid:
-            if svc.state_file.exists():
-                svc.state_file.unlink()      # 只是过期的状态记录
+            svc.clear_state()                # 只是过期的启动记录
             print(f"{svc.name}没有在运行（没有检查用其他方式手动启动的进程）。")
             return
         os.kill(pid, signal.SIGTERM)
@@ -513,7 +519,7 @@ class Background:
             if time.monotonic() >= deadline:
                 fail(f"等待正常退出超过 30 秒；没有强制杀进程。请检查 {svc.log_file}，稍后再执行 {svc.stop_cmd}。")
             time.sleep(0.5)
-        svc.state_file.unlink(missing_ok=True)
+        svc.clear_state()
         print(f"Polaris {svc.name}已停止（PID {pid}）。")
 
     def status(self) -> None:
@@ -555,47 +561,40 @@ def fetch_instance_url(url: str) -> dict | None:
 
 # ---------------------------------------------------------------------- 初始化团队服务配置
 
-TEAM_TEMPLATE_HEADER = """\
+TEAM_TEMPLATE = """\
 # Polaris 团队服务（team）的本地配置。由 start-team.sh --init 生成；含密钥和数据库密码，权限 600，不要提交到 git。
-# 默认值见项目的 config/config.yaml 和 config/config.team.yaml，这里只写与默认值不同的项。
+# 默认值见 config/config.yaml 和 config/config.team.yaml，这里只写与默认值不同的项；完整示例见 config/config.local.yaml.example。
 # 端口和监听地址默认 0.0.0.0:8710，需要修改时在这里写 server.port / server.host。
-# 配置说明见项目 README.md 的"配置文件"一节。
+
+instance:
+  mode: team
+  name: "Polaris 团队服务"
+
+llm:
+  api_key: ""
+  base_url: ""
+  model: ""
+
+database:
+  host: ""
+  port: 3306
+  name: ""
+  user: ""
+  password: ""
 """
 
 
 def init_team(svc: Service) -> None:
-    import yaml
-    if svc.home == ROOT:
-        fail("团队服务的实例目录不能是项目根目录（那是个人服务的实例目录），请用 --home 指定别的目录。")
     if svc.local_config.exists():
-        fail(f"配置已存在，不会覆盖：{svc.local_config}")
-    personal_cfg = layers.local_config_path(ROOT)[0]
-    source = load_yaml(personal_cfg) if personal_cfg.is_file() else {}
-    config: dict = {"instance": {"mode": "team", "name": "Polaris 团队服务"}}
-    copied = []
-    for key in ("llm", "embedding"):
-        if isinstance(source.get(key), dict) and source[key]:
-            config[key] = source[key]
-            copied.append(key)
-    db = source.get("database") if isinstance(source.get("database"), dict) else {}
-    if db.get("host"):
-        config["database"] = {k: db[k] for k in DB_KEYS if k in db}
-        copied.append("database")
-    else:
-        config["database"] = {"host": "", "port": 3306, "name": "", "user": "", "password": ""}
-    if "llm" not in config:
-        config["llm"] = {"api_key": "", "base_url": "", "model": ""}
-    (svc.home / "config").mkdir(mode=0o700, parents=True, exist_ok=True)
-    text = TEAM_TEMPLATE_HEADER + "\n" + yaml.safe_dump(config, allow_unicode=True, sort_keys=False)
+        fail(f"配置已存在，不会覆盖：{svc.local_config}\n"
+             f"要把这台机器改成团队服务，请在该文件中设置 instance.mode: team 并填写 database；"
+             f"个人使用请直接用 ./start-personal.sh，不要在同一台机器上同时运行两种模式。")
+    svc.local_config.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd = os.open(svc.local_config, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(text)
+        f.write(TEAM_TEMPLATE)
     print(f"已生成团队服务配置：{svc.local_config}（权限 600）")
-    if copied:
-        print(f"从个人服务的配置 {personal_cfg} 复制了：{'、'.join(copied)}（内容未显示）")
-    todo = [k for k in ("llm", "database") if k not in copied]
-    print("请检查并修改：instance.name（显示名）" + (f"，以及 {'、'.join(todo)}" if todo else ""))
-    print("然后执行 ./start-team.sh --check 检查，./start-team.sh 启动。")
+    print("请填写 instance.name、llm、database，然后执行 ./start-team.sh --check 检查，./start-team.sh 启动。")
 
 
 # ---------------------------------------------------------------------- 入口
@@ -605,7 +604,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="service.py", description="Polaris 服务启停")
     parser.add_argument("action", choices=("start", "stop"))
     parser.add_argument("mode", choices=tuple(MODES))
-    parser.add_argument("--home", help="实例目录（团队服务默认 instances/team，个人服务固定为项目根目录）")
     parser.add_argument("--port", type=int, help="端口（默认读 server.port；团队服务 8710，个人服务 8700）")
     parser.add_argument("--host", help="团队服务的监听地址（默认读 server.host，一般是 0.0.0.0）")
     parser.add_argument("--check", action="store_true", help="只检查配置和连接，不启动")
@@ -615,15 +613,15 @@ def main() -> None:
 
     prog = f"{args.action}-{args.mode}.sh"
     if args.action == "stop" and (args.check or args.init or args.port or args.host):
-        fail(f"{prog} 只支持 --status 和 --home")
+        fail(f"{prog} 只支持 --status")
     if args.action == "start" and args.status:
         fail(f"查看状态请用 ./stop-{args.mode}.sh --status")
-    if args.mode == "personal" and (args.home or args.host or args.init):
-        fail("个人服务的实例目录固定是项目根目录、只监听 127.0.0.1，不支持 --home / --host / --init")
+    if args.mode == "personal" and (args.host or args.init):
+        fail("个人服务只监听 127.0.0.1，不支持 --host / --init")
     if sys.platform != "darwin" and os.environ.get("POLARIS_SERVICE_BACKEND") == "launchd":
         fail("launchd 只在 macOS 上可用")
 
-    svc = Service(args.mode, home=args.home, port=args.port, host=args.host)
+    svc = Service(args.mode, port=args.port, host=args.host)
     if args.init:
         init_team(svc)
         return
@@ -648,6 +646,10 @@ def main() -> None:
         print(f"预定地址：{svc.host}:{svc.port}")
         return
     _lock = svc.lock()
+    other = svc.other_mode_running()
+    if other:
+        fail(f"本机已在运行{other.name}（{other.mode}）。两种模式共用 config/、data/ 和 logs/，不能同时运行；\n"
+             f"不建议在同一台机器上部署两种模式，单机使用请直接用 personal 模式。如需切换，先执行 {other.stop_cmd}。")
     backend(svc).start()
 
 
