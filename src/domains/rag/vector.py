@@ -1,7 +1,26 @@
 """RAGVectorStore — 向量存储封装。"""
 
 import logging
+import sys
 from pathlib import Path
+
+def _ensure_chroma_sqlite() -> None:
+    """Chroma 需要 sqlite >= 3.35。系统库过旧时改用 pysqlite3-binary。"""
+    import sqlite3
+
+    if sqlite3.sqlite_version_info >= (3, 35, 0):
+        return
+    try:
+        __import__("pysqlite3")
+    except ImportError as exc:
+        raise RuntimeError(
+            f"系统 sqlite3 {sqlite3.sqlite_version} 低于 Chroma 要求的 3.35.0。"
+            "请执行: pip install pysqlite3-binary"
+        ) from exc
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+
+
+_ensure_chroma_sqlite()
 
 from chromadb import PersistentClient
 from chromadb.utils import embedding_functions
