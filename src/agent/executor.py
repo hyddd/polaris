@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from langchain_openai import ChatOpenAI
 
 from src.agent.state import AgentState
-from src.agent.interceptors import get_interceptors, init_default_interceptors
+from src.agent.interceptors import build_pending_action, get_interceptors, init_default_interceptors
 from src.core.config import config
 from src.core.tools.registry import ToolRegistry
 from src.session.manager import get_session_manager
@@ -67,7 +67,7 @@ UNIFIED_SYSTEM_PROMPT = """你是个人效率助手 Polaris。
 - 用户询问"安排""计划""今天有什么事"等时，应同时查看日历日程和待办事项，善用日历、待办等图标
 - 闲聊、打招呼、一般知识问答时不要调用工具，直接友好回复
 - 结合对话历史理解上下文
-- 删除操作先确认再执行
+- 删除日程、待办、提醒时直接调用删除操作，系统会自动请用户确认一次；调用前不要自己再询问确认。用户要求删除多条时，在同一轮中一次调用全部删除
 - 工具返回空结果时如实告知，不编造数据
 - 信任工具返回的结果。工具返回成功消息（如"已更新""已添加""已删除"）时，直接告知用户操作成功，不要说"遇到了问题""无法完成"等。工具结果就是事实，不需要质疑
 - 向用户列出或提到日程、待办、提醒、笔记、知识库文档时，每一条前面都要带上工具结果里的范围标签【公共】或【私人】，原样保留，不要省略或改写；新建成功时也说明存成了【公共】还是【私人】
@@ -234,7 +234,7 @@ def tool_node(state: AgentState) -> dict:
     init_default_interceptors()
     registry = ToolRegistry.get_instance()
     results = []
-    pending_action = None
+    pending = []          # 本轮被拦下、等待用户确认的删除
 
     channel = state.get("channel", "default")
     current_session_id = _run_session(state).session_id
@@ -245,22 +245,13 @@ def tool_node(state: AgentState) -> dict:
             continue
         parsed.append(_parse_tool_call(tc, i))
 
-    # Skip interception if batch has non-interceptable calls (e.g., update with sub-deletes)
-    has_non_interceptable = any(
-        _find_interception(name, args, cid) is None
-        for name, args, cid in parsed
-    )
-
     for tool_name, tool_args, call_id in parsed:
-        if not has_non_interceptable:
-            result = _find_interception(tool_name, tool_args, call_id)
-            if result:
-                pending_action = result.pending_action
-                results.append(ToolMessage(
-                    content=result.tool_message_content,
-                    tool_call_id=call_id,
-                ))
-                continue
+        # 删除一律先拦下等用户确认；同一批里的其他调用照常执行
+        intercepted = _find_interception(tool_name, tool_args, call_id)
+        if intercepted:
+            pending.append(intercepted.action)
+            results.append(ToolMessage(content=intercepted.tool_message_content, tool_call_id=call_id))
+            continue
 
         # Set tool context for tools that need channel/session info
         _set_ctx(channel=channel, session_id=current_session_id, user_id=channel.split(":", 1)[-1] if ":" in channel else "")
@@ -294,8 +285,8 @@ def tool_node(state: AgentState) -> dict:
         results.append(ToolMessage(content=result_str, tool_call_id=call_id))
 
     out = {"messages": results}
-    if pending_action:
-        out["pending_action"] = pending_action
+    if pending:
+        out["pending_action"] = build_pending_action(pending)
     return out
 
 
